@@ -11,6 +11,7 @@ setup(
     packages=['magneton'],
     install_requires=[
       "fire",
+      "pysam",
     ],
     zip_safe=False,
 )
