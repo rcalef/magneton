@@ -1,9 +1,10 @@
+import bz2
 import gzip
 import pickle
 import xml.etree.ElementTree as ET
 
 from collections import defaultdict
-from typing import Generator, Tuple
+from typing import Generator, Optional, Tuple
 
 from pysam import FastaFile
 
@@ -121,12 +122,19 @@ def parse_from_xml(
                 tot += 1
 
                 if tot % print_iter == 0:
-                    print(f"Parsed proteins: {tot}")
+                    print(f"Parsed proteins: {tot}", flush=True)
 
 def parse_from_pkl(
     input_path: str,
+    compression: Optional[str] = None,
 ) -> Generator[Protein, None, None]:
-    with open(input_path, "rb") as fh:
+    if compression is None:
+        open_fn = open
+    elif compression == "bz2":
+        open_fn = bz2.open
+    else:
+        raise ValueError(f"unknown compression: {compression}")
+    with open_fn(input_path, "rb") as fh:
         while True:
             try:
                 yield pickle.load(fh)
