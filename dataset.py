@@ -31,7 +31,7 @@ def get_unique_element_names(prot_list: List[Tuple]) -> List[str]:
     return sorted(list(element_names))
 
 # Get unique element names and create label mapping
-unique_elements = get_unique_element_names(prots_w_seq[:100])
+unique_elements = get_unique_element_names(prots_w_seq[:500])
 element_to_idx = {elem: idx for idx, elem in enumerate(unique_elements)}
 
 print(f"Found {len(unique_elements)} unique element names")
@@ -105,7 +105,7 @@ def get_protein_sequences(prot_list: List, max_workers: int = 10, batch_size: in
     return sequences
 
 # Get all sequences
-all_sequences = get_protein_sequences(prots_w_seq[:100])
+all_sequences = get_protein_sequences(prots_w_seq[:500])
 print(f"Successfully retrieved {len(all_sequences)} sequences")
 
 huggingface_hub.login()
@@ -123,7 +123,7 @@ def create_position_embedding(sequence_embedding: torch.Tensor, start: int, end:
     end_idx = min(end, sequence_embedding.shape[0])
     return sequence_embedding[start_idx:end_idx].mean(dim=0)
 
-for seq, prot_tuple in zip(all_sequences, prots_w_seq[:100]):
+for seq, prot_tuple in zip(all_sequences, prots_w_seq[:500]):
     protein = prot_tuple[0]
     try:
         # Get sequence embedding
