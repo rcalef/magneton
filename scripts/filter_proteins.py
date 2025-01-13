@@ -12,8 +12,9 @@ import fire
 
 from pysam import FastaFile
 
-from magneton.interpro_parsing import get_sorted_files, parse_from_pkl
+from magneton.io.internal import get_sorted_files, parse_from_pkl
 from magneton.types import Protein
+
 
 def filter_proteins(
     input_path: str,
@@ -32,14 +33,17 @@ def filter_proteins(
             filtered_proteins.append(prot)
         tot += 1
 
-    logger.info(f"Retained {len(filtered_proteins)} / {tot} proteins from {os.path.basename(input_path)}")
+    logger.info(
+        f"Retained {len(filtered_proteins)} / {tot} proteins from {os.path.basename(input_path)}"
+    )
     return filtered_proteins
+
 
 def filter_dir(
     dir_path: str,
     output_path: str,
     filter_fai_path: str,
-    nproc: int=16,
+    nproc: int = 16,
 ) -> List[Protein]:
     logger = get_logger()
     handler = logging.StreamHandler(sys.stdout)
@@ -57,6 +61,7 @@ def filter_dir(
         for subres in filtered_proteins:
             for prot in subres:
                 pickle.dump(prot, fh)
+
 
 if __name__ == "__main__":
     fire.Fire(filter_dir)

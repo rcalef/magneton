@@ -4,7 +4,6 @@ from pprint import pprint
 from typing import List, Tuple
 
 
-
 @unique
 class DsspType(Enum):
     H = auto()
@@ -17,6 +16,7 @@ class DsspType(Enum):
     # In place of ' ' (space) for OTHER
     X = auto()
 
+
 DSSP_TO_NAME = [
     "Alphahelix",
     "Betabridge",
@@ -28,9 +28,7 @@ DSSP_TO_NAME = [
     "Bend",
     "Loop",
 ]
-NAME_TO_DSSP = {
-    name: i+1 for i, name in enumerate(DSSP_TO_NAME)
-}
+NAME_TO_DSSP = {name: i + 1 for i, name in enumerate(DSSP_TO_NAME)}
 
 DSSP_TO_MMCIF = [
     "HELX_RH_AL_P",
@@ -44,9 +42,8 @@ DSSP_TO_MMCIF = [
     "OTHER",
 ]
 
-MMCIF_TO_DSSP = {
-    mmcif: i+1 for i, mmcif in enumerate(DSSP_TO_MMCIF)
-}
+MMCIF_TO_DSSP = {mmcif: i + 1 for i, mmcif in enumerate(DSSP_TO_MMCIF)}
+
 
 @dataclass
 class SecondaryStructure:
@@ -55,6 +52,7 @@ class SecondaryStructure:
     # Coordinates are half-open, i.e. [start, end)
     start: int
     end: int
+
 
 @dataclass
 class InterproEntry:
@@ -66,6 +64,7 @@ class InterproEntry:
     # Note that positions are 1-indexed, i.e. exactly as given in InterPro.
     positions: List[Tuple[int]]
 
+
 @dataclass
 class Protein:
     uniprot_id: str
@@ -76,7 +75,7 @@ class Protein:
     total_entries: int
     entries: List[InterproEntry]
     secondary_structs: List[SecondaryStructure] = field(default_factory=list)
-#    secondary_structs: List[SecondaryStructure]
+    #    secondary_structs: List[SecondaryStructure]
 
     def print(self):
         pprint(self)

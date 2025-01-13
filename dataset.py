@@ -1,4 +1,4 @@
-from magneton.interpro_parsing import parse_from_pkl_w_fasta
+from magneton.io.interpro import parse_from_pkl_w_fasta
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
@@ -43,7 +43,7 @@ np.save(os.path.join(save_dir, "element_names.npy"), np.array(unique_elements))
 
 def get_protein_sequence(uniprot_id: str) -> Tuple[str, str]:
     """Fetch protein sequence from UniProt API.
-    
+
     Args:
         uniprot_id: UniProt identifier
     Returns:
@@ -60,7 +60,7 @@ def get_protein_sequence(uniprot_id: str) -> Tuple[str, str]:
 
 def get_protein_sequences(prot_list: List, max_workers: int = 10, batch_size: int = 50) -> List[str]:
     """Fetch multiple protein sequences in parallel.
-    
+
     Args:
         prot_list: List of protein tuples
         max_workers: Number of parallel threads
@@ -70,24 +70,24 @@ def get_protein_sequences(prot_list: List, max_workers: int = 10, batch_size: in
     """
     sequences = []
     failed_ids = []
-    
+
     # Extract all UniProt IDs
     uniprot_ids = [prot_tuple[0].uniprot_id for prot_tuple in prot_list]
-    
+
     # Process in batches to avoid overwhelming the API
     for i in range(0, len(uniprot_ids), batch_size):
         batch = uniprot_ids[i:i + batch_size]
-        
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all requests for this batch
             future_to_id = {
-                executor.submit(get_protein_sequence, uniprot_id): uniprot_id 
+                executor.submit(get_protein_sequence, uniprot_id): uniprot_id
                 for uniprot_id in batch
             }
-            
+
             # Process completed requests with progress bar
-            for future in tqdm(as_completed(future_to_id), 
-                             total=len(batch), 
+            for future in tqdm(as_completed(future_to_id),
+                             total=len(batch),
                              desc=f"Batch {i//batch_size + 1}/{len(uniprot_ids)//batch_size + 1}"):
                 uniprot_id, result = future.result()
                 if not result.startswith('Error'):
@@ -95,13 +95,13 @@ def get_protein_sequences(prot_list: List, max_workers: int = 10, batch_size: in
                 else:
                     failed_ids.append(uniprot_id)
                     print(f"\nFailed to fetch {uniprot_id}: {result}")
-                
+
         # Add a small delay between batches to be nice to the API
         time.sleep(1)
-    
+
     print(f"\nRetrieved {len(sequences)} sequences successfully")
     print(f"Failed to retrieve {len(failed_ids)} sequences")
-    
+
     return sequences
 
 # Get all sequences
@@ -128,18 +128,18 @@ for seq, prot_tuple in zip(all_sequences, prots_w_seq[:500]):
     try:
         # Get sequence embedding
         sequence_embedding = embed_one_prot(seq, client)
-        
+
         # Create one embedding and label for each InterPro entry
         for entry in protein.entries:
             for start, end in entry.positions:
                 # Create embedding for this position
                 pos_embedding = create_position_embedding(sequence_embedding, start, end)
                 all_embeddings.append(pos_embedding)
-                
+
                 # Create one-hot label
                 label_idx = element_to_idx[entry.element_name]
                 all_labels.append(label_idx)
-                
+
     except Exception as e:
         print(f"Error processing protein {protein.uniprot_id}: {str(e)}")
         continue

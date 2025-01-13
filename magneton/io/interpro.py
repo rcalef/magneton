@@ -1,15 +1,8 @@
-import bz2
 import gzip
-import os
-import pickle
-import re
 import xml.etree.ElementTree as ET
 
 from collections import defaultdict
-from operator import itemgetter
-from typing import Generator, List, Optional, Tuple
-
-from pysam import FastaFile
+from typing import Generator
 
 from magneton.types import InterproEntry, Protein
 
@@ -126,53 +119,3 @@ def parse_from_xml(
 
                 if tot % print_iter == 0:
                     print(f"Parsed proteins: {tot}", flush=True)
-
-def parse_from_pkl(
-    input_path: str,
-    compression: Optional[str] = None,
-) -> Generator[Protein, None, None]:
-    if compression is None:
-        open_fn = open
-    elif compression == "bz2":
-        open_fn = bz2.open
-    else:
-        raise ValueError(f"unknown compression: {compression}")
-    with open_fn(input_path, "rb") as fh:
-        while True:
-            try:
-                yield pickle.load(fh)
-            except EOFError as e:
-                break
-            except Exception as e:
-                raise e
-
-def parse_from_pkl_w_fasta(
-    input_path: str,
-    fasta_path: str,
-) -> Generator[Tuple[Protein, str], None, None]:
-    fa = FastaFile(fasta_path)
-    for prot in parse_from_pkl(input_path):
-        if prot.kb_id in fa:
-            yield (prot, fa[prot.kb_id])
-
-def get_sorted_files(
-    dir: str,
-    prefix: str = "parsed_proteins",
-) -> List[str]:
-    pat = re.compile(f"{prefix}.(\d+).pkl.bz2")
-    all_files = []
-    for fn in os.listdir(dir):
-        res = pat.match(fn)
-        if res:
-            all_files.append((int(res.group(1)), fn))
-    return sorted(all_files, key=itemgetter(0))
-
-def parse_from_dir(
-    dir: str,
-    prefix: str = "parsed_proteins",
-) -> Generator[Tuple[Protein, str], None, None]:
-    all_files = get_sorted_files(dir, prefix)
-
-    for fn in all_files:
-        for prot in parse_from_pkl(os.path.join(dir, fn), compression="bz2"):
-            yield prot
