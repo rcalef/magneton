@@ -60,6 +60,8 @@ class InterproEntry:
     element_type: str
     match_id: str
     element_name: str
+    # NOTE: in the current parsing this is actually a str, womp womp
+    # this will be fixed if/when we regenerate the parsed pickles
     representative: bool
     # Note that positions are 1-indexed, i.e. exactly as given in InterPro.
     positions: List[Tuple[int]]
@@ -70,6 +72,8 @@ class Protein:
     uniprot_id: str
     kb_id: str
     name: str
+    # NOTE: in the current parsing this is actually a str, womp womp
+    # this will be fixed if/when we regenerate the parsed pickles
     length: int
     parsed_entries: int
     total_entries: int

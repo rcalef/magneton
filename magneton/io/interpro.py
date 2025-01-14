@@ -61,7 +61,7 @@ def parse_one_protein(prot_ele: ET.Element) -> Protein:
         uniprot_id=uniprot_id,
         kb_id=uniprotkb_id,
         name=prot_ele.get("name"),
-        length=prot_ele.get("length"),
+        length=int(prot_ele.get("length")),
         entries=parsed_entries,
         parsed_entries=len(parsed_entries),
         total_entries=len(all_entries),
@@ -86,7 +86,7 @@ def parse_one_match(match_ele: ET.Element) -> InterproEntry:
     # Want either all True or all False
     is_representative = [x.get("representative") for x in grouped["lcn"]]
     assert all(is_representative) or all([not x for x in is_representative])
-    is_representative = is_representative[0]
+    representative = is_representative[0] == 'true'
 
     positions = [(int(x.get("start")), int(x.get("end"))) for x in grouped["lcn"]]
 
@@ -95,7 +95,7 @@ def parse_one_match(match_ele: ET.Element) -> InterproEntry:
         element_type=ipr.get("type"),
         match_id=match_obj.get("id"),
         element_name=ipr.get("name"),
-        representative=is_representative,
+        representative=representative,
         positions=positions,
     )
 
