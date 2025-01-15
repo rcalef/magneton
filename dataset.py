@@ -15,6 +15,11 @@ import huggingface_hub
 pkl_path = "/rdma/vast-rdma/vast-home/rcalef/transfer/parse_swissprot.pkl"
 fasta_path = "/rdma/vast-rdma/vast-home/rcalef/transfer/uniprot_sprot.fasta.bgz"
 
+# swissprot_pkl_path = "/weka/scratch/weka/kellislab/rcalef/data/interpro/102.0/filter_swissprot/swissprot_prots.pkl.bz2"
+# prots = [x for x in parse_from_pkl(swissprot_pkl_path)]
+
+# len(prots)
+
 prots_w_seq = []
 for i, prot in enumerate(parse_from_pkl_w_fasta(pkl_path, fasta_path)):
     prots_w_seq.append(prot)

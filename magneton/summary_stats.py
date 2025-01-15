@@ -11,12 +11,12 @@ from typing import (
 
 import pandas as pd
 
-from magneton.types import (
+from magneton.custom_types import (
     Protein,
     DSSP_TO_NAME,
 )
 
-from magneton.types import DSSP_TO_NAME
+from magneton.custom_types import DSSP_TO_NAME
 
 want_types = [
     "Family",

@@ -73,7 +73,7 @@ mlp_model.train_model(X_train, y_train, X_val, y_val)
 
 # Final evaluation
 metrics = mlp_model.evaluate_model(X_val, y_val)
-print(f"Final validation metrics:")
+print(f"Final validation metrics:") 
 print(f"Accuracy: {metrics['accuracy']:.4f}")
 print(f"F1 Score: {metrics['f1']:.4f}")
 

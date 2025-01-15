@@ -14,7 +14,7 @@ from magneton.io.internal import (
     process_sharded_proteins,
 )
 from magneton.io.mmcif import mmcif_to_secondary_structs
-from magneton.types import Protein
+from magneton.custom_types import Protein
 
 
 def add_secondary_structs_to_protein(

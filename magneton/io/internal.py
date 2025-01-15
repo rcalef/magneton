@@ -14,7 +14,7 @@ from typing import Callable, Generator, List, Optional, Tuple
 from pysam import FastaFile
 from tqdm import tqdm
 
-from magneton.types import Protein
+from magneton.custom_types import Protein
 
 def parse_from_pkl(
     input_path: str,

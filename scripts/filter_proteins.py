@@ -13,7 +13,7 @@ import fire
 from pysam import FastaFile
 
 from magneton.io.internal import get_sorted_files, parse_from_pkl
-from magneton.types import Protein
+from magneton.custom_types import Protein
 
 
 def filter_proteins(
