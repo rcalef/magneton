@@ -16,16 +16,18 @@ from magneton.summary_stats import (
     merge_summaries,
 )
 
+
 def summary_with_log(
     path: str,
     logger: logging.Logger,
     labels_path: str = "/weka/scratch/weka/kellislab/rcalef/data/interpro/102.0/label_sets/",
 ) -> Tuple[pd.DataFrame, Dict]:
     logger.info(f"{os.path.basename(path)}: starting summary calculation")
-    summaries, substructure_metrics = calc_summaries(parse_from_pkl(path, compression="bz2"), labels_path=labels_path)
+    summaries, substructure_metrics = calc_summaries(
+        parse_from_pkl(path, compression="bz2"), labels_path=labels_path
+    )
     logger.info(f"{os.path.basename(path)}: finished summary calculation")
     return summaries, substructure_metrics
-
 
 
 def calc_and_write_summaries(
@@ -42,7 +44,9 @@ def calc_and_write_summaries(
         prefix=prefix,
     )
     prot_summaries, struct_summaries = zip(*results)
-    merged_prot_summaries, merged_struct_summaries = merge_summaries(prot_summaries, struct_summaries)
+    merged_prot_summaries, merged_struct_summaries = merge_summaries(
+        prot_summaries, struct_summaries
+    )
     with open(os.path.join(outdir, "protein_summaries.tsv"), "w") as fh:
         merged_prot_summaries.to_csv(fh, sep="\t", index=False)
     for interpro_type, metrics in merged_struct_summaries.items():

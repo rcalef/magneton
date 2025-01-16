@@ -33,19 +33,24 @@ def add_secondary_structs_to_protein(
 def add_ss_to_interpro_pkl(
     pkl_path: str,
     outdir: str,
+    prefix: str,
     cif_tmpl: str,
     logger: logging.Logger = logging.getLogger(__name__),
 ):
     num_missing = 0
     tot = 0
-    outpath = os.path.join(outdir, os.path.basename(pkl_path.replace(".pkl.bz2", ".with_ss.pkl.bz2")))
+    outpath = os.path.join(
+        outdir, os.path.basename(pkl_path.replace(prefix, f"{prefix}.with_ss"))
+    )
 
     logger.info(f"{os.path.basename(pkl_path)}: begin")
     with bz2.open(outpath, "wb") as fh:
         for prot in parse_from_pkl(pkl_path, compression="bz2"):
             tot += 1
             try:
-                prot_with_ss, has_struct = add_secondary_structs_to_protein(prot, cif_tmpl)
+                prot_with_ss, has_struct = add_secondary_structs_to_protein(
+                    prot, cif_tmpl
+                )
             except Exception as e:
                 logger.info(f"{os.path.basename(pkl_path)}: {prot.uniprot_id} failed")
                 raise e
@@ -65,7 +70,9 @@ def add_ss_to_interpro_sharded(
 ):
     process_sharded_proteins(
         dir_path,
-        partial(add_ss_to_interpro_pkl, outdir=outdir, cif_tmpl=cif_tmpl),
+        partial(
+            add_ss_to_interpro_pkl, prefix=prefix, outdir=outdir, cif_tmpl=cif_tmpl
+        ),
         nprocs=nprocs,
         prefix=prefix,
     )

@@ -61,6 +61,8 @@ def parse_from_dir(
     prefix: str = "parsed_proteins",
 ) -> Generator[Tuple[Protein, str], None, None]:
     all_files = get_sorted_files(dir, prefix)
+    if len(all_files) == 0:
+        raise ValueError(f"no files found in {dir} with prefix {prefix}")
 
     for fn in all_files:
         for prot in parse_from_pkl(os.path.join(dir, fn), compression="bz2"):

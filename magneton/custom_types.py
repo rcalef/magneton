@@ -6,7 +6,8 @@ from typing import List, Tuple
 
 @unique
 class DsspType(Enum):
-    H = auto()
+    H = 0
+    B = auto()
     E = auto()
     G = auto()
     I = auto()
@@ -28,7 +29,7 @@ DSSP_TO_NAME = [
     "Bend",
     "Loop",
 ]
-NAME_TO_DSSP = {name: i + 1 for i, name in enumerate(DSSP_TO_NAME)}
+NAME_TO_DSSP = {name: i for i, name in enumerate(DSSP_TO_NAME)}
 
 DSSP_TO_MMCIF = [
     "HELX_RH_AL_P",
@@ -42,7 +43,7 @@ DSSP_TO_MMCIF = [
     "OTHER",
 ]
 
-MMCIF_TO_DSSP = {mmcif: i + 1 for i, mmcif in enumerate(DSSP_TO_MMCIF)}
+MMCIF_TO_DSSP = {mmcif: i for i, mmcif in enumerate(DSSP_TO_MMCIF)}
 
 
 @dataclass
