@@ -1,16 +1,17 @@
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 from pdbecif.mmcif_io import CifFileReader
 
-from magneton.custom_types import (
+from magneton.types import (
     DsspType,
     SecondaryStructure,
     MMCIF_TO_DSSP,
 )
 
 def mmcif_to_secondary_structs(
-    path: str
+    path: str,
+    expected_len: Optional[int] = None,
 ) -> List[SecondaryStructure]:
     """Given path to mmCIF file, return list of secondary structure annotations"""
     want_cols = ["beg_label_seq_id", "end_label_seq_id", "conf_type_id"]
@@ -20,6 +21,11 @@ def mmcif_to_secondary_structs(
     keys = list(cif_obj.keys())
     assert len(keys) == 1
     cif_obj = cif_obj[keys[0]]
+
+    if expected_len is not None:
+        seq_len = len(cif_obj["_entity_poly_seq"]["mon_id"])
+        if seq_len !=  expected_len:
+            raise ValueError(f"{keys[0]}: expected {expected_len} residues, got {seq_len}")
 
     # Some mmCIF files don't have secondary structure annotations, e.g. very
     # short peptides (e.g. A0A0C5B5G6)

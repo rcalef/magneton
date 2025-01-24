@@ -12,14 +12,14 @@ from typing import (
 
 import pandas as pd
 
-from magneton.custom_types import (
+from magneton.types import (
     InterproEntry,
     Protein,
     SecondaryStructure,
     DSSP_TO_NAME,
 )
 
-from magneton.custom_types import DSSP_TO_NAME
+from magneton.types import DSSP_TO_NAME
 
 want_types = [
     "Family",
@@ -86,7 +86,7 @@ def summarize_protein(
 
     ss_types = [DSSP_TO_NAME[x.dssp_type.value] for x in prot.secondary_structs]
     ss_counts = pd.Series(ss_types, dtype=ss_cat_dtype).value_counts()
-    ss_cov = sum([x.end - x.start for x in prot.secondary_structs]) / int(prot.length)
+    ss_cov = sum([x.end - x.start for x in prot.secondary_structs]) / prot.length
 
     # Concat counts into one dict and return as a single-row DataFrame
     ret = {
@@ -100,6 +100,7 @@ def summarize_protein(
 
 @dataclass
 class SubstructureMetrics:
+    element_id = id
     element_name: str
     count: int
     max_occurences: int
@@ -250,7 +251,7 @@ def update_substructure_metrics(
     filtered_entries = [
         x
         for x in prot.entries
-        if (x.element_type in have_representative and x.representative == "true")
+        if (x.element_type in have_representative and x.representative)
         or (x.element_type not in have_representative)
     ]
     counts = defaultdict(int)
@@ -262,7 +263,7 @@ def update_substructure_metrics(
 
         metrics[entry.element_type][entry.id].update_from_interpro(
             entry,
-            int(prot.length),
+            prot.length,
             count,
         )
     # Now for secondary structures.
@@ -274,7 +275,7 @@ def update_substructure_metrics(
         count = counts[ss.dssp_type.value]
         metrics["secondary_struct"][DSSP_TO_NAME[ss.dssp_type.value]].update_from_secondary_struct(
             ss,
-            int(prot.length),
+            prot.length,
             count,
         )
 

@@ -14,7 +14,7 @@ from magneton.io.internal import (
     process_sharded_proteins,
 )
 from magneton.io.mmcif import mmcif_to_secondary_structs
-from magneton.custom_types import Protein
+from magneton.types import Protein
 
 
 def add_secondary_structs_to_protein(
@@ -26,7 +26,11 @@ def add_secondary_structs_to_protein(
     if not os.path.exists(path):
         return prot, False
 
-    prot.secondary_structs = mmcif_to_secondary_structs(path)
+    try:
+        prot.secondary_structs = mmcif_to_secondary_structs(path, expected_len=prot.length)
+    except Exception as e:
+        print(e)
+        return prot, False
     return prot, True
 
 
@@ -43,6 +47,7 @@ def add_ss_to_interpro_pkl(
         outdir, os.path.basename(pkl_path.replace(prefix, f"{prefix}.with_ss"))
     )
 
+    first_kept = None
     logger.info(f"{os.path.basename(pkl_path)}: begin")
     with bz2.open(outpath, "wb") as fh:
         for prot in parse_from_pkl(pkl_path, compression="bz2"):
@@ -56,9 +61,12 @@ def add_ss_to_interpro_pkl(
                 raise e
             if has_struct:
                 pickle.dump(prot_with_ss, fh)
+                if first_kept is None:
+                    first_kept = prot.uniprot_id
             else:
                 num_missing += 1
     logger.info(f"{os.path.basename(pkl_path)}: found {num_missing} / {tot} missing")
+    return first_kept
 
 
 def add_ss_to_interpro_sharded(
@@ -68,7 +76,7 @@ def add_ss_to_interpro_sharded(
     nprocs: int = 32,
     prefix: str = "sharded_proteins",
 ):
-    process_sharded_proteins(
+    new_index_entries = process_sharded_proteins(
         dir_path,
         partial(
             add_ss_to_interpro_pkl, prefix=prefix, outdir=outdir, cif_tmpl=cif_tmpl
@@ -76,6 +84,9 @@ def add_ss_to_interpro_sharded(
         nprocs=nprocs,
         prefix=prefix,
     )
+    with open(os.path.join(outdir, "index.txt"), "w") as fh:
+        for file_num, entry in enumerate(new_index_entries):
+            fh.write(f"{file_num}\t{entry}\n")
 
 
 if __name__ == "__main__":

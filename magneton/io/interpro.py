@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from typing import Generator
 
-from magneton.custom_types import InterproEntry, Protein
+from magneton.types import InterproEntry, Protein
 
 # Details on InterPro XML format from Matthias Blum (reached via `interhelp@ebi.ac.uk`):
 #
