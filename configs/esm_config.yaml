@@ -1,0 +1,7 @@
+model_type: esm
+model_name: esm3_sm_open_v1
+batch_size: 32
+max_seq_length: 1024
+window_size: 10
+num_windows: 5
+non_contiguous: true 

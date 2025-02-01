@@ -1,0 +1,7 @@
+model_type: gearnet
+batch_size: 32
+max_seq_length: 350
+hidden_dims: [512, 512, 512]
+num_relation: 7
+edge_input_dim: 59
+num_angle_bin: 8 

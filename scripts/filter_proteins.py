@@ -11,7 +11,11 @@ import fire
 
 from pysam import FastaFile
 
+<<<<<<< Updated upstream
 from magneton.io.internal import parse_from_pkl, process_sharded_proteins
+=======
+from magneton.io.internal import get_sorted_files, parse_from_pkl
+>>>>>>> Stashed changes
 from magneton.types import Protein
 
 

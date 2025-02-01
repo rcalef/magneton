@@ -1,3 +1,11 @@
+**.fasta
+**.tsv
+bgz_to_fasta.py
+mmseqs/
+saved_embeddings/
+tmp/
+archive/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -161,3 +169,4 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+gearnet/

@@ -1,4 +1,4 @@
-from magneton.io.interpro import parse_from_pkl_w_fasta
+from magneton.io.internal import parse_from_pkl_w_fasta
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
@@ -8,7 +8,12 @@ from typing import List, Tuple
 import numpy as np
 import os
 
-from magneton.esm_embed import embed_sequences, embed_one_prot
+# TODO
+# Refactor this file to be the dataset entry point with io.internal
+# Consolidate other functions into the specific embedder files
+
+# from magneton.esm_embed import embed_sequences, embed_one_prot
+from magneton.gearnet_embed import GearNetEmbedder
 from esm.models.esm3 import ESM3
 import huggingface_hub
 
@@ -113,9 +118,11 @@ def get_protein_sequences(prot_list: List, max_workers: int = 10, batch_size: in
 all_sequences = get_protein_sequences(prots_w_seq[:500])
 print(f"Successfully retrieved {len(all_sequences)} sequences")
 
-huggingface_hub.login()
+# huggingface_hub.login()
 
-client =  ESM3.from_pretrained("esm3_sm_open_v1", device=torch.device("cuda"))
+# client =  ESM3.from_pretrained("esm3_sm_open_v1", device=torch.device("cuda"))
+
+embedder = GearNetEmbedder(max_length=350)
 
 # Generate embeddings and labels
 all_embeddings = []
@@ -128,16 +135,33 @@ def create_position_embedding(sequence_embedding: torch.Tensor, start: int, end:
     end_idx = min(end, sequence_embedding.shape[0])
     return sequence_embedding[start_idx:end_idx].mean(dim=0)
 
+# for seq, prot_tuple in zip(all_sequences, prots_w_seq[:500]):
+#     protein = prot_tuple[0]
+#     try:
+#         # Get sequence embedding
+#         sequence_embedding = embed_one_prot(seq, client)
+
+#         # Create one embedding and label for each InterPro entry
+#         for entry in protein.entries:
+#             for start, end in entry.positions:
+#                 # Create embedding for this position
+#                 pos_embedding = create_position_embedding(sequence_embedding, start, end)
+#                 all_embeddings.append(pos_embedding)
+
+#                 # Create one-hot label
+#                 label_idx = element_to_idx[entry.element_name]
+#                 all_labels.append(label_idx)
+
 for seq, prot_tuple in zip(all_sequences, prots_w_seq[:500]):
     protein = prot_tuple[0]
     try:
-        # Get sequence embedding
-        sequence_embedding = embed_one_prot(seq, client)
+        # Get the GearNet embedding for the protein
+        sequence_embedding = embedder.embed_one_prot(protein, max_len=350)  # Use the GearNet embedder
 
         # Create one embedding and label for each InterPro entry
         for entry in protein.entries:
             for start, end in entry.positions:
-                # Create embedding for this position
+                # Create embedding for this position using the GearNet embedding
                 pos_embedding = create_position_embedding(sequence_embedding, start, end)
                 all_embeddings.append(pos_embedding)
 
@@ -154,8 +178,8 @@ embeddings_array = torch.stack(all_embeddings).cpu().numpy()
 labels_array = np.array(all_labels)
 
 # Save embeddings and labels
-np.save(os.path.join(save_dir, "protein_embeddings.npy"), embeddings_array)
-np.save(os.path.join(save_dir, "protein_labels.npy"), labels_array)
+np.save(os.path.join(save_dir, "gearnet_protein_embeddings.npy"), embeddings_array)
+np.save(os.path.join(save_dir, "gearnet_protein_labels.npy"), labels_array)
 
 print(f"Saved embeddings with shape: {embeddings_array.shape}")
 print(f"Saved labels with shape: {labels_array.shape}")
