@@ -6,7 +6,6 @@ import pickle
 import re
 import sys
 
-from bisect import bisect
 from collections.abc import Callable
 from functools import partial
 from itertools import chain
@@ -14,69 +13,12 @@ from multiprocessing import Pool, get_logger
 from operator import itemgetter
 from typing import Generator, List, Optional, Tuple
 
+import pandas as pd
+
 from pysam import FastaFile
 from tqdm import tqdm
 
 from magneton.types import Protein
-
-
-class ProteinDataset:
-    def __init__(
-        self,
-        input_path: str,
-        compression: str = "bz2",
-        fasta_path: Optional[str] = None,
-        prefix: str = "sharded_proteins",
-    ):
-        self.input_path = input_path
-        self.compression = compression
-        self.fasta_path = fasta_path
-        self.prefix = prefix
-
-        if os.path.isdir(input_path):
-            self.backing = "dir"
-            self._load_index()
-        elif ".pkl" in input_path:
-            self.backing = "pkl"
-        else:
-            raise ValueError(f"expected dir or pickle file, got: {input_path}")
-
-    def __iter__(self) -> Generator[Protein, None, None]:
-        if self.backing == "dir":
-            yield from parse_from_dir(
-                self.input_path, self.prefix, compression=self.compression
-            )
-        elif self.backing == "pkl":
-            yield from parse_from_pkl(self.input_path, compression=self.compression)
-
-    def _load_index(self):
-        index_path = os.path.join(self.input_path, "index.txt")
-        index_entries = []
-        with open(index_path, "r") as index_fh:
-            for line in index_fh:
-                index_entries.append(line.strip().split("\t")[1])
-        self.index_entries = index_entries
-
-    def fetch_protein(self, uniprot_id: str) -> Protein:
-        assert self.backing == "dir"
-        # This gives the first index entry that's greater than `uniprot_id`,
-        # we want the last index entry that's less than, hence the -1 below.
-        index = bisect(self.index_entries, uniprot_id)
-        if index == 0:
-            raise ValueError(f"{uniprot_id} not found in {self.input_path}")
-        index -= 1
-
-        for prot in parse_from_pkl(
-            os.path.join(
-                self.input_path,
-                f"{self.prefix}.{index}.pkl.{self.compression}",
-            ),
-            self.compression,
-        ):
-            if prot.uniprot_id == uniprot_id:
-                return prot
-        raise ValueError(f"{uniprot_id} not found in {self.input_path} index {index}")
-
 
 def parse_from_pkl(
     input_path: str,
@@ -142,39 +84,46 @@ def shard_proteins(
     prots_per_file: int = 500000,
 ):
     """Transform generator of proteins into sharded files"""
-    index_path = os.path.join(output_dir, "index.txt")
+    index_entries = []
+    file_lens = []
 
-    with open(index_path, "w") as index_fh:
-        curr_file_num = 0
-        prev_id = "0"
-        curr_file_prots = 0
+    prev_id = "0"
+    curr_file_prots = 0
+    curr_file_num = 0
 
-        output_path = os.path.join(output_dir, f"{prefix}.{curr_file_num}.pkl.bz2")
-        output_fh = bz2.open(output_path, "wb")
-        for prot in input_iter:
-            assert prev_id < prot.uniprot_id, f"{prev_id} !< {prot.uniprot_id}"
-            prev_id = prot.uniprot_id
+    output_path = os.path.join(output_dir, f"{prefix}.{curr_file_num}.pkl.bz2")
+    output_fh = bz2.open(output_path, "wb")
+    for prot in input_iter:
+        assert prev_id < prot.uniprot_id, f"{prev_id} !< {prot.uniprot_id}"
+        prev_id = prot.uniprot_id
 
-            if curr_file_prots == 0:
-                index_fh.write(f"{curr_file_num}\t{prot.uniprot_id}\n")
+        if curr_file_prots == 0:
+            index_entries.append(prot.uniprot_id)
 
-            pickle.dump(prot, output_fh)
-            curr_file_prots += 1
+        pickle.dump(prot, output_fh)
+        curr_file_prots += 1
 
-            if curr_file_prots == prots_per_file:
-                output_fh.close()
-                curr_file_num += 1
-                curr_file_prots = 0
+        if curr_file_prots == prots_per_file:
+            file_lens.append(curr_file_prots)
 
-                print(
-                    f"completed file {curr_file_num}, starting file {curr_file_num+1}"
-                )
-                output_path = os.path.join(
-                    output_dir, f"{prefix}.{curr_file_num}.pkl.bz2"
-                )
-                output_fh = bz2.open(output_path, "wb")
+            curr_file_prots = 0
+            curr_file_num += 1
 
-    output_fh.close()
+            print(
+                f"completed file {curr_file_num}, starting file {curr_file_num+1}"
+            )
+            output_fh.close()
+            output_path = os.path.join(
+                output_dir, f"{prefix}.{curr_file_num}.pkl.bz2"
+            )
+            output_fh = bz2.open(output_path, "wb")
+
+    index = pd.DataFrame({
+        "file_num": range(len(index_entries)),
+        "index_entry": index_entries,
+        "file_len": file_lens + [curr_file_prots],
+    })
+    index.to_csv(os.path.join(output_dir, "index.tsv"), sep="\t", index=False, header=False)
 
 def _filter_protein_file(
     input_path: str,

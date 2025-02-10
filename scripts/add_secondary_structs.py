@@ -41,7 +41,7 @@ def add_ss_to_interpro_pkl(
     cif_tmpl: str,
     logger: logging.Logger = logging.getLogger(__name__),
 ):
-    num_missing = 0
+    num_kept = 0
     tot = 0
     outpath = os.path.join(
         outdir, os.path.basename(pkl_path.replace(prefix, f"{prefix}.with_ss"))
@@ -60,13 +60,12 @@ def add_ss_to_interpro_pkl(
                 logger.info(f"{os.path.basename(pkl_path)}: {prot.uniprot_id} failed")
                 raise e
             if has_struct:
+                num_kept += 1
                 pickle.dump(prot_with_ss, fh)
                 if first_kept is None:
                     first_kept = prot.uniprot_id
-            else:
-                num_missing += 1
-    logger.info(f"{os.path.basename(pkl_path)}: found {num_missing} / {tot} missing")
-    return first_kept
+    logger.info(f"{os.path.basename(pkl_path)}: found {tot-num_kept} / {tot} missing")
+    return first_kept, num_kept
 
 
 def add_ss_to_interpro_sharded(
@@ -84,9 +83,9 @@ def add_ss_to_interpro_sharded(
         nprocs=nprocs,
         prefix=prefix,
     )
-    with open(os.path.join(outdir, "index.txt"), "w") as fh:
-        for file_num, entry in enumerate(new_index_entries):
-            fh.write(f"{file_num}\t{entry}\n")
+    with open(os.path.join(outdir, "index.tsv"), "w") as fh:
+        for file_num, (new_index_entry, new_index_size) in enumerate(new_index_entries):
+            fh.write(f"{file_num}\t{new_index_entry}\t{new_index_size}\n")
 
 
 if __name__ == "__main__":
