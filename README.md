@@ -10,3 +10,18 @@ uv sync
 uv pip install -e .
 source .venv/bin/activate
 ```
+
+## Experiments
+
+# Run full pipeline
+```
+python -m magneton.cli
+
+```
+
+# Run specific stages
+```
+python -m magneton.cli stage=embed
+python -m magneton.cli stage=train
+python -m magneton.cli stage=visualize
+```

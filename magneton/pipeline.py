@@ -2,41 +2,32 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 import torch
 import numpy as np
+from omegaconf import DictConfig
 from .embedders.factory import EmbedderFactory
-from .config.base_config import ESMConfig, GearNetConfig
-from .dataset import ProteinDataset
+# TODO Fix this with Robert's data entry
 from magneton.io.internal import ProteinDataset
-# dataset deprecated
-# train, visualize, mlp are also deprecated
 from .training.trainer import ModelTrainer
-from .visualization import EmbeddingVisualizer
-from .config.config import Config
-from .data_module import ProteinDataModule
+# from .visualization import EmbeddingVisualizer
 
 class EmbeddingPipeline:
     """Main pipeline for protein embedding and analysis"""
     
-    def __init__(self, config: Dict[str, Any]):
-        # Convert dict config to Config object for training
-        self.config = Config(**config)
+    def __init__(self, cfg: DictConfig):
+        print("\n=== Pipeline Configuration ===")
+        print(f"Output Directory: {cfg.pipeline.output_dir}")
+        print(f"Model Type: {cfg.pipeline.model.model_type}")
+        print(f"Embedding Config: {cfg.pipeline.embedding}")
+        print("============================\n")
+        
+        self.config = cfg.pipeline
         self.output_dir = Path(self.config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize components
-        self.embedder = EmbedderFactory.create_embedder(self.config)
-        self.dataset = ProteinDataset(self.config.data)
+        self.embedder = EmbedderFactory.create_embedder(self.config.embedding)
+        self.dataset = ProteinDataset(self.config.data.data_dir)
         self.trainer = ModelTrainer(self.config)
-        self.visualizer = EmbeddingVisualizer(self.config)
-        
-    def _create_config(self, config_dict: Dict[str, Any]):
-        """Create appropriate config object based on model type"""
-        model_type = config_dict.get('model_type')
-        if model_type == 'esm':
-            return ESMConfig(**config_dict)
-        elif model_type == 'gearnet':
-            return GearNetConfig(**config_dict)
-        else:
-            raise ValueError(f"Unknown model type: {model_type}")
+        # self.visualizer = EmbeddingVisualizer()
             
     def run(self):
         """Run complete pipeline"""
@@ -48,38 +39,43 @@ class EmbeddingPipeline:
         """Generate and save embeddings"""
         print("Generating embeddings...")
         
+        # TODO
+        # Check if embeddings exist, terminate if so
+        # Implement override if want to regenerate
+
         # Load data
-        proteins = self.dataset.load_proteins(self.config.num_proteins)
+        proteins = self.dataset.load_proteins()
         
         # Generate embeddings
-        embeddings = self.embedder.embed_sequences(proteins)
+        # Make this function model-agnostic because different embedders require different types of data (seq vs. structure)
+        embeddings = self.embedder.embed_batch(proteins)
         labels = self.dataset.get_labels(proteins)
         
         # Save results
-        np.save(self.output_dir / f"{self.config.data.embedding_type}_embeddings.npy", embeddings)
-        np.save(self.output_dir / f"{self.config.data.embedding_type}_labels.npy", labels)
+        embedding_path = self.output_dir / "embeddings.npy"
+        labels_path = self.output_dir / "labels.npy"
+        np.save(embedding_path, embeddings)
+        np.save(labels_path, labels)
+        print(f"Saved embeddings to {embedding_path}")
         
     def run_training(self):
         """Train and evaluate model using Lightning"""
         print("Training model...")
+
+        # Need for datamodule?
         
-        # Create data module
-        datamodule = ProteinDataModule(self.config.data)
-        datamodule.setup()
+        # Load saved embeddings
+        embeddings = np.load(self.output_dir / "embeddings.npy")
+        labels = np.load(self.output_dir / "labels.npy")
         
-        # Setup trainer with dataset info
-        self.trainer.setup(
-            num_classes=datamodule.num_classes,
-            input_dim=datamodule.input_dim
-        )
-        
-        # Train and evaluate
-        metrics = self.trainer.train_and_evaluate(datamodule)
+        # Train model
+        metrics = self.trainer.train_and_evaluate(embeddings, labels)
         
         # Save model
-        self.trainer.save_model(
-            self.output_dir / f"{self.config.data.embedding_type}_model.pt"
-        )
+        model_path = self.output_dir / "model.pt"
+        self.trainer.save_model(model_path)
+        print(f"Saved model to {model_path}")
+        print(f"Training metrics: {metrics}")
         
         return metrics
         
@@ -88,12 +84,13 @@ class EmbeddingPipeline:
         print("Generating visualizations...")
         
         # Load data
-        embeddings = np.load(self.output_dir / f"{self.config.data.embedding_type}_embeddings.npy")
-        labels = np.load(self.output_dir / f"{self.config.data.embedding_type}_labels.npy")
+        embeddings = np.load(self.output_dir / "embeddings.npy")
+        labels = np.load(self.output_dir / "labels.npy")
         
         # Generate visualizations
         self.visualizer.visualize_embeddings(
             embeddings, 
             labels,
             save_dir=self.output_dir
-        ) 
+        )
+        print(f"Saved visualizations to {self.output_dir}")

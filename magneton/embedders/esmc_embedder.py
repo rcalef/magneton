@@ -28,6 +28,8 @@ class ESMCConfig(BaseConfig):
     use_flash_attn: bool = field(kw_only=True, default=False)
     rep_layer: int = field(kw_only=True, default=35)
     max_seq_length: int = field(kw_only=True, default=2048)
+    batch_size: int = 32
+    device: str = 'cuda'
 
 
 class ESMCEmbedder(BaseEmbedder):

@@ -1,66 +1,22 @@
-import click
-import yaml
-from pathlib import Path
-from typing import Dict, Any
-from .embedders.factory import EmbedderFactory
-from .config.base_config import ESMConfig, GearNetConfig
+import hydra
+from omegaconf import DictConfig
 from .pipeline import EmbeddingPipeline
 
-def load_config(config_path: str) -> Dict[str, Any]:
-    """Load and validate configuration"""
-    with open(config_path) as f:
-        config_dict = yaml.safe_load(f)
-    return config_dict
-
-@click.group()
-def cli():
-    """Protein embedding pipeline CLI"""
-    pass
-
-@cli.command()
-@click.argument('config_path', type=click.Path(exists=True))
-@click.option('--output-dir', '-o', default='embeddings', help='Output directory')
-@click.option('--num-proteins', '-n', default=None, type=int, help='Number of proteins to process')
-@click.option('--device', '-d', default='cuda', help='Device to use (cuda/cpu)')
-def run_pipeline(config_path: str, output_dir: str, num_proteins: int, device: str):
-    """Run the complete embedding pipeline"""
-    # Load config
-    config_dict = load_config(config_path)
-    config_dict.update({
-        'output_dir': output_dir,
-        'num_proteins': num_proteins,
-        'device': device
-    })
+@hydra.main(version_base=None, config_path="configs", config_name="config")
+def main(cfg: DictConfig) -> None:
+    """Main entry point for the protein embedding pipeline"""
+    pipeline = EmbeddingPipeline(cfg)
     
-    # Create pipeline
-    pipeline = EmbeddingPipeline(config_dict)
-    
-    # Run pipeline stages
-    pipeline.run()
+    # Determine which pipeline stage to run based on config
+    if cfg.get('stage') == 'embed':
+        pipeline.run_embedding()
+    elif cfg.get('stage') == 'train':
+        pipeline.run_training()
+    elif cfg.get('stage') == 'visualize':
+        pipeline.run_visualization()
+    else:
+        # Default: run full pipeline
+        pipeline.run()
 
-@cli.command()
-@click.argument('config_path', type=click.Path(exists=True))
-def embed(config_path: str):
-    """Generate embeddings only"""
-    config_dict = load_config(config_path)
-    pipeline = EmbeddingPipeline(config_dict)
-    pipeline.run_embedding()
-
-@cli.command()
-@click.argument('config_path', type=click.Path(exists=True))
-def train(config_path: str):
-    """Train model only"""
-    config_dict = load_config(config_path)
-    pipeline = EmbeddingPipeline(config_dict)
-    pipeline.run_training()
-
-@cli.command()
-@click.argument('config_path', type=click.Path(exists=True))
-def visualize(config_path: str):
-    """Generate visualizations only"""
-    config_dict = load_config(config_path)
-    pipeline = EmbeddingPipeline(config_dict)
-    pipeline.run_visualization()
-
-if __name__ == '__main__':
-    cli() 
+if __name__ == "__main__":
+    main() 
