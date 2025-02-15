@@ -1,12 +1,19 @@
+from pprint import pprint
+
 import hydra
-from omegaconf import DictConfig
-from .pipeline import EmbeddingPipeline
+from hydra.utils import instantiate
+
+from magneton.config import PipelineConfig
+from magneton.pipeline import EmbeddingPipeline
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
-def main(cfg: DictConfig) -> None:
+def main(cfg: PipelineConfig) -> None:
     """Main entry point for the protein embedding pipeline"""
+    cfg = instantiate(cfg)
+    pprint(cfg, compact=False)
+    return
     pipeline = EmbeddingPipeline(cfg)
-    
+
     # Determine which pipeline stage to run based on config
     if cfg.get('stage') == 'embed':
         pipeline.run_embedding()
@@ -19,4 +26,4 @@ def main(cfg: DictConfig) -> None:
         pipeline.run()
 
 if __name__ == "__main__":
-    main() 
+    main()

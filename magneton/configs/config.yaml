@@ -1,29 +1,28 @@
 defaults:
+  - base_pipeline
   - _self_
-  - pipeline: default
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
-stage: "embed"  # Options: null (full pipeline), "embed", "train", "visualize"
 
-pipeline:
-  seed: 42
-  output_dir: "outputs"
-  data:
-    data_dir: "data"
-  embedding:
-    model_type: "esmc"
+seed: 42
+output_dir: "outputs"
+stages: ["embed"]  # Options: null (full pipeline), "embed", "train", "visualize"
+data:
+  data_dir: "data"
+embedding:
+  model: "esmc"
+  batch_size: 32
+  device: "cuda"
+  model_params:
     max_seq_length: 2048
-    batch_size: 32
-    device: "cuda"
     weights_path: "path/to/weights"
     use_flash_attn: false
     rep_layer: 35
-    model_params: {}
-  model:
-    model_type: "mlp"
-  training:
-    max_epochs: 100
+model:
+  model_type: "mlp"
+training:
+  max_epochs: 100
 
 # # decide on these
 # model:
@@ -49,7 +48,7 @@ pipeline:
 # max_seq_length: 1024
 # window_size: 10
 # num_windows: 5
-# non_contiguous: true 
+# non_contiguous: true
 
 # gearnet
 # _target_: magneton.config.config.GearNetConfig
@@ -58,4 +57,4 @@ pipeline:
 # hidden_dims: [512, 512, 512]
 # num_relation: 7
 # edge_input_dim: 59
-# num_angle_bin: 8 
+# num_angle_bin: 8
