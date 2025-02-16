@@ -16,6 +16,9 @@ class EmbeddingConfig:
 class DataConfig:
     _target_: str = "magneton.config.DataConfig"
     data_dir: str = MISSING
+    fasta_path: Optional[str] = None
+    compression: str = "bz2"
+    prefix: str = "sharded_proteins"
 
 @dataclass
 class ModelConfig:

@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Optional, Union, Dict, Any
+from typing import Any, List, Set
 import torch
+
+from magneton.constants import DataType
 
 # from ..config.base_config import EmbeddingConfig
 
@@ -40,6 +42,11 @@ class BaseEmbedder(ABC):
         pass
 
     @classmethod
-    def get_required_input_type(cls) -> str:
+    def get_required_input_type(cls) -> Set[DataType]:
         """Return the required input type for this embedder"""
+        pass
+
+    @classmethod
+    def model_name(cls) -> str:
+        """Return human-readable name for embedder"""
         pass

@@ -1,32 +1,33 @@
 from pathlib import Path
-from typing import Dict, Any, Optional
 
 import torch
 import numpy as np
-from omegaconf import DictConfig
+import pandas as pd
 
+from tqdm import tqdm
+
+from magneton.config import PipelineConfig
+from magneton.data.utils import get_dataloader
 from magneton.embedders.factory import EmbedderFactory
-from magneton.data.dataset import get_protein_dataset
 from magneton.training.trainer import ModelTrainer
 # from .visualization import EmbeddingVisualizer
 
 class EmbeddingPipeline:
     """Main pipeline for protein embedding and analysis"""
 
-    def __init__(self, cfg: DictConfig):
+    def __init__(self, cfg: PipelineConfig):
         print("\n=== Pipeline Configuration ===")
         print(f"Output Directory: {cfg.pipeline.output_dir}")
         print(f"Model Type: {cfg.pipeline.model.model_type}")
         print(f"Embedding Config: {cfg.pipeline.embedding}")
         print("============================\n")
 
-        self.config = cfg.pipeline
+        self.config = cfg
         self.output_dir = Path(self.config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize components
         self.embedder = EmbedderFactory.create_embedder(self.config.embedding)
-        self.dataset = get_protein_dataset(self.config.data.data_dir)
         self.trainer = ModelTrainer(self.config)
         # self.visualizer = EmbeddingVisualizer()
 
@@ -44,20 +45,28 @@ class EmbeddingPipeline:
         # Check if embeddings exist, terminate if so
         # Implement override if want to regenerate
 
-        # Load data
-        proteins = self.dataset.load_proteins()
+        # Get data loader
+        loader = get_dataloader(
+            self.config.data,
+            self.embedder.get_required_input_type(),
+        )
 
-        # Generate embeddings
-        # Make this function model-agnostic because different embedders require different types of data (seq vs. structure)
-        embeddings = self.embedder.embed_batch(proteins)
-        labels = self.dataset.get_labels(proteins)
+        # Get embeddings and associated IDs
+        all_embeds = []
+        all_ids = []
+        for batch in tqdm(loader, desc=f"{self.embedder.model_name()} embedding"):
+            batch_embeds = self.embedder.embed_batch(batch)
+            all_embeds.extend(batch_embeds)
+            all_ids.extend([prot.uniprot_id for (seq, prot) in batch])
 
         # Save results
-        embedding_path = self.output_dir / "embeddings.npy"
-        labels_path = self.output_dir / "labels.npy"
-        np.save(embedding_path, embeddings)
-        np.save(labels_path, labels)
-        print(f"Saved embeddings to {embedding_path}")
+        embedding_path = self.output_dir / f"{self.embedder.model_name()}.embeddings.pt"
+        all_embeds = torch.cat(all_embeds, dim=0).cpu()
+        torch.save(all_embeds, embedding_path)
+
+        ids_path = self.output_dir / f"{self.embedder.model_name()}.ids.tsv"
+        pd.Series(all_ids).to_csv(ids_path, index=False, header=False, sep="\t")
+        print("Done generating embeddings")
 
     def run_training(self):
         """Train and evaluate model using Lightning"""

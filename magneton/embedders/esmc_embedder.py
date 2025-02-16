@@ -1,6 +1,7 @@
 import os
 
 from dataclasses import dataclass, field
+from typing import List, Set, Tuple
 
 import torch
 
@@ -13,14 +14,11 @@ from esm.sdk.api import (
 from esm.tokenization import get_esmc_model_tokenizers
 from esm.utils.sampling import _BatchedESMProteinTensor
 from tqdm import tqdm
-from typing import List, Tuple
 
+from magneton.constants import DataType
 from magneton.embedders.base_embedder import BaseConfig, BaseEmbedder
 from magneton.types import Protein
 from magneton.utils import get_chunk_idxs
-
-# from magneton.config.base_config import ESMConfig
-
 
 @dataclass
 class ESMCConfig(BaseConfig):
@@ -29,7 +27,6 @@ class ESMCConfig(BaseConfig):
     rep_layer: int = field(kw_only=True, default=35)
     max_seq_length: int = field(kw_only=True, default=2048)
     batch_size: int = 32
-    device: str = 'cuda'
 
 
 class ESMCEmbedder(BaseEmbedder):
@@ -60,6 +57,7 @@ class ESMCEmbedder(BaseEmbedder):
         self.model.load_state_dict(state_dict)
         self.max_len = config.max_seq_length
         self.rep_layer = config.rep_layer
+        self.device = config.device
 
     @torch.no_grad()
     def _get_embedding(
@@ -147,5 +145,9 @@ class ESMCEmbedder(BaseEmbedder):
         return all_embeddings
 
     @classmethod
-    def get_required_input_type(cls) -> str:
-        return "sequence"
+    def get_required_input_type(cls) -> Set[DataType]:
+        return {DataType.SEQ}
+
+    @classmethod
+    def model_name(cls) -> str:
+        return "ESM-C"

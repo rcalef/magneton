@@ -1,29 +1,17 @@
 defaults:
   - base_pipeline
+  - data: interpro103_swissprot
+  - embedding: esmc
   - _self_
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
 
-seed: 42
-output_dir: "outputs"
-stages: ["embed"]  # Options: null (full pipeline), "embed", "train", "visualize"
-data:
-  data_dir: "data"
-embedding:
-  model: "esmc"
-  batch_size: 32
-  device: "cuda"
-  model_params:
-    max_seq_length: 2048
-    weights_path: "path/to/weights"
-    use_flash_attn: false
-    rep_layer: 35
+output_dir: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc"
 model:
   model_type: "mlp"
 training:
   max_epochs: 100
-
 # # decide on these
 # model:
 #   hidden_dims: [512, 256, 128]
