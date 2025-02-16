@@ -1,3 +1,4 @@
+from pprint import pprint
 from typing import Dict, Tuple, Type
 
 from magneton.config import EmbeddingConfig
@@ -21,7 +22,7 @@ class EmbedderFactory:
     @classmethod
     def create_embedder(cls, config: EmbeddingConfig) -> BaseEmbedder:
         """Create an embedder instance based on config"""
-        model_type = config.get('model_type', 'esmc')  # default to esmc
+        model_type = config.model
         embedder_class, config_class = cls._embedders.get(model_type)
 
         if embedder_class is None:
@@ -29,7 +30,7 @@ class EmbedderFactory:
 
         # Print debug info
         print(f"\n=== Creating {model_type} embedder ===")
-        print(f"Config parameters: {dict(config)}")
+        print(f"Config parameters: {pprint(config)}")
 
         embedder_config = config_class(
             device=config.device,

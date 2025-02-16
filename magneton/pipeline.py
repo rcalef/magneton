@@ -1,4 +1,5 @@
 from pathlib import Path
+from pprint import pprint
 
 import torch
 import numpy as np
@@ -17,9 +18,10 @@ class EmbeddingPipeline:
 
     def __init__(self, cfg: PipelineConfig):
         print("\n=== Pipeline Configuration ===")
-        print(f"Output Directory: {cfg.pipeline.output_dir}")
-        print(f"Model Type: {cfg.pipeline.model.model_type}")
-        print(f"Embedding Config: {cfg.pipeline.embedding}")
+        print(f"Output Directory: {cfg.output_dir}")
+        print(f"Model Type: {cfg.model.model_type}")
+        print(f"Full Config:")
+        pprint(cfg, compact=False)
         print("============================\n")
 
         self.config = cfg
@@ -49,6 +51,7 @@ class EmbeddingPipeline:
         loader = get_dataloader(
             self.config.data,
             self.embedder.get_required_input_type(),
+            self.config.embedding.batch_size,
         )
 
         # Get embeddings and associated IDs

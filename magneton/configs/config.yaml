@@ -12,6 +12,10 @@ model:
   model_type: "mlp"
 training:
   max_epochs: 100
+
+hydra:
+  run:
+    dir: ${output_dir}
 # # decide on these
 # model:
 #   hidden_dims: [512, 256, 128]

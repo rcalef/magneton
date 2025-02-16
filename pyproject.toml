@@ -39,4 +39,18 @@ Source-code = "https://github.com/rcalef/magneton/"
 packages = ["magneton"]
 
 [tool.uv]
-no-build-isolation-package = ["torch-scatter", "torch-cluster"]
+no-build-isolation-package = ["torch-scatter", "torch-cluster", "flash-attn"]
+
+
+# TODO add back in flash-attn once we resolve cuda version mismatches
+# on OpenMind
+#[tool.uv]
+#no-build-isolation-package = ["torch-scatter", "torch-cluster", "flash-attn"]
+
+#[project.optional-dependencies]
+#build = ["torch", "setuptools", "packaging"]
+#compile = ["flash-attn"]
+
+#[[tool.uv.dependency-metadata]]
+#name = "flash-attn"
+#requires-dist = ["torch", "einops"]
