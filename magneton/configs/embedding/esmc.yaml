@@ -1,0 +1,7 @@
+model: "esmc"
+batch_size: 32
+device: "cuda"
+model_params:
+  weights_path: "/weka/scratch/weka/kellislab/rcalef/model_weights/esmc-600m-2024-12"
+  rep_layer: 35
+  use_flash_attn: False
