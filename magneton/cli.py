@@ -2,8 +2,8 @@ import hydra
 from hydra.utils import instantiate
 
 from magneton.config import PipelineConfig
-from magneton.constants import name_to_stage, PipelineStage
 from magneton.pipeline import EmbeddingPipeline
+from magneton.types import name_to_stage, PipelineStage
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(cfg: PipelineConfig) -> None:

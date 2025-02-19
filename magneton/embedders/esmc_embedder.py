@@ -1,6 +1,7 @@
 import os
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from functools import partial
 from typing import List, Set, Tuple
 
 import torch
@@ -12,13 +13,162 @@ from esm.sdk.api import (
     LogitsConfig,
 )
 from esm.tokenization import get_esmc_model_tokenizers
+from esm.utils.misc import stack_variable_length_tensors
 from esm.utils.sampling import _BatchedESMProteinTensor
 from tqdm import tqdm
 
-from magneton.constants import DataType
-from magneton.embedders.base_embedder import BaseConfig, BaseEmbedder
-from magneton.types import Protein
+from magneton.config import DataConfig, TrainingConfig
+from magneton.data.meta_dataset import MetaDataset
+from magneton.data.substructure import LabeledSubstructure
+from magneton.embedders.base_embedder import BaseConfig, BaseDataModule, BaseEmbedder
+from magneton.types import DataType
 from magneton.utils import get_chunk_idxs
+
+
+@dataclass
+class SubstructureBatch:
+    substructures: List[List[LabeledSubstructure]]
+
+    def to(self, device: str):
+        for i in range(len(self.substructures)):
+            for j in range(len(self.substructures[i])):
+                self.substructures[i][j] = self.substructures[i][j].to(device)
+        return self
+
+
+@dataclass
+class ESMCDataElem:
+    tokenized_seq: torch.Tensor
+    substructures: List[LabeledSubstructure]
+
+
+@dataclass
+class ESMCBatch(SubstructureBatch):
+    tokenized_seq: _BatchedESMProteinTensor
+
+    def to(self, device: str):
+        super().to(device)
+        self.tokenized_seq = self.tokenized_seq.to(device)
+        return self
+
+
+class ESMCDataSet(MetaDataset):
+    def __init__(
+        self,
+        data_config: DataConfig,
+    ):
+        super().__init__(
+            data_config=data_config,
+            want_datatypes=[DataType.SEQ, DataType.SUBSTRUCT],
+            load_fasta_in_mem=True,
+        )
+        self.tokenizer = get_esmc_model_tokenizers()
+
+    def __len__(self):
+        return super().__len__()
+
+    def __getitem__(self, idx: int) -> ESMCDataElem:
+        elem = self._prot_to_elem(self.dataset[idx])
+        return ESMCDataElem(
+            tokenized_seq=torch.tensor(self.tokenizer.encode(elem.seq)),
+            substructures=elem.substructures,
+        )
+
+
+def esmc_collate(
+    entries: List[ESMCDataElem],
+    pad_id: int,
+    drop_empty_substructures: bool = True,
+) -> ESMCBatch:
+    """
+    Collate the entries into a batch.
+    """
+    if drop_empty_substructures:
+        entries = [e for e in entries if len(e.substructures) > 0]
+    padded_tensor = stack_variable_length_tensors(
+        [x.tokenized_seq for x in entries],
+        constant_value=pad_id,
+    )
+    substructs = [x.substructures for x in entries]
+    return ESMCBatch(
+        tokenized_seq=_BatchedESMProteinTensor(sequence=padded_tensor),
+        substructures=substructs,
+    )
+
+
+class ESMCDataModule(BaseDataModule):
+    def __init__(
+        self,
+        data_config: DataConfig,
+        train_config: TrainingConfig,
+    ):
+        super().__init__()
+        self.config = data_config
+        self.batch_size = train_config.batch_size
+
+    def _get_loader(self, dataset: ESMCDataSet) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(
+            dataset,
+            batch_size=self.config.batch_size,
+            shuffle=True,
+        )
+
+    def _get_split_info(self, split: str) -> Tuple[str, str]:
+        if split == "all":
+            return self.config.data_dir, self.config.prefix
+        else:
+            return (
+                os.path.join(
+                    self.config.data_dir, "dataset_splits", "seq_splits", f"{split}_sharded"
+                ),
+                f"swissprot.with_ss.{split}"
+            )
+
+    def _get_dataloader(
+        self,
+        split: str,
+        **kwargs,
+    ) -> torch.utils.data.DataLoader:
+        data_dir, prefix = self._get_split_info(split)
+        config = replace(
+            self.config,
+            data_dir=data_dir,
+            prefix=prefix,
+        )
+        dataset = ESMCDataSet(
+            data_config=config,
+        )
+        return torch.utils.data.DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            collate_fn=partial(esmc_collate, pad_id=dataset.tokenizer.pad_token_id),
+            **kwargs,
+        )
+
+    def train_dataloader(self):
+        return self._get_dataloader(
+            "train",
+            shuffle=True,
+        )
+
+    def val_dataloader(self):
+        return self._get_dataloader(
+            "val",
+            shuffle=False,
+        )
+
+    def test_dataloader(self):
+        return self._get_dataloader(
+            "test",
+            shuffle=False,
+        )
+
+    def predict_dataloader(self):
+        return self._get_dataloader(
+            "all",
+            shuffle=False,
+        )
+
 
 @dataclass
 class ESMCConfig(BaseConfig):
@@ -26,24 +176,27 @@ class ESMCConfig(BaseConfig):
     use_flash_attn: bool = field(kw_only=True, default=False)
     rep_layer: int = field(kw_only=True, default=35)
     max_seq_length: int = field(kw_only=True, default=2048)
-    batch_size: int = 32
 
 
 class ESMCEmbedder(BaseEmbedder):
     def __init__(
         self,
         config: ESMCConfig,
+        frozen: bool = True,
     ):
         super().__init__(config)
 
-        with torch.device(self.device):
-            self.model = ESMC(
-                d_model=1152,
-                n_heads=18,
-                n_layers=36,
-                tokenizer=get_esmc_model_tokenizers(),
-                use_flash_attn=config.use_flash_attn,
-            ).eval()
+        self.model = ESMC(
+            d_model=1152,
+            n_heads=18,
+            n_layers=36,
+            tokenizer=get_esmc_model_tokenizers(),
+            use_flash_attn=config.use_flash_attn,
+        ).eval()
+
+        if frozen:
+            for param in self.parameters():
+                param.requires_grad = False
 
         state_dict = torch.load(
             os.path.join(
@@ -70,11 +223,7 @@ class ESMCEmbedder(BaseEmbedder):
             return_hidden_states=True,
         )
         logits_out = self.model.logits(protein_tensor, logits_config)
-        return (
-            self.model.transformer.norm(logits_out.hidden_states)[self.rep_layer]
-            .detach()
-            .cpu()
-        )
+        return self.model.transformer.norm(logits_out.hidden_states)[self.rep_layer]
 
     @torch.no_grad()
     def embed_single_protein(self, seq: str) -> torch.Tensor:
@@ -99,35 +248,9 @@ class ESMCEmbedder(BaseEmbedder):
         return ret.squeeze()[1 : len(seq) + 1]
 
     @torch.no_grad()
-    def embed_batch(self, batch: List[Tuple[str, Protein]]) -> List[torch.Tensor]:
-        """Embed a batch of protein sequences"""
-        # Split out sequences we can run in batch inference, and those that
-        # are too long and need to be chunked.
-        short_idxs = []
-        long_idxs = []
-        short_seqs = []
-        long_seqs = []
-        for idx, (seq, _) in enumerate(batch):
-            if len(seq) <= self.max_len:
-                short_idxs.append(idx)
-                short_seqs.append(seq)
-            else:
-                long_idxs.append(idx)
-                long_seqs.append(seq)
-
-        # Batch inference for short sequences
-        seq_tokens = self.model._tokenize(short_seqs)
-        protein_tensor = _BatchedESMProteinTensor(sequence=seq_tokens).to(self.device)
-        short_embeds = self._get_embedding(protein_tensor)
-
-        ret = [None] * len(batch)
-        for i, (idx, seq) in enumerate(zip(short_idxs, short_seqs)):
-            # Skip BOS and EOS tokens
-            ret[idx] = short_embeds[i, 1 : len(seq) + 1, :]
-        for i, (idx, seq) in enumerate(zip(long_idxs, long_seqs)):
-            ret[idx] = self.embed_single_protein(seq)
-
-        return ret
+    def embed_batch(self, batch: ESMCBatch) -> List[torch.Tensor]:
+        """Embed a batch of pre-tokenized protein sequences"""
+        return self._get_embedding(batch.tokenized_seq)[:, 1:-1, :]
 
     @torch.no_grad()
     def embed_sequences(self, sequences: List[str]) -> List[torch.Tensor]:
@@ -136,13 +259,16 @@ class ESMCEmbedder(BaseEmbedder):
 
         for seq in tqdm(sequences, desc="Processing sequences"):
             try:
-                embedding = self.embed_one_prot(seq)
+                embedding = self.embed_single_protein(seq)
                 all_embeddings.append(embedding)
             except Exception as e:
                 print(f"Error processing sequence: {str(e)}")
                 continue
 
         return all_embeddings
+
+    def get_embed_dim(self):
+        return 1152
 
     @classmethod
     def get_required_input_type(cls) -> Set[DataType]:

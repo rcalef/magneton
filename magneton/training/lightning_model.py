@@ -1,9 +1,11 @@
 from typing import Dict, Any
+
+import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-import pytorch_lightning as pl
 from torchmetrics import Accuracy, F1Score
-from ..config import ModelConfig
+
+from magneton.config import ModelConfig
 
 class ProteinClassifier(pl.LightningModule):
     def __init__(self, config: ModelConfig, num_classes: int, input_dim: int):
@@ -14,11 +16,11 @@ class ProteinClassifier(pl.LightningModule):
         # Build MLP layers
         layers = []
         prev_dim = input_dim
-        for hidden_dim in config.hidden_dims:
+        for hidden_dim in config.model_params["hidden_dims"]:
             layers.extend([
                 nn.Linear(prev_dim, hidden_dim),
                 nn.ReLU(),
-                nn.Dropout(config.dropout_rate)
+                nn.Dropout(config.model_params["dropout_rate"])
             ])
             prev_dim = hidden_dim
 

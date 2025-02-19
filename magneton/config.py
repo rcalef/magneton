@@ -16,19 +16,23 @@ class EmbeddingConfig:
 class DataConfig:
     _target_: str = "magneton.config.DataConfig"
     data_dir: str = MISSING
-    fasta_path: Optional[str] = None
     compression: str = "bz2"
     prefix: str = "sharded_proteins"
+    fasta_path: Optional[str] = None
+    labels_path: Optional[str] = None
+    interpro_types: Optional[List[str]] = None
 
 @dataclass
 class ModelConfig:
     _target_: str = "magneton.config.ModelConfig"
     model_type: str = MISSING
+    model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
 
 @dataclass
 class TrainingConfig:
     _target_: str = "magneton.config.TrainingConfig"
     max_epochs: int = 100
+    batch_size: int = 32
 
 @dataclass
 class PipelineConfig:

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from enum import Enum, auto, unique
+from enum import auto, Enum, StrEnum, unique
 from pprint import pprint
 from typing import List, Tuple
 
@@ -58,10 +58,31 @@ class SecondaryStructure:
         print(f"{DSSP_TO_NAME[self.dssp_type.value]}: {self.start} - {self.end}")
 
 
+interpro_types = [
+    "Family",
+    "Domain",
+    "Homologous_superfamily",
+    "Conserved_site",
+    "Active_site",
+    "Binding_site",
+    "PTM",
+]
+
+
+class InterProType(StrEnum):
+    FAMILY = "Family"
+    DOMAIN = "Domain"
+    HOMO_FAMILY = "Homologous_superfamily"
+    CONS_SITE = "Conserved_site"
+    ACT_SITE = "Active_site"
+    BIND_SITE = "Binding_site"
+    PTM = "PTM"
+
+
 @dataclass
 class InterproEntry:
     id: str
-    element_type: str
+    element_type: InterProType
     match_id: str
     element_name: str
     representative: bool
@@ -70,7 +91,6 @@ class InterproEntry:
 
     def print(self):
         pprint(self)
-
 
 
 @dataclass
@@ -89,3 +109,25 @@ class Protein:
 
     def __setstate__(self, state):
         return self.__init__(**state)
+
+
+class DataType(StrEnum):
+    SEQ = "sequence"
+    STRUCT = "structure"
+    SUBSTRUCT = "substructure"
+
+
+class PipelineStage(Enum):
+    EMBED = 0
+    TRAIN = auto()
+    VISUALIZE = auto()
+
+
+stage_names = [
+    "embed",
+    "train",
+    "visualize",
+]
+
+# Map stage names to their corresponding enum values
+name_to_stage = {name: stage for stage, name in enumerate(stage_names)}

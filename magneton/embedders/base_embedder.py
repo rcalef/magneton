@@ -1,22 +1,36 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, List, Set
-import torch
 
-from magneton.constants import DataType
+import torch
+import torch.nn as nn
+import lightning as L
+
+from magneton.config import DataConfig, TrainingConfig
+from magneton.types import DataType
 
 # from ..config.base_config import EmbeddingConfig
+
+
+class BaseDataModule(L.LightningDataModule, ABC):
+
+    def __init__(
+        self,
+        data_config: DataConfig,
+        train_cofing: TrainingConfig,
+    ):
+        super().__init__()
 
 
 @dataclass
 class BaseConfig:
     device: str = field(kw_only=True, default="cpu")
 
-
-class BaseEmbedder(ABC):
+class BaseEmbedder(nn.Module, ABC):
     """Base class for protein embedders"""
 
     def __init__(self, config: BaseConfig):
+        super().__init__()
         self.config = config
         self.device = torch.device(config.device)
 
@@ -39,6 +53,10 @@ class BaseEmbedder(ABC):
     # @abstractmethod
     def process_protein(self, protein_data: Any) -> torch.Tensor:
         """Process a single protein through the model"""
+        pass
+
+    @abstractmethod
+    def get_embed_dim(cls) -> int:
         pass
 
     @classmethod

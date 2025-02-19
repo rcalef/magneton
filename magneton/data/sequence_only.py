@@ -3,8 +3,9 @@ from typing import Generator, List, Tuple
 from pysam import FastaFile
 from torch.utils.data import IterableDataset
 
-from magneton.data.dataset import get_protein_dataset
+from magneton.data.protein_dataset import get_protein_dataset
 from magneton.types import Protein
+
 
 class SequenceOnlyDataset(IterableDataset):
     def __init__(
@@ -13,6 +14,7 @@ class SequenceOnlyDataset(IterableDataset):
         fasta_path: str,
         compression: str = "bz2",
         prefix: str = "sharded_proteins",
+        load_fasta_in_mem: bool = True,
     ):
         super().__init__()
         self.dataset = get_protein_dataset(
@@ -20,7 +22,11 @@ class SequenceOnlyDataset(IterableDataset):
             compression=compression,
             prefix=prefix,
         )
-        self.fasta = FastaFile(fasta_path)
+        if load_fasta_in_mem:
+            fa = FastaFile(fasta_path)
+            self.fasta = {k: fa.fetch(k) for k in fa.references}
+        else:
+            self.fasta = FastaFile(fasta_path)
 
     def __len__(self) -> int:
         return len(self.dataset)

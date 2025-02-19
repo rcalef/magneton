@@ -78,7 +78,7 @@ def summarize_protein(
     filtered_entries = [
         x
         for x in prot.entries
-        if (x.element_type in have_representative and x.representative == "true")
+        if (x.element_type in have_representative and x.representative)
         or (x.element_type not in have_representative)
     ]
     entry_types = [x.element_type for x in filtered_entries]

@@ -29,7 +29,8 @@ class EmbeddingPipeline:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize components
-        self.embedder = EmbedderFactory.create_embedder(self.config.embedding)
+        self.embedder, data_cls = EmbedderFactory.create_embedder(self.config.embedding)
+        self.data_module = data_cls(cfg.data, cfg.training)
         self.trainer = ModelTrainer(self.config)
         # self.visualizer = EmbeddingVisualizer()
 
@@ -48,11 +49,7 @@ class EmbeddingPipeline:
         # Implement override if want to regenerate
 
         # Get data loader
-        loader = get_dataloader(
-            self.config.data,
-            self.embedder.get_required_input_type(),
-            self.config.embedding.batch_size,
-        )
+        loader = self.data_module.predict_dataloader()
 
         # Get embeddings and associated IDs
         all_embeds = []
