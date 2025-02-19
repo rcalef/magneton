@@ -23,7 +23,6 @@ dependencies = [
     "scikit-learn>=1.6.0",
     "seaborn>=0.13.2",
     "torch>=2.5.1",
-    "torchdrug>=0.2.1",
     "tqdm>=4.67.1",
     "wandb>=0.19.6",
 ]
@@ -39,11 +38,11 @@ Source-code = "https://github.com/rcalef/magneton/"
 packages = ["magneton"]
 
 [project.optional-dependencies]
-build = ["torch", "setuptools", "packaging"]
-compile = ["flash-attn", "torch-cluster", "torch-scatter"]
+build = ["setuptools"]
+compile = ["torchdrug"]
 
 [tool.uv]
-no-build-isolation-package = ["torch-scatter", "torch-cluster", "flash-attn"]
+no-build-isolation-package = ["torchdrug", "torch-cluster", "torch-scatter"]
 
 
 # TODO add back in flash-attn once we resolve cuda version mismatches

@@ -1405,9 +1405,16 @@ dependencies = [
     { name = "scikit-learn" },
     { name = "seaborn" },
     { name = "torch" },
-    { name = "torchdrug" },
     { name = "tqdm" },
     { name = "wandb" },
+]
+
+[package.optional-dependencies]
+build = [
+    { name = "setuptools" },
+]
+compile = [
+    { name = "torchdrug" },
 ]
 
 [package.metadata]
@@ -1425,8 +1432,9 @@ requires-dist = [
     { name = "pysam", specifier = ">=0.22.1" },
     { name = "scikit-learn", specifier = ">=1.6.0" },
     { name = "seaborn", specifier = ">=0.13.2" },
+    { name = "setuptools", marker = "extra == 'build'" },
     { name = "torch", specifier = ">=2.5.1" },
-    { name = "torchdrug", specifier = ">=0.2.1" },
+    { name = "torchdrug", marker = "extra == 'compile'" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "wandb", specifier = ">=0.19.6" },
 ]
