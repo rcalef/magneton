@@ -1,5 +1,5 @@
 data_dir: "/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/swissprot/sharded_swissprot/with_ss"
 fasta_path: "/weka/scratch/weka/kellislab/rcalef/data/uniprot/uniprot_sprot.fasta.gz"
 prefix: "swissprot.with_ss"
-label_path: "/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/label_sets"
+labels_path: "/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/label_sets"
 interpro_types: ["Domain"]

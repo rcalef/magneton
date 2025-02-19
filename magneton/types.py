@@ -130,4 +130,4 @@ stage_names = [
 ]
 
 # Map stage names to their corresponding enum values
-name_to_stage = {name: stage for stage, name in enumerate(stage_names)}
+name_to_stage = {name: PipelineStage(stage) for stage, name in enumerate(stage_names)}

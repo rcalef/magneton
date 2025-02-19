@@ -102,7 +102,7 @@ class ESMCDataModule(BaseDataModule):
         data_config: DataConfig,
         train_config: TrainingConfig,
     ):
-        super().__init__()
+        super().__init__(data_config, train_config)
         self.config = data_config
         self.batch_size = train_config.batch_size
 

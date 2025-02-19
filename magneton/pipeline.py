@@ -8,7 +8,6 @@ import pandas as pd
 from tqdm import tqdm
 
 from magneton.config import PipelineConfig
-from magneton.data.utils import get_dataloader
 from magneton.embedders.factory import EmbedderFactory
 from magneton.training.trainer import ModelTrainer
 # from .visualization import EmbeddingVisualizer
@@ -53,19 +52,15 @@ class EmbeddingPipeline:
 
         # Get embeddings and associated IDs
         all_embeds = []
-        all_ids = []
         for batch in tqdm(loader, desc=f"{self.embedder.model_name()} embedding"):
             batch_embeds = self.embedder.embed_batch(batch)
             all_embeds.extend(batch_embeds)
-            all_ids.extend([prot.uniprot_id for (seq, prot) in batch])
 
         # Save results
         embedding_path = self.output_dir / f"{self.embedder.model_name()}.embeddings.pt"
         all_embeds = torch.cat(all_embeds, dim=0).cpu()
         torch.save(all_embeds, embedding_path)
 
-        ids_path = self.output_dir / f"{self.embedder.model_name()}.ids.tsv"
-        pd.Series(all_ids).to_csv(ids_path, index=False, header=False, sep="\t")
         print("Done generating embeddings")
 
     def run_training(self):

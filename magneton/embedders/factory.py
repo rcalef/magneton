@@ -10,7 +10,7 @@ from .gearnet_embedder import GearNetEmbedder
 from .esmc_embedder import ESMCEmbedder, ESMCConfig, ESMCDataModule
 
 class EmbedderFactory:
-    _embedders: Dict[str, Tuple[Type[BaseEmbedder], Type[BaseConfig]], Type[BaseDataModule]] = {
+    _embedders: Dict[str, Tuple[Type[BaseEmbedder], Type[BaseConfig], Type[BaseDataModule]]] = {
         "esm": (ESMEmbedder, None, None),
         "gearnet": (GearNetEmbedder, None, None),
         "esmc": (ESMCEmbedder, ESMCConfig, ESMCDataModule),
