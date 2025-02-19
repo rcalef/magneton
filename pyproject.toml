@@ -38,6 +38,10 @@ Source-code = "https://github.com/rcalef/magneton/"
 [tool.setuptools]
 packages = ["magneton"]
 
+[project.optional-dependencies]
+build = ["torch", "setuptools", "packaging"]
+compile = ["flash-attn", "torch-cluster", "torch-scatter"]
+
 [tool.uv]
 no-build-isolation-package = ["torch-scatter", "torch-cluster", "flash-attn"]
 
