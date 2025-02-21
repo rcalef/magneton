@@ -6,30 +6,32 @@ import torch.nn as nn
 from torchmetrics import Accuracy, F1Score
 from torch_scatter import scatter_mean
 
-from magneton.config import ModelConfig
-from magneton.embedders.base_embedder import BaseEmbedder
+from magneton.config import PipelineConfig
 from magneton.embedders.esmc_embedder import SubstructureBatch
+from magneton.embedders.factory import EmbedderFactory
 
 class EmbeddingMLP(L.LightningModule):
     def __init__(
         self,
-        config: ModelConfig,
-        embedder: BaseEmbedder,
+        config: PipelineConfig,
         num_classes: int,
     ):
         super().__init__()
         self.save_hyperparameters()
-        self.config = config
-        self.embedder = embedder
+        self.model_config = config.model
+        self.train_config = config.training
+        self.embed_config = config.embedding
+
+        self.embedder  = EmbedderFactory.create_embedder(self.embed_config)
 
         # Build MLP layers
         layers = []
-        prev_dim = embedder.get_embed_dim()
-        for hidden_dim in config.model_params["hidden_dims"]:
+        prev_dim = self.embedder.get_embed_dim()
+        for hidden_dim in self.model_config.model_params["hidden_dims"]:
             layers.extend([
                 nn.Linear(prev_dim, hidden_dim),
                 nn.ReLU(),
-                nn.Dropout(config.model_params["dropout_rate"])
+                nn.Dropout(self.model_config.model_params["dropout_rate"])
             ])
             prev_dim = hidden_dim
 
@@ -43,19 +45,6 @@ class EmbeddingMLP(L.LightningModule):
         self.val_acc = Accuracy(task="multiclass", num_classes=num_classes)
         self.test_acc = Accuracy(task="multiclass", num_classes=num_classes)
         self.f1 = F1Score(task="multiclass", num_classes=num_classes)
-
-    # def to(self, device):
-    #     # Have to override this to explicitly move
-    #     # the frozen embedder over to the device.
-    #     # We could also consider registering it as a frozen module instead.
-    #     self.embedder.to(device)
-
-    #     self.model.to(device)
-    #     self.train_acc.to(device)
-    #     self.val_acc.to(device)
-    #     self.test_acc.to(device)
-    #     self.f1.to(device)
-    #     return self
 
     def forward(self, batch: SubstructureBatch):
         # num_proteins X max_length X embed_dim
@@ -125,11 +114,15 @@ class EmbeddingMLP(L.LightningModule):
         self.log("val_loss", loss)
         self.log("val_acc", acc)
         self.log("val_f1", f1)
+        self.log("eff_batch_size", batch.total_length())
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
             self.parameters(),
-            lr=self.config.model_params["learning_rate"],
-            weight_decay=self.config.model_params["weight_decay"],
+            lr=self.train_config.learning_rate,
+            weight_decay=self.train_config.weight_decay,
         )
         return optimizer
+
+    def name(self) -> str:
+        return f"{self.embed_config.model}-mlp"

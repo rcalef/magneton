@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
@@ -34,6 +34,11 @@ class TrainingConfig:
     _target_: str = "magneton.config.TrainingConfig"
     max_epochs: int = 100
     batch_size: int = 32
+    learning_rate: float = 1e-2
+    weight_decay: float = 0.0
+    accelerator: str = "gpu"
+    devices: Optional[Any] = "auto"
+    additional_training_kwargs: Optional[Dict[str, Any]] = field(default_factory=dict)
 
 @dataclass
 class PipelineConfig:

@@ -10,6 +10,7 @@ from tqdm import tqdm
 from magneton.config import PipelineConfig
 from magneton.embedders.factory import EmbedderFactory
 from magneton.training.trainer import ModelTrainer
+from magneton.training.embedding_mlp import EmbeddingMLP
 # from .visualization import EmbeddingVisualizer
 
 class EmbeddingPipeline:
@@ -27,11 +28,9 @@ class EmbeddingPipeline:
         self.output_dir = Path(self.config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize components
-        self.embedder, data_cls = EmbedderFactory.create_embedder(self.config.embedding)
-        self.data_module = data_cls(cfg.data, cfg.training)
-        self.trainer = ModelTrainer(self.config)
-        # self.visualizer = EmbeddingVisualizer()
+        # Initialize dataset
+        _, _, data_cls  = EmbedderFactory.fetch_embedder_classes(self.config.embedding.model)
+        self.data_module = data_cls(self.config.data, self.config.training)
 
     def run(self):
         """Run complete pipeline"""
@@ -42,6 +41,7 @@ class EmbeddingPipeline:
     def run_embedding(self):
         """Generate and save embeddings"""
         print("Generating embeddings...")
+        embedder  = EmbedderFactory.create_embedder(self.config.embedding)
 
         # TODO
         # Check if embeddings exist, terminate if so
@@ -52,12 +52,13 @@ class EmbeddingPipeline:
 
         # Get embeddings and associated IDs
         all_embeds = []
-        for batch in tqdm(loader, desc=f"{self.embedder.model_name()} embedding"):
+        for batch in tqdm(loader, desc=f"{embedder.model_name()} embedding"):
+            batch = batch.to(self.config.embedding.device)
             batch_embeds = self.embedder.embed_batch(batch)
-            all_embeds.extend(batch_embeds)
+            all_embeds.append(batch_embeds.detach().cpu())
 
         # Save results
-        embedding_path = self.output_dir / f"{self.embedder.model_name()}.embeddings.pt"
+        embedding_path = self.output_dir / f"{embedder.model_name()}.embeddings.pt"
         all_embeds = torch.cat(all_embeds, dim=0).cpu()
         torch.save(all_embeds, embedding_path)
 
@@ -66,19 +67,22 @@ class EmbeddingPipeline:
     def run_training(self):
         """Train and evaluate model using Lightning"""
         print("Training model...")
-
-        # Need for datamodule?
-
-        # Load saved embeddings
-        embeddings = np.load(self.output_dir / "embeddings.npy")
-        labels = np.load(self.output_dir / "labels.npy")
+        train_loader = self.data_module.train_dataloader()
+        val_loader = self.data_module.val_dataloader()
 
         # Train model
-        metrics = self.trainer.train_and_evaluate(embeddings, labels)
+        model = EmbeddingMLP(
+            config=self.config,
+            num_classes=len(train_loader.dataset.substruct_parser.type_to_label)
+        )
+        trainer = ModelTrainer(self.config.training, self.output_dir)
+        trainer.setup(model)
+
+        metrics = trainer.train_and_evaluate(train_loader=train_loader, val_loader=val_loader)
 
         # Save model
         model_path = self.output_dir / "model.pt"
-        self.trainer.save_model(model_path)
+        trainer.save_model(model_path)
         print(f"Saved model to {model_path}")
         print(f"Training metrics: {metrics}")
 

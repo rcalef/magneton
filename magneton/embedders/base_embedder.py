@@ -17,10 +17,11 @@ class BaseDataModule(L.LightningDataModule, ABC):
     def __init__(
         self,
         data_config: DataConfig,
-        train_cofing: TrainingConfig,
+        train_config: TrainingConfig,
     ):
         super().__init__()
-
+        self.data_config = data_config
+        self.train_config = train_config
 
 @dataclass
 class BaseConfig:
@@ -46,7 +47,7 @@ class BaseEmbedder(nn.Module, ABC):
     def embed_batch(
         self,
         batch: List[Any],
-    ) -> List[torch.Tensor]:
+    ) -> torch.Tensor:
         """Embed multiple sequences"""
         pass
 
