@@ -18,6 +18,7 @@ class Batch:
     seqs: List[str] | None
     # First element is ranges, second element is labels
     substructures: List[List[LabeledSubstructure]] | None
+    structure_list: List[str] | None = None
 
 @dataclass
 class BatchElement:
@@ -25,6 +26,7 @@ class BatchElement:
     seq: str | None = None
     # First element is ranges, second element is labels
     substructures: List[LabeledSubstructure] | None = None
+    structure_path: str | None = None
 
 
 class MetaDataset(Dataset):
@@ -56,6 +58,9 @@ class MetaDataset(Dataset):
                 want_types=data_config.interpro_types,
                 labels_dir=data_config.labels_path,
             )
+        if DataType.STRUCT in self.datatypes:
+            assert data_config.struct_path is not None, "Structure path is required for structure data"
+            self.struct_template = data_config.struct_path
 
     def _prot_to_elem(self, prot: Protein) -> BatchElement:
         ret = BatchElement(protein_id=prot.uniprot_id)
@@ -63,6 +68,10 @@ class MetaDataset(Dataset):
             ret.seq = self.fasta[prot.kb_id]
         if DataType.SUBSTRUCT in self.datatypes:
             ret.substructures = self.substruct_parser.parse(prot)
+        if DataType.STRUCT in self.datatypes:
+            # Extract uniprot ID from protein ID (removing any additional identifiers)
+            uniprot_id = prot.uniprot_id.split('|')[0] if '|' in prot.uniprot_id else prot.uniprot_id
+            ret.structure_path = self.struct_template % uniprot_id
         return ret
 
     def __len__(self) -> int:
@@ -88,5 +97,6 @@ def collate_meta_datasets(
         protein_ids=[e.protein_id for e in entries],
         seqs=[e.seq for e in entries] if entries[0].seq is not None else None,
         substructures=[e.substructures for e in entries] if entries[0].substructures is not None else None,
+        structure_list=[e.structure_path for e in entries] if entries[0].structure_path is not None else None,
     )
     return batch

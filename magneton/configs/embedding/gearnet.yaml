@@ -1,0 +1,10 @@
+model: "gearnet"
+batch_size: 32
+device: "cuda"
+model_params:
+  weights_path: "/weka/scratch/weka/kellislab/rcalef/model_weights/esmc-600m-2024-12"
+  max_seq_length: 2048
+  hidden_dims: [512,512,512]
+  num_relation: 7
+  edge_input_dim: 59
+  num_angle_bin: 8
