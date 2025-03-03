@@ -66,7 +66,7 @@ def gearnet_collate(
     #     tokenized_seq=_BatchedESMProteinTensor(sequence=padded_tensor),
     #     substructures=substructs,
     # )
-    
+
     # Load and pack proteins
     proteins = []
     for entry in entries:
@@ -76,9 +76,9 @@ def gearnet_collate(
         except Exception as e:
             print(f"Error loading protein {entry.protein_id}: {str(e)}")
             continue
-    
+
     packed_protein = Protein.pack(proteins)
-    
+
     return GearNetBatch(
         protein_ids=[x.protein_id for x in entries],
         packed_protein=packed_protein,
@@ -187,7 +187,7 @@ class GearNetDataModule(BaseDataModule):
 class GearNetConfig(BaseConfig):
     weights_path: str = field(kw_only=True)
     max_seq_length: int = field(kw_only=True, default=2048)
-    hidden_dims: list = field(kw_only=True, default=[512,512,512])
+    hidden_dims: list = field(kw_only=True, default_factory=lambda: [512, 512, 512])
     num_relation: int = field(kw_only=True, default=7)
     edge_input_dim: int = field(kw_only=True, default=59)
     num_angle_bin: int = field(kw_only=True, default=8)
@@ -196,7 +196,7 @@ class GearNetEmbedder(BaseEmbedder):
     """GearNet protein structure embedding model"""
 
     def __init__(
-            self, 
+            self,
             config: GearNetConfig,
             frozen: bool = True,
     ):
@@ -238,7 +238,7 @@ class GearNetEmbedder(BaseEmbedder):
         """Get embeddings from a packed protein"""
         # Construct graph
         protein = self.graph_construction_model(protein)
-        
+
         # Create one-hot encoded node features
         node_features = torch.zeros((len(protein.residue_type), 21), device=self.device)
         for i, residue_id in enumerate(protein.residue_type):
@@ -252,7 +252,7 @@ class GearNetEmbedder(BaseEmbedder):
     def embed_batch(self, batch: GearNetBatch) -> List[torch.Tensor]:
         """Embed a batch of proteins"""
         # embeddings = self._get_embedding(batch.packed_protein)
-        
+
         # # Split embeddings back into individual proteins
         # protein_lengths = batch.packed_protein.num_residues
         # return torch.split(embeddings, protein_lengths.tolist())

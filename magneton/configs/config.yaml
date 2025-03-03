@@ -20,6 +20,9 @@ training:
   devices: auto
   learning_rate: 0.001
   weight_decay: 0.01
+  additional_training_kwargs:
+    limit_val_batches: 0.2
+    val_check_interval: 0.25
 
 
 hydra:

@@ -120,7 +120,7 @@ class ESMCDataModule(BaseDataModule):
         else:
             return (
                 os.path.join(
-                    self.data_config.data_dir, "dataset_splits", "seq_splits", f"{split}_sharded"
+                    self.data_config.data_dir, f"{split}_sharded"
                 ),
                 f"swissprot.with_ss.{split}"
             )
@@ -207,7 +207,6 @@ class ESMCEmbedder(BaseEmbedder):
                 "weights",
                 "esmc_600m_2024_12_v0.pth",
             ),
-            map_location=self.device,
         )
         self.model.load_state_dict(state_dict)
         self.max_len = config.max_seq_length

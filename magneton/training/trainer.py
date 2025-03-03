@@ -37,29 +37,25 @@ class ModelTrainer:
 
         # Set up callbacks
         callbacks = [
-            # ModelCheckpoint(
-            #     monitor="val_f1",
-            #     mode="max",
-            #     save_top_k=3,
-            #     filename="{epoch}-{val_f1:.2f}"
-            # ),
-            # EarlyStopping(
-            #     monitor="val_f1",
-            #     mode="max",
-            #     patience=10
-            # ),
-            InterruptCallback(),
+            ModelCheckpoint(
+                monitor="val_f1",
+                mode="max",
+                save_top_k=3,
+                filename="{epoch}-{val_f1:.2f}"
+            ),
+            EarlyStopping(
+                monitor="val_f1",
+                mode="max",
+                patience=3
+            ),
         ]
 
         # Set up logger
         logger = WandbLogger(
+            entity="magneton",
             project="magneton",
-            name=f"{model.name()}-training"
+            name=f"{model.name()}-training",
         )
-        # logger = CSVLogger(
-        #     save_dir=self.save_dir,
-        # )
-
         # Create trainer
         self.trainer = L.Trainer(
             callbacks=callbacks,
@@ -68,12 +64,7 @@ class ModelTrainer:
             devices=self.config.devices,
             default_root_dir=self.save_dir,
             max_epochs=self.config.max_epochs,
-#            fast_dev_run=10,
             **self.config.additional_training_kwargs,
-            # max_epochs=self.config.training.max_epochs,
-            # precision=self.config.training.precision,
-            # accumulate_grad_batches=self.config.training.accumulate_grad_batches,
-            # gradient_clip_val=self.config.training.gradient_clip_val
         )
 
     def train_and_evaluate(

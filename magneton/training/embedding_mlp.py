@@ -22,7 +22,7 @@ class EmbeddingMLP(L.LightningModule):
         self.train_config = config.training
         self.embed_config = config.embedding
 
-        self.embedder  = EmbedderFactory.create_embedder(self.embed_config)
+        self.embedder = EmbedderFactory.create_embedder(self.embed_config)
 
         # Build MLP layers
         layers = []
@@ -99,6 +99,7 @@ class EmbeddingMLP(L.LightningModule):
         acc = self.train_acc(preds, labels)
         self.log("train_loss", loss)
         self.log("train_acc", acc)
+        self.log("eff_batch_size", batch.total_length())
         return loss
 
     def validation_step(self, batch: SubstructureBatch, batch_idx):
@@ -114,7 +115,6 @@ class EmbeddingMLP(L.LightningModule):
         self.log("val_loss", loss)
         self.log("val_acc", acc)
         self.log("val_f1", f1)
-        self.log("eff_batch_size", batch.total_length())
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
