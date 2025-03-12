@@ -1,13 +1,13 @@
 defaults:
   - base_pipeline
-  - data: interpro103_swissprot
-  - embedding: esmc
+  - data: debug
+  - embedding: gearnet
   - _self_
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
 
-output_dir: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc"
+output_dir: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/gearnet"
 model:
   model_type: "mlp"
   model_params:

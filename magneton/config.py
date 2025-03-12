@@ -20,7 +20,7 @@ class DataConfig:
     prefix: str = "sharded_proteins"
     fasta_path: Optional[str] = None
     labels_path: Optional[str] = None
-    struct_path: Optional[str] = None
+    struct_template: Optional[str] = None
     interpro_types: Optional[List[str]] = None
 
 @dataclass

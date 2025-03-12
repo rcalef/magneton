@@ -211,7 +211,7 @@ class ESMCEmbedder(BaseEmbedder):
         self.model.load_state_dict(state_dict)
         self.max_len = config.max_seq_length
         self.rep_layer = config.rep_layer
-        self.device = config.device
+        # self.device = config.device
 
     @torch.no_grad()
     def _get_embedding(
@@ -225,6 +225,11 @@ class ESMCEmbedder(BaseEmbedder):
         )
         logits_out = self.model.logits(protein_tensor, logits_config)
         return self.model.transformer.norm(logits_out.hidden_states)[self.rep_layer]
+
+    @torch.no_grad()
+    def embed_batch(self, batch: ESMCBatch) -> torch.Tensor:
+        """Embed a batch of pre-tokenized protein sequences"""
+        return self._get_embedding(batch.tokenized_seq)[:, 1:-1, :]
 
     @torch.no_grad()
     def embed_single_protein(self, seq: str) -> torch.Tensor:
@@ -247,11 +252,6 @@ class ESMCEmbedder(BaseEmbedder):
             ret = torch.cat(outputs, dim=1)
 
         return ret.squeeze()[1 : len(seq) + 1]
-
-    @torch.no_grad()
-    def embed_batch(self, batch: ESMCBatch) -> torch.Tensor:
-        """Embed a batch of pre-tokenized protein sequences"""
-        return self._get_embedding(batch.tokenized_seq)[:, 1:-1, :]
 
     @torch.no_grad()
     def embed_sequences(self, sequences: List[str]) -> List[torch.Tensor]:

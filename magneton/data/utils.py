@@ -28,6 +28,7 @@ def get_dataloader(
         prefix=config.prefix,
         labels_path=config.labels_path,
         want_interpro_types=config.interpro_types,
+        struct_template=config.struct_template,
         load_fasta_in_mem=True,
     )
     return DataLoader(
@@ -46,6 +47,8 @@ def get_dataloader(
             prefix=config.prefix,
         )
         collate_fn = collate_sequence_datasets
+    elif DataType.STRUCT in data_types:
+        pass
     else:
         raise ValueError(f"Unsupported data type: {data_types}")
 

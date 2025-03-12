@@ -6,13 +6,13 @@ import lightning as L
 from magneton.config import EmbeddingConfig
 from .base_embedder import BaseConfig, BaseDataModule, BaseEmbedder
 from .esm_embedder import ESMEmbedder
-from .gearnet_embedder import GearNetEmbedder
+from .gearnet_embedder import GearNetEmbedder, GearNetConfig, GearNetDataModule
 from .esmc_embedder import ESMCEmbedder, ESMCConfig, ESMCDataModule
 
 class EmbedderFactory:
     _embedders: Dict[str, Tuple[Type[BaseEmbedder], Type[BaseConfig], Type[BaseDataModule]]] = {
         "esm": (ESMEmbedder, None, None),
-        "gearnet": (GearNetEmbedder, None, None),
+        "gearnet": (GearNetEmbedder, GearNetConfig, GearNetDataModule),
         "esmc": (ESMCEmbedder, ESMCConfig, ESMCDataModule),
     }
 

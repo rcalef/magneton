@@ -3,3 +3,4 @@ fasta_path: "/weka/scratch/weka/kellislab/rcalef/data/uniprot/uniprot_sprot.fast
 prefix: "swissprot.with_ss"
 labels_path: "/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/label_sets"
 interpro_types: ["Domain"]
+struct_template: "/weka/scratch/weka/kellislab/rcalef/data/pdb_alphafolddb/AF-%s-F1-model_v4.pdb"

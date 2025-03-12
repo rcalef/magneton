@@ -54,7 +54,7 @@ class EmbeddingPipeline:
         all_embeds = []
         for batch in tqdm(loader, desc=f"{embedder.model_name()} embedding"):
             batch = batch.to(self.config.embedding.device)
-            batch_embeds = self.embedder.embed_batch(batch)
+            batch_embeds = embedder.embed_batch(batch)
             all_embeds.append(batch_embeds.detach().cpu())
 
         # Save results

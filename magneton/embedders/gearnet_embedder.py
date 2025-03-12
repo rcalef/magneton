@@ -7,7 +7,8 @@ from typing import List, Set, Tuple
 import torch
 from torchdrug import data, layers, models, transforms
 from torchdrug.layers import geometry
-from torchdrug.data import Protein, PackedProtein
+from torchdrug.data import Protein as torchProtein
+from torchdrug.data import PackedProtein as torchPackedProtein
 import re
 from tqdm import tqdm
 
@@ -28,17 +29,20 @@ class SubstructureBatch:
                 self.substructures[i][j] = self.substructures[i][j].to(device)
         return self
 
+    def total_length(self) -> int:
+        return sum(map(len, self.substructures))
+
+
 @dataclass
 class GearNetDataElem:
     protein_id: str
-    structure_path: str
+    structure: torchProtein
     substructures: List[LabeledSubstructure]
-
 
 @dataclass
 class GearNetBatch(SubstructureBatch):
     protein_ids: List[str]
-    packed_protein: PackedProtein
+    packed_protein: torchPackedProtein
 
     def to(self, device: str):
         super().to(device)
@@ -47,38 +51,30 @@ class GearNetBatch(SubstructureBatch):
 
 def gearnet_collate(
     entries: List[GearNetDataElem],
-    pad_id: int,
     drop_empty_substructures: bool = True,
 ) -> GearNetBatch:
     """
     Collate the data elements into a batch.
-    Should act on packed proteins
+    Should act on packed proteins.
+    Should run single threaded and not do any processing.
     """
+
     if drop_empty_substructures:
         entries = [e for e in entries if len(e.substructures) > 0]
-
-    # padded_tensor = stack_variable_length_tensors(
-    #     [x.tokenized_seq for x in entries],
-    #     constant_value=pad_id,
-    # )
-    # substructs = [x.substructures for x in entries]
-    # return GearNetBatch(
-    #     tokenized_seq=_BatchedESMProteinTensor(sequence=padded_tensor),
-    #     substructures=substructs,
-    # )
-
+    
     # Load and pack proteins
-    proteins = []
-    for entry in entries:
-        try:
-            prot = Protein.from_pdb(entry.structure_path, atom_feature="position")
-            proteins.append(prot)
-        except Exception as e:
-            print(f"Error loading protein {entry.protein_id}: {str(e)}")
-            continue
-
-    packed_protein = Protein.pack(proteins)
-
+    proteins = [entry.structure for entry in entries]
+    # for entry in entries:
+    #     try:
+    #         prot = Protein.from_pdb(entry.structure_path, atom_feature="position")
+    #         proteins.append(prot)
+    #     except Exception as e:
+    #         print(f"Error loading protein {entry.protein_id}: {str(e)}")
+    #         continue
+    
+    packed_protein = torchProtein.pack(proteins)
+    # print(f"Packed Protein: {packed_protein}")
+    
     return GearNetBatch(
         protein_ids=[x.protein_id for x in entries],
         packed_protein=packed_protein,
@@ -95,8 +91,7 @@ class GearNetDataSet(MetaDataset):
             want_datatypes=[DataType.STRUCT, DataType.SUBSTRUCT],
             load_fasta_in_mem=True,
         )
-        # self.tokenizer = get_esmc_tokenizers()
-        self.pdb_template = "/weka/scratch/weka/kellislab/rcalef/data/pdb_alphafolddb/AF-%s-F1-model_v4.pdb"
+        self.pdb_template = data_config.struct_template
 
     def __len__(self):
         return super().__len__()
@@ -104,10 +99,11 @@ class GearNetDataSet(MetaDataset):
     def __getitem__(self, idx: int) -> GearNetDataElem:
         elem = self._prot_to_elem(self.dataset[idx])
         uniprot_id = re.sub(r'\|.*', '', elem.protein_id)
+        # instead of structure path, return from_pdb so that we can run this in parallel
         return GearNetDataElem(
             protein_id=elem.protein_id,
-            structure_path=self.pdb_template % uniprot_id,
-            substructures=elem.substructures
+            structure= torchProtein.from_pdb(self.pdb_template % uniprot_id, atom_feature="position"),
+            substructures=elem.substructures,
         )
 
 class GearNetDataModule(BaseDataModule):
@@ -123,7 +119,7 @@ class GearNetDataModule(BaseDataModule):
     def _get_loader(self, dataset: GearNetDataSet) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
             dataset,
-            batch_size=self.config.batch_size,
+            batch_size=self.batch_size,
             shuffle=True,
         )
 
@@ -133,7 +129,7 @@ class GearNetDataModule(BaseDataModule):
         else:
             return (
                 os.path.join(
-                    self.config.data_dir, "dataset_splits", "seq_splits", f"{split}_sharded"
+                    self.config.data_dir, f"{split}_sharded"
                 ),
                 f"swissprot.with_ss.{split}"
             )
@@ -187,7 +183,7 @@ class GearNetDataModule(BaseDataModule):
 class GearNetConfig(BaseConfig):
     weights_path: str = field(kw_only=True)
     max_seq_length: int = field(kw_only=True, default=2048)
-    hidden_dims: list = field(kw_only=True, default_factory=lambda: [512, 512, 512])
+    hidden_dims: list = field(kw_only=True, default_factory=lambda: [512] * 6)
     num_relation: int = field(kw_only=True, default=7)
     edge_input_dim: int = field(kw_only=True, default=59)
     num_angle_bin: int = field(kw_only=True, default=8)
@@ -223,46 +219,97 @@ class GearNetEmbedder(BaseEmbedder):
             concat_hidden=True,
             short_cut=True,
             readout="sum"
-        ).to(self.device)
+        ).eval()
+
+        # print(self.model)
 
         if frozen:
             for param in self.parameters():
                 param.requires_grad = False
 
         if config.weights_path:
-            state_dict = torch.load(config.weights_path, map_location=self.device)
+            state_dict = torch.load(config.weights_path)
             self.model.load_state_dict(state_dict)
 
+        # if config.weights_path:
+        #     # Load and inspect the state dict before creating the model
+        #     state_dict = torch.load(config.weights_path)
+        #     print("Model architecture from weights:")
+        #     # Print keys that contain 'layers' to understand the structure
+        #     layer_keys = [k for k in state_dict.keys() if 'layers' in k]
+        #     for k in sorted(layer_keys):
+        #         print(f"Layer: {k} -> Shape: {state_dict[k].shape}")
+
     @torch.no_grad()
-    def _get_embedding(self, protein: PackedProtein) -> torch.Tensor:
+    def _get_embedding(self, protein: torchPackedProtein) -> torch.Tensor:
         """Get embeddings from a packed protein"""
+        # print(protein)
+        # # Construct graph
+        # protein = self.graph_construction_model(protein)
+
+        # # Create one-hot encoded node features
+        # node_features = torch.zeros((len(protein.residue_type), 21))
+        # for i, residue_id in enumerate(protein.residue_type):
+        #     node_features[i, residue_id] = 1
+
+        # # Get embeddings
+        # output = self.model(protein, node_features)
+
+        # # TODO Check shape of this and make sure it's the right tensor shape and not a graph
+        # # TODO Check ordering and amino acid correspondence of embeddings
+        # return output['node_feature']
+
         # Construct graph
         protein = self.graph_construction_model(protein)
 
         # Create one-hot encoded node features
-        node_features = torch.zeros((len(protein.residue_type), 21), device=self.device)
+        node_features = torch.zeros((len(protein.residue_type), 21))
         for i, residue_id in enumerate(protein.residue_type):
             node_features[i, residue_id] = 1
 
+        # Device handling
+        device = self.model.device
+        protein = protein.to(device)
+        node_features = node_features.to(device)
+
         # Get embeddings
         output = self.model(protein, node_features)
-        return output['node_feature']
+        node_embeddings = output['node_feature']  # Shape: (total_nodes, embedding_dim)
+        # print(node_embeddings.shape)
+
+        # Get the number of residues per protein in the batch
+        num_residues = protein.num_residues  # List of residue counts for each protein
+        batch_size = len(num_residues)
+        max_len = max(num_residues)
+        embedding_dim = node_embeddings.shape[1]
+        # print(num_residues, batch_size, max_len, embedding_dim)
+
+        # Create padded output tensor
+        padded_embeddings = torch.zeros(
+            (batch_size, max_len, embedding_dim),
+            device=node_embeddings.device
+        )
+
+        # Fill in the embeddings for each protein
+        start_idx = 0
+        for i, length in enumerate(num_residues):
+            padded_embeddings[i, :length] = node_embeddings[start_idx:start_idx + length]
+            start_idx += length
+
+        return padded_embeddings
 
     @torch.no_grad()
-    def embed_batch(self, batch: GearNetBatch) -> List[torch.Tensor]:
+    def embed_batch(self, batch: GearNetBatch) -> torch.Tensor:
         """Embed a batch of proteins"""
-        # embeddings = self._get_embedding(batch.packed_protein)
+        # TODO Check if there's an additional operation that needs to happen after above
+        return self._get_embedding(batch.packed_protein)
 
-        # # Split embeddings back into individual proteins
-        # protein_lengths = batch.packed_protein.num_residues
-        # return torch.split(embeddings, protein_lengths.tolist())
-
-    # TODO Just pass in the packed protein from the dataloader
+    # Note: the following two functions are not used in the MLP training runs, device issues
     @torch.no_grad()
-    def embed_single_structure(self, structure_path: str) -> torch.Tensor:
+    def embed_single_protein(self, structure_path: str) -> torch.Tensor:
         """Embed a single protein structure"""
-        structure = Protein.from_pdb(structure_path, atom_feature="position")
-        packed_protein = Protein.pack([structure]).to(self.device)
+        structure = torchProtein.from_pdb(structure_path, atom_feature="position")
+        packed_protein = torchProtein.pack([structure])
         embedding = self._get_embedding(packed_protein)
         return embedding
 
@@ -273,8 +320,8 @@ class GearNetEmbedder(BaseEmbedder):
 
         for structure_path in tqdm(structure_list, desc="Processing protein structures"):
             try:
-                structure = Protein.from_pdb(structure_path, atom_feature="position")
-                packed_protein = Protein.pack([structure]).to(self.device)
+                structure = torchProtein.from_pdb(structure_path, atom_feature="position")
+                packed_protein = torchProtein.pack([structure])
                 embedding = self._get_embedding(packed_protein)
                 all_embeddings.append(embedding)
             except Exception as e:

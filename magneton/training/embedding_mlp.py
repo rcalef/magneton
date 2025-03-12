@@ -49,6 +49,7 @@ class EmbeddingMLP(L.LightningModule):
     def forward(self, batch: SubstructureBatch):
         # num_proteins X max_length X embed_dim
         protein_embeds = self.embedder.embed_batch(batch)
+        # print(protein_embeds.shape)
         embed_dim = protein_embeds.shape[-1]
         dtype = protein_embeds.dtype
         device = protein_embeds.device

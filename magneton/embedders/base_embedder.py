@@ -33,7 +33,7 @@ class BaseEmbedder(nn.Module, ABC):
     def __init__(self, config: BaseConfig):
         super().__init__()
         self.config = config
-        self.device = torch.device(config.device)
+        # self.device = torch.device(config.device)
 
     @abstractmethod
     def embed_single_protein(

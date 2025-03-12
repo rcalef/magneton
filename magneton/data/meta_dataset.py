@@ -59,8 +59,8 @@ class MetaDataset(Dataset):
                 labels_dir=data_config.labels_path,
             )
         if DataType.STRUCT in self.datatypes:
-            assert data_config.struct_path is not None, "Structure path is required for structure data"
-            self.struct_template = data_config.struct_path
+            assert data_config.struct_template is not None, "Structure path is required for structure data"
+            self.struct_template = data_config.struct_template
 
     def _prot_to_elem(self, prot: Protein) -> BatchElement:
         ret = BatchElement(protein_id=prot.uniprot_id)
