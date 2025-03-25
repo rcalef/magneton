@@ -8,6 +8,7 @@ import torch
 from torchdrug import data, layers, models, transforms
 from torchdrug.layers import geometry
 from torchdrug.data import Protein as torchProtein
+from rdkit import Chem
 from torchdrug.data import PackedProtein as torchPackedProtein
 import re
 from tqdm import tqdm
@@ -18,6 +19,31 @@ from magneton.data.substructure import LabeledSubstructure
 from magneton.embedders.base_embedder import BaseConfig, BaseDataModule, BaseEmbedder
 from magneton.types import DataType
 from magneton.utils import get_chunk_idxs
+
+class CustomProtein(torchProtein):
+    @classmethod
+    def from_pdb(cls, pdb_file, atom_feature="default", bond_feature="default", residue_feature="default",
+                 mol_feature=None, kekulize=False):
+        """
+        Create a protein from a PDB file.
+
+        Parameters:
+            pdb_file (str): file name
+            atom_feature (str or list of str, optional): atom features to extract
+            bond_feature (str or list of str, optional): bond features to extract
+            residue_feature (str, list of str, optional): residue features to extract
+            mol_feature (str or list of str, optional): molecule features to extract
+            kekulize (bool, optional): convert aromatic bonds to single/double bonds.
+                Note this only affects the relation in ``edge_list``.
+                For ``bond_type``, aromatic bonds are always stored explicitly.
+                By default, aromatic bonds are stored.
+        """
+        if not os.path.exists(pdb_file):
+            raise FileNotFoundError("No such file `%s`" % pdb_file)
+        mol = Chem.MolFromPDBFile(pdb_file, sanitize=False)
+        if mol is None:
+            raise ValueError("RDKit cannot read PDB file `%s`" % pdb_file)
+        return cls.from_molecule(mol, atom_feature, bond_feature, residue_feature, mol_feature, kekulize)
 
 @dataclass
 class SubstructureBatch:
@@ -102,7 +128,7 @@ class GearNetDataSet(MetaDataset):
         # instead of structure path, return from_pdb so that we can run this in parallel
         return GearNetDataElem(
             protein_id=elem.protein_id,
-            structure= torchProtein.from_pdb(self.pdb_template % uniprot_id, atom_feature="position"),
+            structure= CustomProtein.from_pdb(self.pdb_template % uniprot_id, atom_feature="position"),
             substructures=elem.substructures,
         )
 

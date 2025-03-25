@@ -46,7 +46,7 @@ class EmbeddingMLP(L.LightningModule):
         self.test_acc = Accuracy(task="multiclass", num_classes=num_classes)
         self.f1 = F1Score(task="multiclass", num_classes=num_classes)
 
-    def forward(self, batch: SubstructureBatch):
+    def embed(self, batch: SubstructureBatch):
         # num_proteins X max_length X embed_dim
         protein_embeds = self.embedder.embed_batch(batch)
         # print(protein_embeds.shape)
@@ -86,6 +86,11 @@ class EmbeddingMLP(L.LightningModule):
             substruct_embeds.append(result)
         # num_substructs X embed_dim
         substruct_embeds = torch.cat(substruct_embeds)
+        return substruct_embeds
+
+    def forward(self, batch: SubstructureBatch):
+        # num_substructs X embed_dim
+        substruct_embeds = self.embed(batch)
 
         # num_substructs X num_classes
         return self.model(substruct_embeds)

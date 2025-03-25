@@ -17,8 +17,8 @@ def main(cfg: PipelineConfig) -> None:
             pipeline.run_embedding()
         elif stage == PipelineStage.TRAIN:
             pipeline.run_training()
-        elif stage == PipelineStage.VISUALIZE:
-            pipeline.run_visualization()
+        elif stage == PipelineStage.EVALUATE:
+            pipeline.run_evals()
         else:
             raise ValueError(f"Unknown stage: {stage}")
             # Default: run full pipeline

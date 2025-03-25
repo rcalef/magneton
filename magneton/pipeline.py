@@ -11,7 +11,7 @@ from magneton.config import PipelineConfig
 from magneton.embedders.factory import EmbedderFactory
 from magneton.training.trainer import ModelTrainer
 from magneton.training.embedding_mlp import EmbeddingMLP
-# from .visualization import EmbeddingVisualizer
+from magneton.evals.umap import UMAPVisualizer
 
 class EmbeddingPipeline:
     """Main pipeline for protein embedding and analysis"""
@@ -28,6 +28,9 @@ class EmbeddingPipeline:
         self.output_dir = Path(self.config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+        self.test_dir = Path(self.config.test_dir)
+        self.test_dir.mkdir(parents=True, exist_ok=True)
+
         # Initialize dataset
         _, _, data_cls  = EmbedderFactory.fetch_embedder_classes(self.config.embedding.model)
         self.data_module = data_cls(self.config.data, self.config.training)
@@ -36,7 +39,7 @@ class EmbeddingPipeline:
         """Run complete pipeline"""
         self.run_embedding()
         self.run_training()
-        self.run_visualization()
+        self.run_evals()
 
     def run_embedding(self):
         """Generate and save embeddings"""
@@ -88,18 +91,64 @@ class EmbeddingPipeline:
 
         return metrics
 
-    def run_visualization(self):
-        """Generate visualizations"""
-        print("Generating visualizations...")
+    def run_evals(self):
+        """Generate visualizations and evals"""
+        print("Evaluating and generating visualizations...")
 
-        # Load data
-        embeddings = np.load(self.output_dir / "embeddings.npy")
-        labels = np.load(self.output_dir / "labels.npy")
-
-        # Generate visualizations
-        self.visualizer.visualize_embeddings(
-            embeddings,
-            labels,
-            save_dir=self.output_dir
+        # Load model and data
+        # Sample loading in ckpt for esmc embedding mlp
+        # TODO Set up flag for this in the config file
+        model = EmbeddingMLP.load_from_checkpoint(
+            "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/magneton/runs/kcmou838/checkpoints/epoch=2-val_f1=0.99.ckpt",
         )
-        print(f"Saved visualizations to {self.output_dir}")
+        model.eval()
+
+        # TODO
+        # Generate evals
+
+        # UMAP
+        # Get embeddings for all substructures
+        all_embeddings = []
+        true_labels = []
+        pred_labels = []
+        with torch.no_grad():
+            for batch in self.data_module.test_dataloader():
+                # Skip batch if no substructs
+                # print(batch.substructures)
+                if [] in batch.substructures:
+                    continue
+
+                # Get substructure embeddings
+                substruct_embeds = model.embed(batch)
+                all_embeddings.append(substruct_embeds)
+                
+                # Get labels
+                batch_labels = [substruct.label for prot_substructs in batch.substructures 
+                            for substruct in prot_substructs]
+                true_labels.extend(batch_labels)
+
+                logits = model(batch)
+                pred = torch.argmax(logits, dim=1)
+                pred_labels.extend([str(x.item()) for x in pred])
+        
+        # Combine embeddings
+        all_embeddings = torch.cat(all_embeddings, dim=0)
+        
+        # Create UMAP visualization
+        visualizer = UMAPVisualizer()
+        visualizer.visualize_embeddings(
+            all_embeddings,
+            pred_labels,
+            save_dir=self.test_dir / "visualizations",
+            title=f"UMAP of {self.config.embedding.model} Substructure Embeddings With Predicted Labels",
+            type="pred",
+        )
+        visualizer.visualize_embeddings(
+            all_embeddings,
+            true_labels,
+            save_dir=self.test_dir / "visualizations",
+            title=f"UMAP of {self.config.embedding.model} Substructure Embeddings",
+            type="true",
+        )
+
+        print(f"Saved evals to {self.output_dir}")

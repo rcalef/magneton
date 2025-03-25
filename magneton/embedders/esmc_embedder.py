@@ -88,6 +88,11 @@ def esmc_collate(
     """
     if drop_empty_substructures:
         entries = [e for e in entries if len(e.substructures) > 0]
+        if len(entries) == 0:
+            entries = [ESMCDataElem(tokenized_seq=torch.zeros(128, dtype=torch.long), substructures=[])]
+
+    # print(len(entries), [x.tokenized_seq for x in entries])
+
     padded_tensor = stack_variable_length_tensors(
         [x.tokenized_seq for x in entries],
         constant_value=pad_id,
@@ -211,7 +216,7 @@ class ESMCEmbedder(BaseEmbedder):
         self.model.load_state_dict(state_dict)
         self.max_len = config.max_seq_length
         self.rep_layer = config.rep_layer
-        # self.device = config.device
+        self.device = config.device
 
     @torch.no_grad()
     def _get_embedding(
@@ -229,8 +234,11 @@ class ESMCEmbedder(BaseEmbedder):
     @torch.no_grad()
     def embed_batch(self, batch: ESMCBatch) -> torch.Tensor:
         """Embed a batch of pre-tokenized protein sequences"""
+        batch.tokenized_seq = batch.tokenized_seq.to(self.device)
+
         return self._get_embedding(batch.tokenized_seq)[:, 1:-1, :]
 
+    # the following two functions are deprecated for the current data module setup
     @torch.no_grad()
     def embed_single_protein(self, seq: str) -> torch.Tensor:
         """Process a single protein sequence through ESM"""

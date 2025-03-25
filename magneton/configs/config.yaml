@@ -1,13 +1,14 @@
 defaults:
   - base_pipeline
   - data: debug
-  - embedding: gearnet
+  - embedding: esmc
   - _self_
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
 
-output_dir: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/gearnet"
+output_dir: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc"
+test_dir: "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/magneton/tests/esmc"
 model:
   model_type: "mlp"
   model_params:
@@ -28,22 +29,6 @@ training:
 hydra:
   run:
     dir: ${output_dir}
-# # decide on these
-# model:
-#   hidden_dims: [512, 256, 128]
-#   dropout_rate: 0.1
-#   learning_rate: 0.001
-#   weight_decay: 0.00001
-
-# # decide on these
-# training:
-#   batch_size: 32
-#   num_workers: 4
-#   precision: 16-mixed
-#   accelerator: gpu
-#   devices: 1
-#   accumulate_grad_batches: 1
-#   gradient_clip_val: 1.0
 
 # esm
 # _target_: magneton.config.config.ESMConfig
@@ -53,12 +38,3 @@ hydra:
 # window_size: 10
 # num_windows: 5
 # non_contiguous: true
-
-# gearnet
-# _target_: magneton.config.config.GearNetConfig
-# model_type: gearnet
-# max_seq_length: 350
-# hidden_dims: [512, 512, 512]
-# num_relation: 7
-# edge_input_dim: 59
-# num_angle_bin: 8

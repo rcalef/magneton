@@ -120,13 +120,13 @@ class DataType(StrEnum):
 class PipelineStage(Enum):
     EMBED = 0
     TRAIN = auto()
-    VISUALIZE = auto()
+    EVALUATE = auto()
 
 
 stage_names = [
     "embed",
     "train",
-    "visualize",
+    "eval",
 ]
 
 # Map stage names to their corresponding enum values

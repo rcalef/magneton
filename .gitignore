@@ -1,3 +1,4 @@
+# artliang specific
 **.fasta
 **.tsv
 bgz_to_fasta.py
@@ -5,6 +6,13 @@ mmseqs/
 saved_embeddings/
 tmp/
 archive/
+installations/
+wandb/
+debug.txt
+
+# figs and weights
+tests/
+magneton/runs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
