@@ -28,6 +28,7 @@ class ModelConfig:
     _target_: str = "magneton.config.ModelConfig"
     model_type: str = MISSING
     model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
+    checkpoint: str = MISSING
 
 @dataclass
 class TrainingConfig:
@@ -47,6 +48,7 @@ class PipelineConfig:
     stages: List[str] = field(default_factory=lambda: ["embed", "train", "visualize"])
     output_dir: str = MISSING
     test_dir: str = MISSING
+    run_id: str = MISSING
     data: DataConfig = MISSING
     embedding: EmbeddingConfig = MISSING
     model: ModelConfig = MISSING

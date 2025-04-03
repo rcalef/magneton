@@ -1,19 +1,20 @@
 defaults:
   - base_pipeline
   - data: debug
-  - embedding: esmc
+  - embedding: gearnet
   - _self_
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
-
-output_dir: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc"
-test_dir: "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/magneton/tests/esmc"
+run_id: gearnet_embed
+output_dir: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/gearnet"
+test_dir: "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/magneton/tests/gearnet"
 model:
   model_type: "mlp"
   model_params:
     hidden_dims: [256, 256, 256]
     dropout_rate: 0.1
+  checkpoint: "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/magneton/runs/kcmou838/checkpoints/epoch=2-val_f1=0.99.ckpt"
 
 training:
   max_epochs: 5

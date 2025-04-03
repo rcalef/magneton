@@ -28,6 +28,7 @@ from magneton.utils import get_chunk_idxs
 @dataclass
 class SubstructureBatch:
     substructures: List[List[LabeledSubstructure]]
+    prot_ids: List[str]
 
     def to(self, device: str):
         for i in range(len(self.substructures)):
@@ -43,6 +44,7 @@ class SubstructureBatch:
 class ESMCDataElem:
     tokenized_seq: torch.Tensor
     substructures: List[LabeledSubstructure]
+    prot_id: str
 
 
 @dataclass
@@ -71,10 +73,13 @@ class ESMCDataSet(MetaDataset):
         return super().__len__()
 
     def __getitem__(self, idx: int) -> ESMCDataElem:
+        # elem: BatchElem
         elem = self._prot_to_elem(self.dataset[idx])
+        prot_id = elem.protein_id
         return ESMCDataElem(
             tokenized_seq=torch.tensor(self.tokenizer.encode(elem.seq)),
             substructures=elem.substructures,
+            prot_id=prot_id
         )
 
 
@@ -89,7 +94,7 @@ def esmc_collate(
     if drop_empty_substructures:
         entries = [e for e in entries if len(e.substructures) > 0]
         if len(entries) == 0:
-            entries = [ESMCDataElem(tokenized_seq=torch.zeros(128, dtype=torch.long), substructures=[])]
+            entries = [ESMCDataElem(tokenized_seq=torch.zeros(128, dtype=torch.long), substructures=[], prot_id="")]
 
     # print(len(entries), [x.tokenized_seq for x in entries])
 
@@ -98,9 +103,11 @@ def esmc_collate(
         constant_value=pad_id,
     )
     substructs = [x.substructures for x in entries]
+    prot_ids = [x.prot_id for x in entries]
     return ESMCBatch(
         tokenized_seq=_BatchedESMProteinTensor(sequence=padded_tensor),
         substructures=substructs,
+        prot_ids=prot_ids
     )
 
 

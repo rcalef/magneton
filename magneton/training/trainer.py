@@ -58,6 +58,7 @@ class ModelTrainer:
         )
         # Create trainer
         self.trainer = L.Trainer(
+            strategy="ddp",
             callbacks=callbacks,
             logger=logger,
             accelerator=self.config.accelerator,

@@ -1,6 +1,6 @@
 data_dir: "/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/swissprot/sharded_swissprot/with_ss/dataset_splits/seq_splits"
 fasta_path: "/weka/scratch/weka/kellislab/rcalef/data/uniprot/uniprot_sprot.fasta.gz"
 prefix: "swissprot.with_ss"
-labels_path: "/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/label_sets"
+labels_path: "/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/label_sets/selected_subset"
 interpro_types: ["Conserved_site"]
 struct_template: "/weka/scratch/weka/kellislab/rcalef/data/pdb_alphafolddb/AF-%s-F1-model_v4.pdb"

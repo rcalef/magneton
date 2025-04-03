@@ -15,14 +15,19 @@ class EmbeddingMLP(L.LightningModule):
         self,
         config: PipelineConfig,
         num_classes: int,
+        device = None
     ):
         super().__init__()
         self.save_hyperparameters()
         self.model_config = config.model
         self.train_config = config.training
         self.embed_config = config.embedding
+        self.num_classes = num_classes
 
         self.embedder = EmbedderFactory.create_embedder(self.embed_config)
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"MLP Device: {self.device}")
 
         # Build MLP layers
         layers = []
@@ -37,6 +42,7 @@ class EmbeddingMLP(L.LightningModule):
 
         layers.append(nn.Linear(prev_dim, num_classes))
         self.model = nn.Sequential(*layers)
+        self.to(self.device)
 
         self.loss = nn.CrossEntropyLoss()
 
@@ -93,7 +99,7 @@ class EmbeddingMLP(L.LightningModule):
         substruct_embeds = self.embed(batch)
 
         # num_substructs X num_classes
-        return self.model(substruct_embeds)
+        return self.model(substruct_embeds.to(self.device))
 
     def training_step(self, batch: SubstructureBatch, batch_idx) -> torch.Tensor:
         logits = self(batch)

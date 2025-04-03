@@ -48,6 +48,7 @@ class CustomProtein(torchProtein):
 @dataclass
 class SubstructureBatch:
     substructures: List[List[LabeledSubstructure]]
+    prot_ids: List[str]
 
     def to(self, device: str):
         for i in range(len(self.substructures)):
@@ -61,13 +62,12 @@ class SubstructureBatch:
 
 @dataclass
 class GearNetDataElem:
-    protein_id: str
+    prot_id: str
     structure: torchProtein
     substructures: List[LabeledSubstructure]
 
 @dataclass
 class GearNetBatch(SubstructureBatch):
-    protein_ids: List[str]
     packed_protein: torchPackedProtein
 
     def to(self, device: str):
@@ -90,19 +90,10 @@ def gearnet_collate(
     
     # Load and pack proteins
     proteins = [entry.structure for entry in entries]
-    # for entry in entries:
-    #     try:
-    #         prot = Protein.from_pdb(entry.structure_path, atom_feature="position")
-    #         proteins.append(prot)
-    #     except Exception as e:
-    #         print(f"Error loading protein {entry.protein_id}: {str(e)}")
-    #         continue
     
     packed_protein = torchProtein.pack(proteins)
-    # print(f"Packed Protein: {packed_protein}")
-    
     return GearNetBatch(
-        protein_ids=[x.protein_id for x in entries],
+        prot_ids=[x.prot_id for x in entries],
         packed_protein=packed_protein,
         substructures=[x.substructures for x in entries]
     )
@@ -127,7 +118,7 @@ class GearNetDataSet(MetaDataset):
         uniprot_id = re.sub(r'\|.*', '', elem.protein_id)
         # instead of structure path, return from_pdb so that we can run this in parallel
         return GearNetDataElem(
-            protein_id=elem.protein_id,
+            prot_id=elem.protein_id,
             structure= CustomProtein.from_pdb(self.pdb_template % uniprot_id, atom_feature="position"),
             substructures=elem.substructures,
         )
