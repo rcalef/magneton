@@ -5,6 +5,7 @@ import torch
 import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
+from lightning.pytorch.profilers import AdvancedProfiler
 
 from magneton.config import TrainingConfig
 
@@ -51,11 +52,25 @@ class ModelTrainer:
         ]
 
         # Set up logger
-        logger = WandbLogger(
-            entity="magneton",
-            project="magneton",
-            name=f"{model.name()}-training",
-        )
+        if self.config.dev_run:
+            logger = CSVLogger(
+                save_dir=self.save_dir,
+                name="csv_logger",
+            )
+            profiler = AdvancedProfiler(
+                dirpath=self.save_dir,
+                filename="profiler_output",
+            )
+            dev_run = 10
+        else:
+            logger = WandbLogger(
+                entity="magneton",
+                project="magneton",
+                name=f"{model.name()}-training",
+            )
+            profiler = None
+            dev_run = False
+
         # Create trainer
         self.trainer = L.Trainer(
             strategy="ddp",
@@ -65,6 +80,8 @@ class ModelTrainer:
             devices=self.config.devices,
             default_root_dir=self.save_dir,
             max_epochs=self.config.max_epochs,
+            profiler=profiler,
+            fast_dev_run=dev_run,
             **self.config.additional_training_kwargs,
         )
 

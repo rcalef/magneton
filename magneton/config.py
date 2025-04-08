@@ -40,6 +40,7 @@ class TrainingConfig:
     accelerator: str = "gpu"
     devices: Optional[Any] = "auto"
     additional_training_kwargs: Optional[Dict[str, Any]] = field(default_factory=dict)
+    dev_run: bool = False
 
 @dataclass
 class PipelineConfig:

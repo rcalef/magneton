@@ -27,6 +27,7 @@ dependencies = [
     "seaborn>=0.13.2",
     "torch>=2.5.1",
     "tqdm>=4.67.1",
+    "umap-learn>=0.5.7",
     "wandb>=0.19.6",
 ]
 classifiers = [

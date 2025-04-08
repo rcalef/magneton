@@ -15,7 +15,6 @@ class EmbeddingMLP(L.LightningModule):
         self,
         config: PipelineConfig,
         num_classes: int,
-        device = None
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -26,7 +25,7 @@ class EmbeddingMLP(L.LightningModule):
 
         self.embedder = EmbedderFactory.create_embedder(self.embed_config)
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        #self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"MLP Device: {self.device}")
 
         # Build MLP layers
@@ -42,7 +41,6 @@ class EmbeddingMLP(L.LightningModule):
 
         layers.append(nn.Linear(prev_dim, num_classes))
         self.model = nn.Sequential(*layers)
-        self.to(self.device)
 
         self.loss = nn.CrossEntropyLoss()
 
@@ -58,7 +56,6 @@ class EmbeddingMLP(L.LightningModule):
         # print(protein_embeds.shape)
         embed_dim = protein_embeds.shape[-1]
         dtype = protein_embeds.dtype
-        device = protein_embeds.device
 
         substruct_embeds = []
         # Iter over proteins
@@ -73,15 +70,15 @@ class EmbeddingMLP(L.LightningModule):
                     all_indices.append(idx)
                     range_ids.append(torch.full((len(idx),), substruct_idx))
 
-            all_indices = torch.cat(all_indices).to(device)
-            range_ids = torch.cat(range_ids).to(device)
+            all_indices = torch.cat(all_indices).to(self.device)
+            range_ids = torch.cat(range_ids).to(self.device)
 
             # num_substructs[i] X embed_dim
             result = torch.zeros(
                 len(prot_substructs),
                 embed_dim,
                 dtype=dtype,
-                device=device,
+                device=self.device,
             )
             result = scatter_mean(
                 index=range_ids[:, None].expand(-1, embed_dim),
@@ -99,7 +96,7 @@ class EmbeddingMLP(L.LightningModule):
         substruct_embeds = self.embed(batch)
 
         # num_substructs X num_classes
-        return self.model(substruct_embeds.to(self.device))
+        return self.model(substruct_embeds)
 
     def training_step(self, batch: SubstructureBatch, batch_idx) -> torch.Tensor:
         logits = self(batch)

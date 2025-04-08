@@ -88,12 +88,11 @@ class EmbeddingPipeline:
         model = EmbeddingMLP(
             config=self.config,
             num_classes=len(train_loader.dataset.substruct_parser.type_to_label),
-            device=device
         )
-        if torch.cuda.device_count() > 1:
-            print(f"Using {torch.cuda.device_count()} GPUs")
-            model = torch.nn.DataParallel(model)
-        model.to(device)
+        # if torch.cuda.device_count() > 1:
+        #     print(f"Using {torch.cuda.device_count()} GPUs")
+        #     model = torch.nn.DataParallel(model)
+        # model.to(device)
 
         trainer = ModelTrainer(self.config.training, self.output_dir)
         trainer.setup(model)
@@ -149,14 +148,14 @@ class EmbeddingPipeline:
                 # Get substructure embeddings
                 substruct_embeds = model.embed(batch)
                 all_embeddings.append(substruct_embeds)
-                
+
                 # Get protein id
                 # batch_ids = batch.prot_ids
                 batch_ids = [batch.prot_ids[i] for i, prot_substructs in enumerate(batch.substructures)
                         for substruct in prot_substructs]
-                
+
                 # Get labels
-                batch_labels = [substruct.label for prot_substructs in batch.substructures 
+                batch_labels = [substruct.label for prot_substructs in batch.substructures
                             for substruct in prot_substructs]
 
                 # Forward pass
@@ -182,10 +181,10 @@ class EmbeddingPipeline:
                 results['top_k_probs'].extend(topk_probs.cpu().numpy().tolist())
 
                 accs.append(model.train_acc(preds, torch.tensor(batch_labels, device=logits.device)))
-        
+
         # Combine embeddings
         all_embeddings = torch.cat(all_embeddings, dim=0)
-        
+
         # Create UMAP visualization
         visualizer = UMAPVisualizer()
         visualizer.visualize_embeddings(
@@ -202,7 +201,7 @@ class EmbeddingPipeline:
             title=f"UMAP of {self.config.embedding.model} Substructure Embeddings",
             type="true",
         )
-          
+
         # Write results
         df = pd.DataFrame(results)
         csv_path = self.test_dir / "evaluation_results.csv"

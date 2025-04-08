@@ -223,7 +223,6 @@ class ESMCEmbedder(BaseEmbedder):
         self.model.load_state_dict(state_dict)
         self.max_len = config.max_seq_length
         self.rep_layer = config.rep_layer
-        self.device = config.device
 
     @torch.no_grad()
     def _get_embedding(

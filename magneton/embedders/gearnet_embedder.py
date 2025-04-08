@@ -1,29 +1,37 @@
 import os
+import re
 
 from dataclasses import dataclass, field, replace
+from multiprocessing import Pool
 from functools import partial
 from typing import List, Set, Tuple
 
 import torch
-from torchdrug import data, layers, models, transforms
+from rdkit import Chem
+from torchdrug import  layers, models
 from torchdrug.layers import geometry
 from torchdrug.data import Protein as torchProtein
-from rdkit import Chem
 from torchdrug.data import PackedProtein as torchPackedProtein
-import re
 from tqdm import tqdm
 
 from magneton.config import DataConfig, TrainingConfig
 from magneton.data.meta_dataset import MetaDataset
 from magneton.data.substructure import LabeledSubstructure
 from magneton.embedders.base_embedder import BaseConfig, BaseDataModule, BaseEmbedder
-from magneton.types import DataType
-from magneton.utils import get_chunk_idxs
+from magneton.types import DataType, Protein
+
 
 class CustomProtein(torchProtein):
     @classmethod
-    def from_pdb(cls, pdb_file, atom_feature="default", bond_feature="default", residue_feature="default",
-                 mol_feature=None, kekulize=False):
+    def from_pdb(
+        cls,
+        pdb_file,
+        atom_feature="default",
+        bond_feature="default",
+        residue_feature="default",
+        mol_feature=None,
+        kekulize=False,
+    ):
         """
         Create a protein from a PDB file.
 
@@ -43,7 +51,11 @@ class CustomProtein(torchProtein):
         mol = Chem.MolFromPDBFile(pdb_file, sanitize=False)
         if mol is None:
             raise ValueError("RDKit cannot read PDB file `%s`" % pdb_file)
-        return cls.from_molecule(mol, atom_feature, bond_feature, residue_feature, mol_feature, kekulize)
+        prot =  cls.from_molecule(
+            mol, atom_feature, bond_feature, residue_feature, mol_feature, kekulize
+        )
+        prot.view = "residue"
+        return prot
 
 @dataclass
 class SubstructureBatch:
@@ -66,6 +78,7 @@ class GearNetDataElem:
     structure: torchProtein
     substructures: List[LabeledSubstructure]
 
+
 @dataclass
 class GearNetBatch(SubstructureBatch):
     packed_protein: torchPackedProtein
@@ -74,6 +87,7 @@ class GearNetBatch(SubstructureBatch):
         super().to(device)
         self.packed_protein = self.packed_protein.to(device)
         return self
+
 
 def gearnet_collate(
     entries: List[GearNetDataElem],
@@ -87,16 +101,17 @@ def gearnet_collate(
 
     if drop_empty_substructures:
         entries = [e for e in entries if len(e.substructures) > 0]
-    
+
     # Load and pack proteins
     proteins = [entry.structure for entry in entries]
-    
+
     packed_protein = torchProtein.pack(proteins)
     return GearNetBatch(
         prot_ids=[x.prot_id for x in entries],
         packed_protein=packed_protein,
-        substructures=[x.substructures for x in entries]
+        substructures=[x.substructures for x in entries],
     )
+
 
 class GearNetDataSet(MetaDataset):
     def __init__(
@@ -115,13 +130,14 @@ class GearNetDataSet(MetaDataset):
 
     def __getitem__(self, idx: int) -> GearNetDataElem:
         elem = self._prot_to_elem(self.dataset[idx])
-        uniprot_id = re.sub(r'\|.*', '', elem.protein_id)
+        uniprot_id = re.sub(r"\|.*", "", elem.protein_id)
         # instead of structure path, return from_pdb so that we can run this in parallel
         return GearNetDataElem(
             prot_id=elem.protein_id,
-            structure= CustomProtein.from_pdb(self.pdb_template % uniprot_id, atom_feature="position"),
+            structure= CustomProtein.from_pdb(self.pdb_template % uniprot_id),
             substructures=elem.substructures,
         )
+
 
 class GearNetDataModule(BaseDataModule):
     def __init__(
@@ -145,10 +161,8 @@ class GearNetDataModule(BaseDataModule):
             return self.config.data_dir, self.config.prefix
         else:
             return (
-                os.path.join(
-                    self.config.data_dir, f"{split}_sharded"
-                ),
-                f"swissprot.with_ss.{split}"
+                os.path.join(self.config.data_dir, f"{split}_sharded"),
+                f"swissprot.with_ss.{split}",
             )
 
     def _get_dataloader(
@@ -169,6 +183,9 @@ class GearNetDataModule(BaseDataModule):
             dataset,
             batch_size=self.batch_size,
             collate_fn=gearnet_collate,
+            num_workers=4,
+            prefetch_factor=4,
+            pin_memory=True,
             **kwargs,
         )
 
@@ -196,6 +213,7 @@ class GearNetDataModule(BaseDataModule):
             shuffle=False,
         )
 
+
 @dataclass
 class GearNetConfig(BaseConfig):
     weights_path: str = field(kw_only=True)
@@ -205,13 +223,14 @@ class GearNetConfig(BaseConfig):
     edge_input_dim: int = field(kw_only=True, default=59)
     num_angle_bin: int = field(kw_only=True, default=8)
 
+
 class GearNetEmbedder(BaseEmbedder):
     """GearNet protein structure embedding model"""
 
     def __init__(
-            self,
-            config: GearNetConfig,
-            frozen: bool = True,
+        self,
+        config: GearNetConfig,
+        frozen: bool = True,
     ):
         super().__init__(config)
 
@@ -220,9 +239,9 @@ class GearNetEmbedder(BaseEmbedder):
             edge_layers=[
                 geometry.SequentialEdge(max_distance=2),
                 geometry.SpatialEdge(radius=10.0, min_distance=5),
-                geometry.KNNEdge(k=10, min_distance=5)
+                geometry.KNNEdge(k=10, min_distance=5),
             ],
-            edge_feature="gearnet"
+            edge_feature="gearnet",
         )
 
         # Initialize GearNet model
@@ -235,7 +254,7 @@ class GearNetEmbedder(BaseEmbedder):
             batch_norm=True,
             concat_hidden=True,
             short_cut=True,
-            readout="sum"
+            readout="sum",
         ).eval()
 
         # print(self.model)
@@ -285,13 +304,11 @@ class GearNetEmbedder(BaseEmbedder):
             node_features[i, residue_id] = 1
 
         # Device handling
-        device = self.model.device
-        protein = protein.to(device)
-        node_features = node_features.to(device)
+        node_features = node_features.to(protein.device)
 
         # Get embeddings
         output = self.model(protein, node_features)
-        node_embeddings = output['node_feature']  # Shape: (total_nodes, embedding_dim)
+        node_embeddings = output["node_feature"]  # Shape: (total_nodes, embedding_dim)
         # print(node_embeddings.shape)
 
         # Get the number of residues per protein in the batch
@@ -303,14 +320,15 @@ class GearNetEmbedder(BaseEmbedder):
 
         # Create padded output tensor
         padded_embeddings = torch.zeros(
-            (batch_size, max_len, embedding_dim),
-            device=node_embeddings.device
+            (batch_size, max_len, embedding_dim), device=protein.device
         )
 
         # Fill in the embeddings for each protein
         start_idx = 0
         for i, length in enumerate(num_residues):
-            padded_embeddings[i, :length] = node_embeddings[start_idx:start_idx + length]
+            padded_embeddings[i, :length] = node_embeddings[
+                start_idx : start_idx + length
+            ]
             start_idx += length
 
         return padded_embeddings
@@ -335,9 +353,13 @@ class GearNetEmbedder(BaseEmbedder):
         """Embed multiple protein structures"""
         all_embeddings = []
 
-        for structure_path in tqdm(structure_list, desc="Processing protein structures"):
+        for structure_path in tqdm(
+            structure_list, desc="Processing protein structures"
+        ):
             try:
-                structure = torchProtein.from_pdb(structure_path, atom_feature="position")
+                structure = torchProtein.from_pdb(
+                    structure_path, atom_feature="position"
+                )
                 packed_protein = torchProtein.pack([structure])
                 embedding = self._get_embedding(packed_protein)
                 all_embeddings.append(embedding)
