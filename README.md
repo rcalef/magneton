@@ -27,3 +27,11 @@ python magneton/cli.py +stages=["embed"]
 python magneton/cli.py +stages=["train"]
 python magneton/cli.py +stages=["eval"]
 ```
+
+# For debugging and testing before running on wandb
+```
+python magneton/cli.py +stages=["train"] ++training.dev_run=True
+```
+
+## Datasets
+See config.yaml for exact details but there is the main dataset and splits and a debug dataset.
