@@ -41,6 +41,7 @@ class TrainingConfig:
     devices: Optional[Any] = "auto"
     additional_training_kwargs: Optional[Dict[str, Any]] = field(default_factory=dict)
     dev_run: bool = False
+    run_id: str = MISSING
 
 @dataclass
 class PipelineConfig:

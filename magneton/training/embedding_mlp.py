@@ -25,7 +25,7 @@ class EmbeddingMLP(L.LightningModule):
 
         self.embedder = EmbedderFactory.create_embedder(self.embed_config)
 
-        #self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"MLP Device: {self.device}")
 
         # Build MLP layers

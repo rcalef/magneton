@@ -130,7 +130,8 @@ class GearNetDataSet(MetaDataset):
 
     def __getitem__(self, idx: int) -> GearNetDataElem:
         elem = self._prot_to_elem(self.dataset[idx])
-        uniprot_id = re.sub(r"\|.*", "", elem.protein_id)
+        # uniprot_id = re.sub(r"\|.*", "", elem.protein_id)
+        uniprot_id = re.sub(r'\|.*', '', elem.protein_id)
         # instead of structure path, return from_pdb so that we can run this in parallel
         return GearNetDataElem(
             prot_id=elem.protein_id,
@@ -257,8 +258,6 @@ class GearNetEmbedder(BaseEmbedder):
             readout="sum",
         ).eval()
 
-        # print(self.model)
-
         if frozen:
             for param in self.parameters():
                 param.requires_grad = False
@@ -267,33 +266,15 @@ class GearNetEmbedder(BaseEmbedder):
             state_dict = torch.load(config.weights_path)
             self.model.load_state_dict(state_dict)
 
-        # if config.weights_path:
-        #     # Load and inspect the state dict before creating the model
-        #     state_dict = torch.load(config.weights_path)
-        #     print("Model architecture from weights:")
-        #     # Print keys that contain 'layers' to understand the structure
-        #     layer_keys = [k for k in state_dict.keys() if 'layers' in k]
-        #     for k in sorted(layer_keys):
-        #         print(f"Layer: {k} -> Shape: {state_dict[k].shape}")
+        self.device = config.device
 
     @torch.no_grad()
     def _get_embedding(self, protein: torchPackedProtein) -> torch.Tensor:
         """Get embeddings from a packed protein"""
-        # print(protein)
-        # # Construct graph
-        # protein = self.graph_construction_model(protein)
-
-        # # Create one-hot encoded node features
-        # node_features = torch.zeros((len(protein.residue_type), 21))
-        # for i, residue_id in enumerate(protein.residue_type):
-        #     node_features[i, residue_id] = 1
-
-        # # Get embeddings
-        # output = self.model(protein, node_features)
+        # print(f"Protein device: {protein.device}")
 
         # # TODO Check shape of this and make sure it's the right tensor shape and not a graph
         # # TODO Check ordering and amino acid correspondence of embeddings
-        # return output['node_feature']
 
         # Construct graph
         protein = self.graph_construction_model(protein)
@@ -336,6 +317,9 @@ class GearNetEmbedder(BaseEmbedder):
     @torch.no_grad()
     def embed_batch(self, batch: GearNetBatch) -> torch.Tensor:
         """Embed a batch of proteins"""
+        # batch.packed_protein = batch.packed_protein.to(self.device)
+        # print(f"Batch device: {self.device}")
+
         # TODO Check if there's an additional operation that needs to happen after above
         return self._get_embedding(batch.packed_protein)
 

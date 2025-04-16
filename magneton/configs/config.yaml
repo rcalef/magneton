@@ -1,12 +1,13 @@
 defaults:
   - base_pipeline
-  - data: debug
+  # - data: debug
+  - data: interpro103_swissprot
   - embedding: gearnet
   - _self_
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
-run_id: gearnet_embed
+run_id: gearnet_embed_conserved_site
 output_dir: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/gearnet"
 test_dir: "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/magneton/tests/gearnet"
 model:
@@ -14,7 +15,10 @@ model:
   model_params:
     hidden_dims: [256, 256, 256]
     dropout_rate: 0.1
-  checkpoint: "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/magneton/runs/kcmou838/checkpoints/epoch=2-val_f1=0.99.ckpt"
+  # checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc/checkpoints_esmc_embed_domain/epoch=3-val_f1=0.97.ckpt"
+  # checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc/checkpoints_esmc_embed_superfam/epoch=2-val_f1=0.92.ckpt"
+  checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc/checkpoints_esmc_embed_conserved_sites/epoch=2-val_f1=0.96.ckpt"
+
 
 training:
   max_epochs: 5
@@ -25,17 +29,9 @@ training:
   additional_training_kwargs:
     limit_val_batches: 0.2
     val_check_interval: 0.25
+  run_id: gearnet_embed_conserved_site
 
 
 hydra:
   run:
     dir: ${output_dir}
-
-# esm
-# _target_: magneton.config.config.ESMConfig
-# model_type: esm
-# model_name: esm3_sm_open_v1
-# max_seq_length: 1024
-# window_size: 10
-# num_windows: 5
-# non_contiguous: true

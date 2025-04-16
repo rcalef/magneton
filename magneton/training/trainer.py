@@ -39,6 +39,7 @@ class ModelTrainer:
         # Set up callbacks
         callbacks = [
             ModelCheckpoint(
+                dirpath=self.save_dir / f"checkpoints_{self.config.run_id}",
                 monitor="val_f1",
                 mode="max",
                 save_top_k=3,

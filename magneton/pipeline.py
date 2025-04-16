@@ -24,6 +24,7 @@ class EmbeddingPipeline:
         print(f"Test Directory: {cfg.test_dir}")
         print(f"Model Type: {cfg.model.model_type}")
         print(f"Model Checkpoint: {cfg.model.checkpoint}")
+        print(f"Interpro Type: {cfg.data.interpro_types}")
         print(f"Full Config:")
         pprint(cfg, compact=False)
         print("============================\n")
@@ -132,9 +133,9 @@ class EmbeddingPipeline:
         }
         accs = []
         k = 3
-        # TODO Change to selected_subset tsv once moved to MLP trained on the right number of classes
-        # labels_tsv_path = '/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/label_sets/selected_subset/Conserved_site.labels.tsv'
-        labels_tsv_path = '/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/label_sets/Conserved_site.labels.tsv'
+
+        # TODO Change based on type: Domain tsv
+        labels_tsv_path = f'/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/label_sets/selected_subset/{list(self.config.data.interpro_types)[0]}.labels.tsv'
         labels_df = pd.read_csv(labels_tsv_path, sep='\t')
         label_to_element = dict(zip(labels_df['label'], labels_df['element_name']))
 
@@ -180,31 +181,35 @@ class EmbeddingPipeline:
                 results['top_k_labels'].extend(topk_indices.cpu().numpy().tolist())
                 results['top_k_probs'].extend(topk_probs.cpu().numpy().tolist())
 
-                accs.append(model.train_acc(preds, torch.tensor(batch_labels, device=logits.device)))
+                acc = model.train_acc(preds, torch.tensor(batch_labels, device=logits.device))
+                accs.append(acc)
+                print(acc)
 
         # Combine embeddings
         all_embeddings = torch.cat(all_embeddings, dim=0)
 
         # Create UMAP visualization
-        visualizer = UMAPVisualizer()
-        visualizer.visualize_embeddings(
-            all_embeddings,
-            results['pred_labels'],
-            save_dir=self.test_dir / "visualizations",
-            title=f"UMAP of {self.config.embedding.model} Substructure Embeddings With Predicted Labels",
-            type="pred",
-        )
-        visualizer.visualize_embeddings(
-            all_embeddings,
-            results['true_labels'],
-            save_dir=self.test_dir / "visualizations",
-            title=f"UMAP of {self.config.embedding.model} Substructure Embeddings",
-            type="true",
-        )
+        # visualizer = UMAPVisualizer()
+        # visualizer.visualize_embeddings(
+        #     all_embeddings,
+        #     results['pred_labels'],
+        #     save_dir=self.test_dir / "visualizations",
+        #     title=f"UMAP of {self.config.embedding.model} Substructure Embeddings With Predicted Labels",
+        #     type="pred",
+        # )
+        # visualizer.visualize_embeddings(
+        #     all_embeddings,
+        #     results['true_labels'],
+        #     save_dir=self.test_dir / "visualizations",
+        #     title=f"UMAP of {self.config.embedding.model} Substructure Embeddings",
+        #     type="true",
+        # )
 
         # Write results
         df = pd.DataFrame(results)
-        csv_path = self.test_dir / "evaluation_results.csv"
+
+        # TODO Change based on type
+        csv_path = self.test_dir / f"evaluation_results_esmc_{list(self.config.data.interpro_types)[0]}.csv"
         df.to_csv(csv_path, index=False)
 
         print(f"Accuracies for each batch: {accs}")
