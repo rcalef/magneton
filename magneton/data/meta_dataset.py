@@ -37,13 +37,7 @@ class MetaDataset(Dataset):
         load_fasta_in_mem: bool = True,
     ):
         super().__init__()
-        self.dataset = get_protein_dataset(
-            input_path=data_config.data_dir,
-            compression=data_config.compression,
-            prefix=data_config.prefix,
-            # TODO: make large protein datasets random access
-            in_memory=True,
-        )
+
         self.datatypes = set(want_datatypes)
         if DataType.SEQ in self.datatypes:
             assert data_config.fasta_path is not None, "Fasta path is required for sequence data"
@@ -61,6 +55,15 @@ class MetaDataset(Dataset):
         if DataType.STRUCT in self.datatypes:
             assert data_config.struct_template is not None, "Structure path is required for structure data"
             self.struct_template = data_config.struct_template
+
+        self.dataset = get_protein_dataset(
+            input_path=data_config.data_dir,
+            compression=data_config.compression,
+            prefix=data_config.prefix,
+            want_subtype_parser=self.substruct_parser if DataType.SUBSTRUCT in self.datatypes else None,
+            # TODO: make large protein datasets random access
+            in_memory=True,
+        )
 
     def _prot_to_elem(self, prot: Protein) -> BatchElement:
         ret = BatchElement(protein_id=prot.uniprot_id)

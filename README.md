@@ -15,23 +15,31 @@ Install using [`uv`](https://docs.astral.sh/uv/). Given `uv` installed using ins
 # Also note that install can take a long time (~10 mins) because of torch-drug
 uv sync --extra build
 uv sync --extra build --extra compile
+# TODO: either remove torchdrug or make this less shitty
+uv pip install torch-scatter torch-cluster -f https://pytorch-geometric.com/whl/torch-2.6.0+cu124.html
+uv pip install torchdrug
 uv pip install -e .
 source .venv/bin/activate
 ```
 
-## Experiments
+# Experiments
 
-# Run specific stages
+## Run specific stages
 ```
 python magneton/cli.py +stages=["embed"]
 python magneton/cli.py +stages=["train"]
 python magneton/cli.py +stages=["eval"]
 ```
 
-# For debugging and testing before running on wandb
+## For debugging and testing before running on wandb
 ```
 python magneton/cli.py +stages=["train"] ++training.dev_run=True
 ```
 
 ## Datasets
 See config.yaml for exact details but there is the main dataset and splits and a debug dataset.
+
+## Run ESM-C with flash attention (if installed)
+```
+python magneton/cli.py embedding=esmc +stages=["train"] ++embedding.model_params.use_flash_attn=True embedding.batch_size=32
+```

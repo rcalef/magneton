@@ -67,6 +67,7 @@ def parse_from_dir(
     dir: str,
     prefix: str = "sharded_proteins",
     compression: str = "bz2",
+    filter_func: Optional[Callable[[Protein], bool]] = None,
 ) -> Generator[Tuple[Protein, str], None, None]:
     all_files = get_sorted_files(dir, prefix)
     if len(all_files) == 0:
@@ -74,6 +75,8 @@ def parse_from_dir(
 
     for _, fn in all_files:
         for prot in parse_from_pkl(os.path.join(dir, fn), compression=compression):
+            if filter_func is not None and not filter_func(prot):
+                continue
             yield prot
 
 
@@ -128,16 +131,22 @@ def shard_proteins(
 def _filter_protein_file(
     input_path: str,
     filter_func: Callable[[Protein], bool],
+    compression: Optional[str] = "bz2",
 ) -> List[Protein]:
-    return [prot for prot in parse_from_pkl(input_path) if filter_func(prot)]
+    return [prot for prot in parse_from_pkl(input_path, compression=compression) if filter_func(prot)]
 
 def filter_proteins(
     shard_dir: str,
     filter_func: Callable[[Protein], bool],
-    nprocs: int = 32,
     prefix: str = "sharded_proteins",
+    compression: Optional[str] = "bz2",
+    nprocs: int = 32,
 ) -> List[Protein]:
-    filter_func=partial(_filter_protein_file, filter_func=filter_func)
+    filter_func=partial(
+        _filter_protein_file,
+        filter_func=filter_func,
+        compression=compression,
+    )
     filtered_lists = process_sharded_proteins(
         shard_dir=shard_dir,
         func=filter_func,

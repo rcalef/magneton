@@ -19,13 +19,14 @@ dependencies = [
     "jupyter>=1.1.1",
     "lightning>=2.5.0.post0",
     "matplotlib>=3.10.0",
-    "numpy>=1.26.4",
+    "numpy<2.0.0",
     "pandas>=2.2.3",
     "pdbecif>=1.5",
     "pysam>=0.22.1",
     "scikit-learn>=1.6.0",
     "seaborn>=0.13.2",
-    "torch>=2.5.1",
+    "torch==2.6.0",
+    "torchvision>=0.21.0",
     "tqdm>=4.67.1",
     "umap-learn>=0.5.7",
     "wandb>=0.19.6",
@@ -43,11 +44,10 @@ packages = ["magneton"]
 
 [project.optional-dependencies]
 build = ["setuptools"]
-compile = ["torchdrug"]
+compile = ["flash-attn"]
 
 [tool.uv]
-no-build-isolation-package = ["torchdrug", "torch-cluster", "torch-scatter"]
-
+no-build-isolation-package = ["torchdrug", "torch-cluster", "torch-scatter", "flash-attn"]
 
 # TODO add back in flash-attn once we resolve cuda version mismatches
 # on OpenMind
@@ -58,6 +58,6 @@ no-build-isolation-package = ["torchdrug", "torch-cluster", "torch-scatter"]
 #build = ["torch", "setuptools", "packaging"]
 #compile = ["flash-attn"]
 
-#[[tool.uv.dependency-metadata]]
-#name = "flash-attn"
-#requires-dist = ["torch", "einops"]
+[[tool.uv.dependency-metadata]]
+name = "flash-attn"
+requires-dist = ["torch", "einops"]

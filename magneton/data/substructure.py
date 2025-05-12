@@ -5,8 +5,11 @@ from typing import List
 import pandas as pd
 import torch
 
-from magneton.types import InterProType, Protein
-
+from magneton.types import (
+    INTERPRO_REP_TYPES,
+    InterProType,
+    Protein,
+)
 
 @dataclass
 class LabeledSubstructure:
@@ -45,7 +48,7 @@ class SubstructureParser:
         for entry in prot.entries:
             if entry.id not in self.type_to_label:
                 continue
-            if entry.element_type in [InterProType.DOMAIN, InterProType.FAMILY] and not entry.representative:
+            if entry.element_type in INTERPRO_REP_TYPES and not entry.representative:
                 continue
             parsed.append(LabeledSubstructure(
                 ranges=[torch.tensor((start, end)) for start, end in entry.positions],

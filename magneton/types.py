@@ -58,17 +58,6 @@ class SecondaryStructure:
         print(f"{DSSP_TO_NAME[self.dssp_type.value]}: {self.start} - {self.end}")
 
 
-interpro_types = [
-    "Family",
-    "Domain",
-    "Homologous_superfamily",
-    "Conserved_site",
-    "Active_site",
-    "Binding_site",
-    "PTM",
-]
-
-
 class InterProType(StrEnum):
     FAMILY = "Family"
     DOMAIN = "Domain"
@@ -78,6 +67,11 @@ class InterProType(StrEnum):
     BIND_SITE = "Binding_site"
     PTM = "PTM"
 
+# InterPro types that use the `representative` field
+INTERPRO_REP_TYPES = [
+    InterProType.FAMILY,
+    InterProType.DOMAIN,
+]
 
 @dataclass
 class InterproEntry:

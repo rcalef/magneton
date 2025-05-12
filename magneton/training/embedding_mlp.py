@@ -106,9 +106,10 @@ class EmbeddingMLP(L.LightningModule):
         preds = torch.argmax(logits, dim=1)
 
         acc = self.train_acc(preds, labels)
-        self.log("train_loss", loss)
-        self.log("train_acc", acc)
-        self.log("eff_batch_size", batch.total_length())
+        # Revisit this if it seems slower
+        self.log("train_loss", loss, sync_dist=True)
+        self.log("train_acc", acc, sync_dist=True)
+        self.log("eff_batch_size", batch.total_length(), sync_dist=True)
         return loss
 
     def validation_step(self, batch: SubstructureBatch, batch_idx):
@@ -121,9 +122,10 @@ class EmbeddingMLP(L.LightningModule):
         acc = self.val_acc(preds, labels)
         f1 = self.f1(preds, labels)
 
-        self.log("val_loss", loss)
-        self.log("val_acc", acc)
-        self.log("val_f1", f1)
+        # Revisit this if it seems slower
+        self.log("val_loss", loss, sync_dist=True)
+        self.log("val_acc", acc, sync_dist=True)
+        self.log("val_f1", f1, sync_dist=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
