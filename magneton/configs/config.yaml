@@ -1,15 +1,15 @@
 defaults:
   - base_pipeline
-  # - data: debug
+  #- data: debug
   - data: interpro103_swissprot
   - embedding: gearnet
   - _self_
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
-run_id: gearnet_embed_conserved_site
-output_dir: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/gearnet"
-test_dir: "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/magneton/tests/gearnet"
+run_id: esmc_embed_conserved_site
+output_dir: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc_test"
+test_dir: "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/magneton/tests/esmc"
 model:
   model_type: "mlp"
   model_params:
@@ -29,7 +29,7 @@ training:
   additional_training_kwargs:
     limit_val_batches: 0.2
     val_check_interval: 0.25
-  run_id: gearnet_embed_conserved_site
+  run_id: esmc_embed_conserved_site
 
 
 hydra:

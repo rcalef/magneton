@@ -206,9 +206,10 @@ class ESMCEmbedder(BaseEmbedder):
             n_layers=36,
             tokenizer=get_esmc_model_tokenizers(),
             use_flash_attn=config.use_flash_attn,
-        ).eval()
+        )
 
         if frozen:
+            self.model = self.model.eval()
             for param in self.parameters():
                 param.requires_grad = False
 
@@ -223,7 +224,6 @@ class ESMCEmbedder(BaseEmbedder):
         self.model.load_state_dict(state_dict)
         self.max_len = config.max_seq_length
         self.rep_layer = config.rep_layer
-        self.device = config.device
 
     @torch.no_grad()
     def _get_embedding(
@@ -241,8 +241,6 @@ class ESMCEmbedder(BaseEmbedder):
     @torch.no_grad()
     def embed_batch(self, batch: ESMCBatch) -> torch.Tensor:
         """Embed a batch of pre-tokenized protein sequences"""
-        batch.tokenized_seq = batch.tokenized_seq.to(self.device)
-
         return self._get_embedding(batch.tokenized_seq)[:, 1:-1, :]
 
     # the following two functions are deprecated for the current data module setup
@@ -262,7 +260,7 @@ class ESMCEmbedder(BaseEmbedder):
             for start, end in idxs:
                 sub_tensor = ESMProteinTensor(
                     sequence=protein_tensor.sequence[start:end]
-                ).to(self.device)
+                ).to(protein_tensor.device)
                 outputs.append(self._get_embedding(sub_tensor))
             ret = torch.cat(outputs, dim=1)
 

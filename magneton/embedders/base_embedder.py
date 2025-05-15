@@ -25,7 +25,7 @@ class BaseDataModule(L.LightningDataModule, ABC):
 
 @dataclass
 class BaseConfig:
-    device: str = field(kw_only=True, default="cpu")
+    pass
 
 class BaseEmbedder(nn.Module, ABC):
     """Base class for protein embedders"""

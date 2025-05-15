@@ -9,7 +9,6 @@ class EmbeddingConfig:
     _target_: str = "magneton.config.EmbeddingConfig"
     model: str = MISSING
     batch_size: int = 32
-    device: str = "cuda"
     model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
 
 @dataclass
@@ -29,6 +28,7 @@ class ModelConfig:
     model_type: str = MISSING
     model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
     checkpoint: str = MISSING
+    frozen_embedder: bool = True
 
 @dataclass
 class TrainingConfig:

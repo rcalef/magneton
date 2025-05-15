@@ -35,7 +35,11 @@ class EmbedderFactory:
         return cls._embedders[name]
 
     @classmethod
-    def create_embedder(cls, config: EmbeddingConfig) -> Tuple[BaseEmbedder]:
+    def create_embedder(
+        cls,
+        config: EmbeddingConfig,
+        frozen: bool = True,
+    ) -> Tuple[BaseEmbedder]:
         """Create an embedder instance based on config"""
         model_type = config.model
         embedder_class, config_class, _ = cls._embedders.get(model_type)
@@ -48,8 +52,7 @@ class EmbedderFactory:
         print(f"Config parameters: {pprint(config)}")
 
         embedder_config = config_class(
-            device=config.device,
             **config.model_params,
         )
 
-        return embedder_class(embedder_config)
+        return embedder_class(embedder_config, frozen=frozen)
