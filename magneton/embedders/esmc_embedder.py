@@ -15,6 +15,7 @@ from esm.sdk.api import (
 from esm.tokenization import get_esmc_model_tokenizers
 from esm.utils.misc import stack_variable_length_tensors
 from esm.utils.sampling import _BatchedESMProteinTensor
+from torch.nn import CrossEntropyLoss
 from tqdm import tqdm
 
 from magneton.config import DataConfig, TrainingConfig
@@ -79,7 +80,7 @@ class ESMCDataSet(MetaDataset):
         return ESMCDataElem(
             tokenized_seq=torch.tensor(self.tokenizer.encode(elem.seq)),
             substructures=elem.substructures,
-            prot_id=prot_id
+            prot_id=prot_id,
         )
 
 
@@ -94,7 +95,13 @@ def esmc_collate(
     if drop_empty_substructures:
         entries = [e for e in entries if len(e.substructures) > 0]
         if len(entries) == 0:
-            entries = [ESMCDataElem(tokenized_seq=torch.zeros(128, dtype=torch.long), substructures=[], prot_id="")]
+            entries = [
+                ESMCDataElem(
+                    tokenized_seq=torch.zeros(128, dtype=torch.long),
+                    substructures=[],
+                    prot_id="",
+                )
+            ]
 
     # print(len(entries), [x.tokenized_seq for x in entries])
 
@@ -107,7 +114,7 @@ def esmc_collate(
     return ESMCBatch(
         tokenized_seq=_BatchedESMProteinTensor(sequence=padded_tensor),
         substructures=substructs,
-        prot_ids=prot_ids
+        prot_ids=prot_ids,
     )
 
 
@@ -131,10 +138,8 @@ class ESMCDataModule(BaseDataModule):
             return self.data_config.data_dir, self.data_config.prefix
         else:
             return (
-                os.path.join(
-                    self.data_config.data_dir, f"{split}_sharded"
-                ),
-                f"swissprot.with_ss.{split}"
+                os.path.join(self.data_config.data_dir, f"{split}_sharded"),
+                f"swissprot.with_ss.{split}",
             )
 
     def _get_dataloader(
@@ -190,6 +195,7 @@ class ESMCConfig(BaseConfig):
     use_flash_attn: bool = field(kw_only=True, default=False)
     rep_layer: int = field(kw_only=True, default=35)
     max_seq_length: int = field(kw_only=True, default=2048)
+    mask_prob: float = field(kw_only=True, default=0.15)
 
 
 class ESMCEmbedder(BaseEmbedder):
@@ -224,6 +230,10 @@ class ESMCEmbedder(BaseEmbedder):
         self.model.load_state_dict(state_dict)
         self.max_len = config.max_seq_length
         self.rep_layer = config.rep_layer
+
+        # For masking when calculating original MLM loss
+        self.rng = torch.Generator().manual_seed(42)
+        self.mask_prob = config.mask_prob
 
     @torch.no_grad()
     def _get_embedding(
@@ -281,6 +291,36 @@ class ESMCEmbedder(BaseEmbedder):
 
         return all_embeddings
 
+    def calc_original_loss(self, batch: ESMCBatch) -> torch.Tensor:
+        """NOTE: this modifies the original tokenized seq tensor, call last."""
+        seqs = batch.tokenized_seq.sequence
+
+        mask = get_seq_mask(
+            seqs,
+            pad_token_id=self.model.tokenizer.pad_token_id,
+            bos_token_id=self.model.tokenizer.bos_token_id,
+            eos_token_id=self.model.tokenizer.eos_token_id,
+            rng=self.rng,
+            mask_prob=self.mask_prob,
+        )
+        masked_idxs = torch.where(mask.reshape(-1))[0]
+
+        # Store original mask values for loss calculation
+        orig_values_flat = seqs.reshape(-1)[masked_idxs]
+
+        seqs.masked_fill_(mask, self.model.tokenizer.mask_token_id)
+
+        logits_config = LogitsConfig(
+            sequence=True,
+            return_embeddings=False,
+            return_hidden_states=False,
+        )
+        logits = self.model.logits(batch.tokenized_seq, logits_config).logits.sequence
+
+        # Flatten logits along batch dim and get logits for just masked positions
+        masked_pos_logits = logits.reshape(-1, logits.shape[-1])[masked_idxs]
+        return CrossEntropyLoss()(masked_pos_logits, orig_values_flat)
+
     def get_embed_dim(self):
         return 1152
 
@@ -291,3 +331,23 @@ class ESMCEmbedder(BaseEmbedder):
     @classmethod
     def model_name(cls) -> str:
         return "ESM-C"
+
+
+def get_seq_mask(
+    tokenized_seqs: torch.Tensor,
+    pad_token_id: int,
+    bos_token_id: int,
+    eos_token_id: int,
+    rng: torch.Generator,
+    mask_prob: float = 0.15,
+) -> torch.Tensor:
+    probs = torch.rand(
+        tokenized_seqs.shape, generator=rng,
+    ).to(tokenized_seqs.device)
+    mask = (
+        (probs < mask_prob)
+        & (tokenized_seqs != pad_token_id)
+        & (tokenized_seqs != bos_token_id)
+        & (tokenized_seqs != eos_token_id)
+    )
+    return mask

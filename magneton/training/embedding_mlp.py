@@ -11,6 +11,7 @@ from magneton.config import PipelineConfig
 from magneton.embedders.esmc_embedder import SubstructureBatch
 from magneton.embedders.factory import EmbedderFactory
 
+
 class EmbeddingMLP(L.LightningModule):
     def __init__(
         self,
@@ -35,11 +36,13 @@ class EmbeddingMLP(L.LightningModule):
         layers = []
         prev_dim = self.embedder.get_embed_dim()
         for hidden_dim in self.model_config.model_params["hidden_dims"]:
-            layers.extend([
-                nn.Linear(prev_dim, hidden_dim),
-                nn.ReLU(),
-                nn.Dropout(self.model_config.model_params["dropout_rate"])
-            ])
+            layers.extend(
+                [
+                    nn.Linear(prev_dim, hidden_dim),
+                    nn.ReLU(),
+                    nn.Dropout(self.model_config.model_params["dropout_rate"]),
+                ]
+            )
             prev_dim = hidden_dim
 
         layers.append(nn.Linear(prev_dim, num_classes))
@@ -56,9 +59,12 @@ class EmbeddingMLP(L.LightningModule):
     def configure_model(self):
         print(f"MLP Device: {self.device}")
 
-    def embed(self, batch: SubstructureBatch) -> torch.Tensor:
+    def calc_substructure_embeds(
+        self,
         # num_proteins X max_length X embed_dim
-        protein_embeds = self.embedder.embed_batch(batch)
+        protein_embeds: torch.Tensor,
+        batch: SubstructureBatch,
+    ) -> torch.Tensor:
         # print(protein_embeds.shape)
         embed_dim = protein_embeds.shape[-1]
         dtype = protein_embeds.dtype
@@ -97,16 +103,27 @@ class EmbeddingMLP(L.LightningModule):
         substruct_embeds = torch.cat(substruct_embeds)
         return substruct_embeds
 
-    def forward(self, batch: SubstructureBatch) -> torch.Tensor:
+    def forward(
+        self,
+        batch: SubstructureBatch,
+    ) -> torch.Tensor:
         # num_substructs X embed_dim
-        substruct_embeds = self.embed(batch)
+        protein_embeds = self.embedder.embed_batch(batch)
+        substruct_embeds = self.calc_substructure_embeds(protein_embeds, batch)
 
         # num_substructs X num_classes
         return self.model(substruct_embeds)
 
     def training_step(self, batch: SubstructureBatch, batch_idx) -> torch.Tensor:
         logits = self(batch)
-        labels = torch.tensor([substruct.label for prot_substructs in batch.substructures for substruct in prot_substructs], device=logits.device)
+        labels = torch.tensor(
+            [
+                substruct.label
+                for prot_substructs in batch.substructures
+                for substruct in prot_substructs
+            ],
+            device=logits.device,
+        )
 
         loss = self.loss(logits, labels)
         preds = torch.argmax(logits, dim=1)
@@ -120,7 +137,14 @@ class EmbeddingMLP(L.LightningModule):
 
     def validation_step(self, batch: SubstructureBatch, batch_idx):
         logits = self(batch)
-        labels = torch.tensor([substruct.label for prot_substructs in batch.substructures for substruct in prot_substructs], device=logits.device)
+        labels = torch.tensor(
+            [
+                substruct.label
+                for prot_substructs in batch.substructures
+                for substruct in prot_substructs
+            ],
+            device=logits.device,
+        )
 
         loss = self.loss(logits, labels)
         preds = torch.argmax(logits, dim=1)
@@ -173,11 +197,13 @@ class MultitaskEmbeddingMLP(L.LightningModule):
             layers = []
             prev_dim = self.embedder.get_embed_dim()
             for hidden_dim in self.model_config.model_params["hidden_dims"]:
-                layers.extend([
-                    nn.Linear(prev_dim, hidden_dim),
-                    nn.ReLU(),
-                    nn.Dropout(self.model_config.model_params["dropout_rate"])
-                ])
+                layers.extend(
+                    [
+                        nn.Linear(prev_dim, hidden_dim),
+                        nn.ReLU(),
+                        nn.Dropout(self.model_config.model_params["dropout_rate"]),
+                    ]
+                )
                 prev_dim = hidden_dim
 
             layers.append(nn.Linear(prev_dim, num_classes))
@@ -189,10 +215,13 @@ class MultitaskEmbeddingMLP(L.LightningModule):
     def configure_model(self):
         print(f"MLP Device: {self.device}")
 
-    def embed(self, batch: SubstructureBatch) -> Dict[str, torch.Tensor]:
+    def calc_substructure_embeds(
+        self,
         # num_proteins X max_length X embed_dim
-        protein_embeds = self.embedder.embed_batch(batch)
-        # print(protein_embeds.shape)
+        protein_embeds: torch.Tensor,
+        batch: SubstructureBatch,
+    ) -> Dict[str, torch.Tensor]:
+
         embed_dim = protein_embeds.shape[-1]
         dtype = protein_embeds.dtype
 
@@ -226,7 +255,9 @@ class MultitaskEmbeddingMLP(L.LightningModule):
                 out=result,
             )
             for substruct_idx, substructure in enumerate(prot_substructs):
-                substruct_embeds[substructure.element_type].append(result[substruct_idx])
+                substruct_embeds[substructure.element_type].append(
+                    result[substruct_idx]
+                )
         # num_substructs[substruct_type] X embed_dim
         ret = {}
         for substruct_type, embeds in substruct_embeds.items():
@@ -234,8 +265,10 @@ class MultitaskEmbeddingMLP(L.LightningModule):
         return ret
 
     def forward(self, batch: SubstructureBatch) -> Dict[str, torch.Tensor]:
+        protein_embeds = self.embedder.embed_batch(batch)
+
         # num_substructs X embed_dim
-        substruct_embeds = self.embed(batch)
+        substruct_embeds = self.calc_substructure_embeds(protein_embeds, batch)
 
         # num_substructs X num_classes
         logits = {}
@@ -253,12 +286,15 @@ class MultitaskEmbeddingMLP(L.LightningModule):
         total_loss = torch.tensor(0, device=self.device, dtype=dtype)
         for substruct_type, substruct_logits in logits.items():
 
-            labels = torch.tensor([
-                substruct.label
-                for prot_substructs in batch.substructures
-                for substruct in prot_substructs
-                if substruct.element_type == substruct_type
-            ], device=self.device)
+            labels = torch.tensor(
+                [
+                    substruct.label
+                    for prot_substructs in batch.substructures
+                    for substruct in prot_substructs
+                    if substruct.element_type == substruct_type
+                ],
+                device=self.device,
+            )
 
             loss = self.loss(substruct_logits, labels)
             total_loss += loss
@@ -285,12 +321,15 @@ class MultitaskEmbeddingMLP(L.LightningModule):
         total_loss = torch.tensor(0, device=self.device, dtype=dtype)
         for substruct_type, substruct_logits in logits.items():
 
-            labels = torch.tensor([
-                substruct.label
-                for prot_substructs in batch.substructures
-                for substruct in prot_substructs
-                if substruct.element_type == substruct_type
-            ], device=self.device)
+            labels = torch.tensor(
+                [
+                    substruct.label
+                    for prot_substructs in batch.substructures
+                    for substruct in prot_substructs
+                    if substruct.element_type == substruct_type
+                ],
+                device=self.device,
+            )
 
             loss = self.loss(substruct_logits, labels)
             total_loss += loss
@@ -303,8 +342,12 @@ class MultitaskEmbeddingMLP(L.LightningModule):
             self.log(f"{substruct_type}_val_loss", loss, sync_dist=True)
             self.log(f"{substruct_type}_val_acc", acc, sync_dist=True)
             self.log(f"{substruct_type}_eff_batch_size", len(labels), sync_dist=True)
+
         self.log("val_loss", total_loss, sync_dist=True)
 
+        # Calculate loss for original task
+        orig_loss = self.embedder.calc_original_loss(batch)
+        self.log("orig_loss", orig_loss, sync_dist=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
