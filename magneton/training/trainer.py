@@ -40,14 +40,14 @@ class ModelTrainer:
         callbacks = [
             ModelCheckpoint(
                 dirpath=self.save_dir / f"checkpoints_{self.config.run_id}",
-                monitor="val_f1",
-                mode="max",
+                monitor="val_loss",
+                mode="min",
                 save_top_k=3,
-                filename="{epoch}-{val_f1:.2f}"
+                filename="{epoch}-{val_loss:.2f}"
             ),
             EarlyStopping(
-                monitor="val_f1",
-                mode="max",
+                monitor="val_loss",
+                mode="min",
                 patience=3
             ),
         ]
@@ -74,7 +74,7 @@ class ModelTrainer:
 
         # Create trainer
         self.trainer = L.Trainer(
-            strategy="ddp",
+            strategy="ddp_find_unused_parameters_true",
             callbacks=callbacks,
             logger=logger,
             accelerator=self.config.accelerator,

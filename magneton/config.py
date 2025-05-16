@@ -21,6 +21,7 @@ class DataConfig:
     labels_path: Optional[str] = None
     struct_template: Optional[str] = None
     interpro_types: Optional[List[str]] = None
+    collapse_labels: bool = True
 
 @dataclass
 class ModelConfig:

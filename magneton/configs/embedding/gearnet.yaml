@@ -1,6 +1,5 @@
 model: "gearnet"
 batch_size: 32
-device: "cuda"
 model_params:
   weights_path: "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/gearnet/mc_gearnet_edge.pth"
   max_seq_length: 2048

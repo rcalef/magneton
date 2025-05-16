@@ -14,7 +14,7 @@ from magneton.io.internal import (
     parse_from_dir,
     parse_from_pkl,
 )
-from magneton.data.substructure import SubstructureParser
+from magneton.data.substructure import BaseSubstructureParser
 from magneton.types import (
     InterProType,
     Protein,
@@ -103,7 +103,7 @@ class ShardedProteinDataset(IterableDataset):
 
 def protein_has_substructs(
     prot: Protein,
-    want_subtype_parser: SubstructureParser,
+    want_subtype_parser: BaseSubstructureParser,
 ) -> bool:
     """
     Check if any of the substructure entries are of the desired type.
@@ -120,7 +120,7 @@ def get_protein_dataset(
     in_memory: bool = False,
     prefix: str = "sharded_proteins",
     nprocs: int = 32,
-    want_subtype_parser: SubstructureParser | None = None,
+    want_subtype_parser: BaseSubstructureParser | None = None,
 ) -> InMemoryProteinDataset | ShardedProteinDataset:
     if want_subtype_parser:
         filter_func = partial(protein_has_substructs, want_subtype_parser=want_subtype_parser)

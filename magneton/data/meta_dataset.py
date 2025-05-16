@@ -8,7 +8,11 @@ from torch.utils.data import Dataset
 
 from magneton.config import DataConfig
 from magneton.data.protein_dataset import get_protein_dataset
-from magneton.data.substructure import LabeledSubstructure, SubstructureParser
+from magneton.data.substructure import (
+    LabeledSubstructure,
+    SeparatedSubstructureParser,
+    UnifiedSubstructureParser,
+)
 from magneton.types import DataType, InterProType, Protein
 
 
@@ -48,10 +52,24 @@ class MetaDataset(Dataset):
                 self.fasta = FastaFile(data_config.fasta_path)
         if DataType.SUBSTRUCT in self.datatypes:
             assert data_config.labels_path is not None, "Labels path is required for substructure data"
-            self.substruct_parser = SubstructureParser(
-                want_types=data_config.interpro_types,
-                labels_dir=data_config.labels_path,
-            )
+            if data_config.collapse_labels and len(data_config.interpro_types) == 1:
+                print(
+                    "Warning: collapse_labels is set to True, but only one InterPro type is provided.\n"
+                    "Forcing collapse_labels to False for simplicity."
+                )
+                data_config.collapse_labels = False
+
+            if data_config.collapse_labels:
+                # TODO: write out what this unified label set actually is
+                self.substruct_parser = UnifiedSubstructureParser(
+                    want_types=data_config.interpro_types,
+                    labels_dir=data_config.labels_path,
+                )
+            else:
+                self.substruct_parser = SeparatedSubstructureParser(
+                    want_types=data_config.interpro_types,
+                    labels_dir=data_config.labels_path,
+                )
         if DataType.STRUCT in self.datatypes:
             assert data_config.struct_template is not None, "Structure path is required for structure data"
             self.struct_template = data_config.struct_template

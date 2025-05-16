@@ -12,7 +12,7 @@ from tqdm import tqdm
 from magneton.config import PipelineConfig
 from magneton.embedders.factory import EmbedderFactory
 from magneton.training.trainer import ModelTrainer
-from magneton.training.embedding_mlp import EmbeddingMLP
+from magneton.training.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
 from magneton.evals.umap import UMAPVisualizer
 
 class EmbeddingPipeline:
@@ -86,14 +86,16 @@ class EmbeddingPipeline:
         print(f"Training Device: {device}")
 
         # Train model
-        model = EmbeddingMLP(
-            config=self.config,
-            num_classes=len(train_loader.dataset.substruct_parser.type_to_label),
-        )
-        # if torch.cuda.device_count() > 1:
-        #     print(f"Using {torch.cuda.device_count()} GPUs")
-        #     model = torch.nn.DataParallel(model)
-        # model.to(device)
+        if self.config.data.collapse_labels:
+            model = EmbeddingMLP(
+                config=self.config,
+                num_classes=train_loader.dataset.substruct_parser.num_labels(),
+            )
+        else:
+            model = MultitaskEmbeddingMLP(
+                config=self.config,
+                num_classes=train_loader.dataset.substruct_parser.num_labels(),
+            )
 
         trainer = ModelTrainer(self.config.training, self.output_dir)
         trainer.setup(model)
