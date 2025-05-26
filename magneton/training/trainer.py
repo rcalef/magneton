@@ -23,9 +23,11 @@ class ModelTrainer:
         self,
         config: TrainingConfig,
         save_dir: str,
+        run_id: str,
     ):
         self.config = config
         self.save_dir = save_dir
+        self.run_id = run_id
         self.model = None
         self.trainer = None
 
@@ -39,7 +41,7 @@ class ModelTrainer:
         # Set up callbacks
         callbacks = [
             ModelCheckpoint(
-                dirpath=self.save_dir / f"checkpoints_{self.config.run_id}",
+                dirpath=self.save_dir / f"checkpoints_{self.run_id}",
                 monitor="val_loss",
                 mode="min",
                 save_top_k=3,
@@ -67,14 +69,14 @@ class ModelTrainer:
             logger = WandbLogger(
                 entity="magneton",
                 project="magneton",
-                name=f"{model.name()}-training",
+                name=f"{self.run_id}_{model.name()}",
             )
             profiler = None
             dev_run = False
 
         # Create trainer
         self.trainer = L.Trainer(
-            strategy="ddp_find_unused_parameters_true",
+            strategy=self.config.strategy,
             callbacks=callbacks,
             logger=logger,
             accelerator=self.config.accelerator,
@@ -83,6 +85,7 @@ class ModelTrainer:
             max_epochs=self.config.max_epochs,
             profiler=profiler,
             fast_dev_run=dev_run,
+            precision="bf16-mixed",
             **self.config.additional_training_kwargs,
         )
 
@@ -93,7 +96,22 @@ class ModelTrainer:
     ) -> Dict[str, float]:
         """Train model and return metrics"""
         # Train model
-        self.trainer.fit(self.model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+        if self.config.loss_strategy == "ewc":
+            self.model.calc_fisher_state = True
+
+            self.trainer.predict(
+                self.model,
+                dataloaders=train_loader,
+                return_predictions=False,
+            )
+
+            self.model.calc_fisher_state = False
+
+        self.trainer.fit(
+            self.model,
+            train_dataloaders=train_loader,
+            val_dataloaders=val_loader,
+        )
 
         # Test model
         metrics = self.trainer.validate(self.model, dataloaders=val_loader)

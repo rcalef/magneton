@@ -49,8 +49,10 @@ class UnifiedSubstructureParser(BaseSubstructureParser):
         self,
         want_types: List[InterProType],
         labels_dir: str,
+        elem_name: str = "all",
     ):
         self.want_types = sorted(want_types)
+        self.elem_name = elem_name
         self.type_to_label = {}
 
         curr_label = 0
@@ -75,7 +77,7 @@ class UnifiedSubstructureParser(BaseSubstructureParser):
             parsed.append(LabeledSubstructure(
                 ranges=[torch.tensor((start, end)) for start, end in entry.positions],
                 label=self.type_to_label[entry.id],
-                element_type="all",
+                element_type=self.elem_name,
             ))
         return parsed
 

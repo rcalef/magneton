@@ -96,8 +96,13 @@ class EmbeddingPipeline:
                 config=self.config,
                 num_classes=train_loader.dataset.substruct_parser.num_labels(),
             )
+            self.config.training.strategy = "ddp_find_unused_parameters_true"
 
-        trainer = ModelTrainer(self.config.training, self.output_dir)
+        trainer = ModelTrainer(
+            self.config.training,
+            self.output_dir,
+            self.config.run_id,
+        )
         trainer.setup(model)
 
         metrics = trainer.train_and_evaluate(train_loader=train_loader, val_loader=val_loader)

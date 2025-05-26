@@ -1,6 +1,6 @@
 model: "esmc"
-batch_size: 32
 model_params:
+  model_size: "600m"
   weights_path: "/weka/scratch/weka/kellislab/rcalef/model_weights/esmc-600m-2024-12"
   rep_layer: 35
   use_flash_attn: False

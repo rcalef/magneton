@@ -33,7 +33,7 @@ python magneton/cli.py +stages=["eval"]
 
 ## For debugging and testing before running on wandb
 ```
-python magneton/cli.py +stages=["train"] ++training.dev_run=True
+python magneton/cli.py training.dev_run=True
 ```
 
 ## Datasets
@@ -41,5 +41,18 @@ See config.yaml for exact details but there is the main dataset and splits and a
 
 ## Run ESM-C with flash attention (if installed)
 ```
-python magneton/cli.py embedding=esmc +stages=["train"] ++embedding.model_params.use_flash_attn=True embedding.batch_size=32
+python magneton/cli.py embedding=esmc ++embedding.model_params.use_flash_attn=True training.batch_size=32
+```
+
+## Run with elastic weight consolidation for embedder fine-tuning
+```
+python magneton/cli.py \
+  embedding=esmc_300m  \
+  model.frozen_embedder=False \
+  training.loss_strategy=ewc \
+  training.ewc_weight=400 \
+  training.embedding_learning_rate=1e-5 \
+  training.embedding_weight_decay=0 \
+  training.batch_size=24 \
+  ++embedding.model_params.use_flash_attn=True
 ```

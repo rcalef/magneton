@@ -8,7 +8,6 @@ from omegaconf import MISSING
 class EmbeddingConfig:
     _target_: str = "magneton.config.EmbeddingConfig"
     model: str = MISSING
-    batch_size: int = 32
     model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
 
 @dataclass
@@ -38,17 +37,21 @@ class TrainingConfig:
     batch_size: int = 32
     learning_rate: float = 1e-2
     weight_decay: float = 0.0
+    embedding_learning_rate: float = 1e-5
+    embedding_weight_decay: float = 0.0
     accelerator: str = "gpu"
+    strategy: str = "ddp"
     devices: Optional[Any] = "auto"
     additional_training_kwargs: Optional[Dict[str, Any]] = field(default_factory=dict)
     dev_run: bool = False
-    run_id: str = MISSING
+    loss_strategy: str = "standard"
+    ewc_weight: float = 400
 
 @dataclass
 class PipelineConfig:
     _target_: str = "magneton.config.PipelineConfig"
     seed: int = 42
-    stages: List[str] = field(default_factory=lambda: ["embed", "train", "visualize"])
+    stages: List[str] = field(default_factory=lambda: ["train"])
     output_dir: str = MISSING
     test_dir: str = MISSING
     run_id: str = MISSING

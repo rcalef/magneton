@@ -52,18 +52,19 @@ class MetaDataset(Dataset):
                 self.fasta = FastaFile(data_config.fasta_path)
         if DataType.SUBSTRUCT in self.datatypes:
             assert data_config.labels_path is not None, "Labels path is required for substructure data"
-            if data_config.collapse_labels and len(data_config.interpro_types) == 1:
+            if not data_config.collapse_labels and len(data_config.interpro_types) == 1:
                 print(
-                    "Warning: collapse_labels is set to True, but only one InterPro type is provided.\n"
-                    "Forcing collapse_labels to False for simplicity."
+                    "Warning: collapse_labels is set to False, but only one InterPro type is provided.\n"
+                    "Forcing collapse_labels to True for simplicity."
                 )
-                data_config.collapse_labels = False
+                data_config.collapse_labels = True
 
             if data_config.collapse_labels:
                 # TODO: write out what this unified label set actually is
                 self.substruct_parser = UnifiedSubstructureParser(
                     want_types=data_config.interpro_types,
                     labels_dir=data_config.labels_path,
+                    elem_name="all" if len(data_config.interpro_types) > 1 else data_config.interpro_types[0],
                 )
             else:
                 self.substruct_parser = SeparatedSubstructureParser(

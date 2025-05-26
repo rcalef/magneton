@@ -14,7 +14,6 @@ from esm.sdk.api import (
 )
 from esm.tokenization import get_esmc_model_tokenizers
 from esm.utils.misc import stack_variable_length_tensors
-from esm.utils.sampling import _BatchedESMProteinTensor
 from torch.nn import CrossEntropyLoss
 from tqdm import tqdm
 
@@ -50,7 +49,7 @@ class ESMCDataElem:
 
 @dataclass
 class ESMCBatch(SubstructureBatch):
-    tokenized_seq: _BatchedESMProteinTensor
+    tokenized_seq: torch.Tensor
 
     def to(self, device: str):
         super().to(device)
@@ -112,7 +111,7 @@ def esmc_collate(
     substructs = [x.substructures for x in entries]
     prot_ids = [x.prot_id for x in entries]
     return ESMCBatch(
-        tokenized_seq=_BatchedESMProteinTensor(sequence=padded_tensor),
+        tokenized_seq=padded_tensor,
         substructures=substructs,
         prot_ids=prot_ids,
     )
@@ -191,6 +190,7 @@ class ESMCDataModule(BaseDataModule):
 
 @dataclass
 class ESMCConfig(BaseConfig):
+    model_size: str = field(kw_only=True, default="600m")
     weights_path: str = field(kw_only=True)
     use_flash_attn: bool = field(kw_only=True, default=False)
     rep_layer: int = field(kw_only=True, default=35)
@@ -206,49 +206,84 @@ class ESMCEmbedder(BaseEmbedder):
     ):
         super().__init__(config)
 
-        self.model = ESMC(
-            d_model=1152,
-            n_heads=18,
-            n_layers=36,
-            tokenizer=get_esmc_model_tokenizers(),
-            use_flash_attn=config.use_flash_attn,
-        )
+        self.max_len = config.max_seq_length
+        self.rep_layer = config.rep_layer
+        self.model_size = config.model_size
 
-        if frozen:
-            self.model = self.model.eval()
-            for param in self.parameters():
-                param.requires_grad = False
+        if config.model_size == "600m":
+            self.model = ESMC(
+                d_model=1152,
+                n_heads=18,
+                n_layers=36,
+                tokenizer=get_esmc_model_tokenizers(),
+                use_flash_attn=config.use_flash_attn,
+            )
+            self.embed_dim=1152
+        elif config.model_size == "300m":
+            self.model = ESMC(
+                d_model=960,
+                n_heads=15,
+                n_layers=30,
+                tokenizer=get_esmc_model_tokenizers(),
+                use_flash_attn=config.use_flash_attn,
+            )
+            self.embed_dim=960
+        else:
+            raise ValueError(f"unknown ESM-C model size: {config.model_size}")
 
         state_dict = torch.load(
             os.path.join(
                 config.weights_path,
                 "data",
                 "weights",
-                "esmc_600m_2024_12_v0.pth",
+                f"esmc_{config.model_size}_2024_12_v0.pth",
             ),
         )
         self.model.load_state_dict(state_dict)
-        self.max_len = config.max_seq_length
-        self.rep_layer = config.rep_layer
+
+        if frozen:
+            self.model = self.model.eval()
+            self._freeze()
+        # Freeze everything after the layer we're
+        # using for extracting representations to
+        # avoid DDP errors.
+        else:
+            self._unfreeze(unfreeze_all=False)
 
         # For masking when calculating original MLM loss
         self.rng = torch.Generator().manual_seed(42)
         self.mask_prob = config.mask_prob
 
-    @torch.no_grad()
+    def _freeze(self):
+        for params in self.model.parameters():
+            params.requires_grad = False
+
+    def _unfreeze(
+        self,
+        unfreeze_all: bool = False,
+    ):
+        for param in self.model.parameters():
+            param.requires_grad = True
+        if not unfreeze_all:
+            # Freeze layers that do not contribute to the embeddings
+            # that we're extracting to prevent DDP exceptions.
+            num_blocks = len(self.model.transformer.blocks)
+            if self.rep_layer != num_blocks-1:
+                for block in self.model.transformer.blocks[self.rep_layer+1:]:
+                    for param in block.parameters():
+                        param.requires_grad = False
+            for param in self.model.sequence_head.parameters():
+                param.requires_grad = False
+
+
     def _get_embedding(
         self,
-        protein_tensor: _BatchedESMProteinTensor,
+        protein_tensor: torch.Tensor,
     ) -> torch.Tensor:
-        logits_config = LogitsConfig(
-            sequence=True,
-            return_embeddings=False,
-            return_hidden_states=True,
-        )
-        logits_out = self.model.logits(protein_tensor, logits_config)
-        return self.model.transformer.norm(logits_out.hidden_states)[self.rep_layer]
+        logits_out = self.model.forward(protein_tensor)
 
-    @torch.no_grad()
+        return self.model.transformer.norm(logits_out.hidden_states[self.rep_layer])
+
     def embed_batch(self, batch: ESMCBatch) -> torch.Tensor:
         """Embed a batch of pre-tokenized protein sequences"""
         return self._get_embedding(batch.tokenized_seq)[:, 1:-1, :]
@@ -291,9 +326,13 @@ class ESMCEmbedder(BaseEmbedder):
 
         return all_embeddings
 
-    def calc_original_loss(self, batch: ESMCBatch) -> torch.Tensor:
+    def calc_original_loss(
+        self,
+        batch: ESMCBatch,
+        reduction: str = "mean",
+    ) -> torch.Tensor:
         """NOTE: this modifies the original tokenized seq tensor, call last."""
-        seqs = batch.tokenized_seq.sequence
+        seqs = batch.tokenized_seq
 
         mask = get_seq_mask(
             seqs,
@@ -308,29 +347,24 @@ class ESMCEmbedder(BaseEmbedder):
         # Store original mask values for loss calculation
         orig_values_flat = seqs.reshape(-1)[masked_idxs]
 
-        seqs.masked_fill_(mask, self.model.tokenizer.mask_token_id)
+        seqs = seqs.masked_fill(mask, self.model.tokenizer.mask_token_id)
 
-        logits_config = LogitsConfig(
-            sequence=True,
-            return_embeddings=False,
-            return_hidden_states=False,
-        )
-        logits = self.model.logits(batch.tokenized_seq, logits_config).logits.sequence
+        logits = self.model.forward(seqs).sequence_logits
 
         # Flatten logits along batch dim and get logits for just masked positions
         masked_pos_logits = logits.reshape(-1, logits.shape[-1])[masked_idxs]
-        return CrossEntropyLoss()(masked_pos_logits, orig_values_flat)
+        return CrossEntropyLoss(reduction=reduction)(masked_pos_logits, orig_values_flat)
 
     def get_embed_dim(self):
-        return 1152
+        return self.embed_dim
+
+    def model_name(self) -> str:
+        return f"ESM-C_{self.model_size}"
 
     @classmethod
     def get_required_input_type(cls) -> Set[DataType]:
         return {DataType.SEQ}
 
-    @classmethod
-    def model_name(cls) -> str:
-        return "ESM-C"
 
 
 def get_seq_mask(

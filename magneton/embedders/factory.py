@@ -14,6 +14,7 @@ class EmbedderFactory:
         "esm": (ESMEmbedder, None, None),
         "gearnet": (GearNetEmbedder, GearNetConfig, GearNetDataModule),
         "esmc": (ESMCEmbedder, ESMCConfig, ESMCDataModule),
+        "esmc_300m": (ESMCEmbedder, ESMCConfig, ESMCDataModule),
     }
 
     @classmethod

@@ -19,7 +19,6 @@ model:
   # checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc/checkpoints_esmc_embed_superfam/epoch=2-val_f1=0.92.ckpt"
   checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc/checkpoints_esmc_embed_conserved_sites/epoch=2-val_f1=0.96.ckpt"
 
-
 training:
   max_epochs: 5
   accelerator: gpu
@@ -29,8 +28,6 @@ training:
   additional_training_kwargs:
     limit_val_batches: 0.2
     val_check_interval: 0.25
-  run_id: esmc_embed_conserved_site
-
 
 hydra:
   run:
