@@ -1,15 +1,25 @@
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 import lightning as L
 
 from esm.tokenization import get_esmc_model_tokenizers
-from lightning.pytorch.callbacks import EarlyStopping
-from lightning.pytorch.loggers import CSVLogger, WandbLogger
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    ModelCheckpoint,
+)
+from lightning.pytorch.loggers import (
+    CSVLogger,
+    WandbLogger,
+)
 from torchmetrics import (
     Accuracy,
     AveragePrecision,
+    Metric,
     MetricCollection,
 )
+from torchmetrics.functional.classification import multilabel_average_precision
 
 from magneton.config import EvalConfig
 from magneton.data.supervised_dataset import (
@@ -19,6 +29,50 @@ from magneton.data.supervised_dataset import (
 )
 from magneton.embedders.base_embedder import BaseEmbedder
 from magneton.training.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
+
+
+def _calc_fmax(
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    num_thresh_steps: int=101,
+) -> torch.Tensor:
+    probs = logits.sigmoid()
+    f1s = []
+    for thresh in torch.linspace(start=0, end=1, steps=num_thresh_steps):
+        preds = probs >= thresh
+
+        tp = ((preds == labels) & labels).sum()
+        fp = ((preds != labels) & labels).sum()
+        tn = ((preds == labels) & ~labels).sum()
+        fn = ((preds != labels) & ~labels).sum()
+
+        f1 = (2*tp) / (2*tp + fp + fn)
+        f1s.append(f1)
+
+    f1s = torch.stack(f1s)
+    return f1s.max()
+
+
+class FMaxScore(Metric):
+    def __init__(self, **kwargs):
+        self.num_thresh_steps = kwargs.pop("num_thresh_steps", 101)
+        super().__init__(**kwargs)
+
+        self.add_state("preds", default=[], dist_reduce_fx="cat")
+        self.add_state("labels", default=[], dist_reduce_fx="cat")
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
+        if preds.shape != target.shape:
+            raise ValueError("preds and target must have the same shape")
+
+        self.preds.append(preds.detach().cpu())
+        self.labels.append(target.detach().cpu())
+
+    def compute(self) -> torch.Tensor:
+        all_preds = torch.cat(self.preds)
+        all_labels = torch.cat(self.labels)
+
+        return _calc_fmax(all_preds, all_labels)
 
 class MultiLabelMLP(L.LightningModule):
     def __init__(
@@ -68,6 +122,7 @@ class MultiLabelMLP(L.LightningModule):
             prefix="train_",
         )
         self.val_metrics = self.train_metrics.clone(prefix="valid_")
+        self.val_metrics.add_metrics({"fmax": FMaxScore(num_thresh_steps=101)})
 
     def forward(
         self,
@@ -113,8 +168,6 @@ class MultiLabelMLP(L.LightningModule):
     def validation_step(self, batch: SupervisedBatch, batch_idx):
         logits = self(batch)
 
-        # preds = torch.argmax(logits, dim=1)
-        # acc = self.train_acc(preds, labels)
         labels = batch.labels.to(dtype=logits.dtype)
         loss = self.loss(logits, labels)
 
@@ -122,6 +175,12 @@ class MultiLabelMLP(L.LightningModule):
         self.log("val_loss", loss, sync_dist=True)
         self.val_metrics(logits, batch.labels)
         self.log_dict(self.val_metrics)
+
+    def predict_step(self, batch: SupervisedBatch, batch_idx: int, dataloader_idx: int=0):
+        logits = self(batch)
+        labels = batch.labels
+
+        return logits, labels
 
     def configure_optimizers(self):
         optim_params = []
@@ -180,25 +239,26 @@ def run_supervised_classification(
 
     # Set up callbacks
     callbacks = [
-        # ModelCheckpoint(
-        #     dirpath=self.save_dir / f"checkpoints_{self.run_id}",
-        #     monitor="val_loss",
-        #     mode="min",
-        #     save_top_k=3,
-        #     filename="{epoch}-{val_loss:.2f}"
-        # ),
-        EarlyStopping(
+        ModelCheckpoint(
+            dirpath=output_dir,
             monitor="valid_auprc",
-            mode="max",
-            patience=4,
+            mode="min",
+            save_top_k=3,
+            filename="{epoch}-{valid_auprc:.2f}"
         ),
+        # EarlyStopping(
+        #     monitor="valid_auprc",
+        #     mode="max",
+        #     patience=4,
+        # ),
     ]
     logger = WandbLogger(
         entity="magneton",
         project="magneton",
         name=run_id,
     )
-        # Create trainer
+
+    # Create trainer
     trainer = L.Trainer(
         strategy="auto",
         callbacks=callbacks,
@@ -206,7 +266,7 @@ def run_supervised_classification(
         accelerator="gpu",
         devices="auto",
         default_root_dir=output_dir,
-        max_epochs=10,
+        max_epochs=15,
         precision="bf16-mixed",
         val_check_interval=0.25,
     )
@@ -214,4 +274,27 @@ def run_supervised_classification(
         classifier,
         datamodule=module,
     )
+    final_predictions = trainer.predict(
+        model=classifier,
+        dataloaders=module.val_dataloader(),
+        return_predictions=True
+    )
+
+    all_logits, all_labels = zip(*final_predictions)
+    all_logits = torch.cat(all_logits)
+    all_labels = torch.cat(all_labels)
+
+    output_dir = Path(output_dir)
+    torch.save(all_logits, output_dir / "val_logits.pt")
+    torch.save(all_labels, output_dir / "val_labels.pt")
+
+    final_fmax = _calc_fmax(all_logits, all_labels)
+    final_auprc = multilabel_average_precision(
+        all_logits,
+        all_labels,
+        num_labels=module.num_classes,
+    )
+    print(f"Final Fmax: {final_fmax.item():0.3f}")
+    print(f"Final AUPRC: {final_auprc.item():0.3f}")
+
     logger.experiment.finish()

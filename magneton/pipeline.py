@@ -111,11 +111,12 @@ class EmbeddingPipeline:
             elif task in ["GO:BP", "GO:MF", "GO:CC", "EC"]:
                 output_dir = os.path.join(self.config.output_dir, task)
                 os.makedirs(output_dir, exist_ok=True)
+
                 run_id = f"{self.config.run_id}_{task}"
                 run_supervised_classification(
                     model=model,
                     task=task,
-                    output_dir=self.config.output_dir,
+                    output_dir=output_dir,
                     run_id=run_id,
                     config=self.config.evaluate,
                 )
