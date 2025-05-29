@@ -1,9 +1,7 @@
-import os
 from dataclasses import dataclass
 from typing import Generator, List
 
 from pysam import FastaFile
-import torch
 from torch.utils.data import Dataset
 
 from magneton.config import DataConfig
@@ -13,7 +11,7 @@ from magneton.data.substructure import (
     SeparatedSubstructureParser,
     UnifiedSubstructureParser,
 )
-from magneton.types import DataType, InterProType, Protein
+from magneton.types import DataType, Protein
 
 
 @dataclass
@@ -52,7 +50,7 @@ class MetaDataset(Dataset):
                 self.fasta = FastaFile(data_config.fasta_path)
         if DataType.SUBSTRUCT in self.datatypes:
             assert data_config.labels_path is not None, "Labels path is required for substructure data"
-            if not data_config.collapse_labels and len(data_config.interpro_types) == 1:
+            if not data_config.collapse_labels and len(data_config.substruct_types) == 1:
                 print(
                     "Warning: collapse_labels is set to False, but only one InterPro type is provided.\n"
                     "Forcing collapse_labels to True for simplicity."
@@ -62,13 +60,13 @@ class MetaDataset(Dataset):
             if data_config.collapse_labels:
                 # TODO: write out what this unified label set actually is
                 self.substruct_parser = UnifiedSubstructureParser(
-                    want_types=data_config.interpro_types,
+                    want_types=data_config.substruct_types,
                     labels_dir=data_config.labels_path,
-                    elem_name="all" if len(data_config.interpro_types) > 1 else data_config.interpro_types[0],
+                    elem_name="all" if len(data_config.substruct_types) > 1 else data_config.substruct_types[0],
                 )
             else:
                 self.substruct_parser = SeparatedSubstructureParser(
-                    want_types=data_config.interpro_types,
+                    want_types=data_config.substruct_types,
                     labels_dir=data_config.labels_path,
                 )
         if DataType.STRUCT in self.datatypes:

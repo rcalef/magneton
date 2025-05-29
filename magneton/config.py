@@ -11,6 +11,16 @@ class EmbeddingConfig:
     model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
 
 @dataclass
+class EvalConfig:
+    _target_: str = "magneton.config.EvalConfig"
+    tasks: List[str] = MISSING
+    data_dir: str = MISSING
+    model_checkpoint: str = MISSING
+    # Whether or not the saved model used EWC loss
+    has_fisher_info: bool = False
+    model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
+
+@dataclass
 class DataConfig:
     _target_: str = "magneton.config.DataConfig"
     data_dir: str = MISSING
@@ -19,7 +29,7 @@ class DataConfig:
     fasta_path: Optional[str] = None
     labels_path: Optional[str] = None
     struct_template: Optional[str] = None
-    interpro_types: Optional[List[str]] = None
+    substruct_types: Optional[List[str]] = None
     collapse_labels: bool = True
 
 @dataclass
@@ -58,7 +68,8 @@ class PipelineConfig:
     data: DataConfig = MISSING
     embedding: EmbeddingConfig = MISSING
     model: ModelConfig = MISSING
-    training: TrainingConfig = MISSING
+    training: Optional[TrainingConfig] = None
+    evaluate: Optional[EvalConfig] = None
 
 cs = ConfigStore.instance()
 cs.store(name="base_pipeline", node=PipelineConfig)

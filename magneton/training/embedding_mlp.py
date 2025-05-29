@@ -19,6 +19,7 @@ class EmbeddingMLP(L.LightningModule):
         self,
         config: PipelineConfig,
         num_classes: int,
+        load_pretrained_fisher: bool = False,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -62,6 +63,13 @@ class EmbeddingMLP(L.LightningModule):
         self.f1 = F1Score(task="multiclass", num_classes=num_classes)
 
         self.calc_fisher_state = False
+        if load_pretrained_fisher:
+            placeholder_vec = torch.zeros_like(torch.nn.utils.parameters_to_vector(self.embedder.parameters()))
+            self.register_buffer(
+                "fisher_info",
+                placeholder_vec,
+                persistent=True,
+            )
 
     def configure_model(self):
         print(f"MLP Device: {self.device}")
@@ -172,7 +180,6 @@ class EmbeddingMLP(L.LightningModule):
         protein_embeds: torch.Tensor,
         batch: SubstructureBatch,
     ) -> torch.Tensor:
-        # print(protein_embeds.shape)
         embed_dim = protein_embeds.shape[-1]
         dtype = protein_embeds.dtype
 
@@ -318,7 +325,7 @@ class MultitaskEmbeddingMLP(L.LightningModule):
         )
 
         # Build MLP layers and metric loggers
-        substruct_types = config.data.interpro_types
+        substruct_types = config.data.substruct_types
         mlps = {}
         for substruct_type in substruct_types:
             num_classes = self.num_classes[substruct_type]
@@ -412,7 +419,7 @@ class MultitaskEmbeddingMLP(L.LightningModule):
             dtype = substruct_logits.dtype
             break
 
-        total_loss = torch.tensor(0, device=self.device, dtype=dtype)
+        losses = []
         for substruct_type, substruct_logits in logits.items():
 
             labels = torch.tensor(
@@ -426,7 +433,7 @@ class MultitaskEmbeddingMLP(L.LightningModule):
             )
 
             loss = self.loss(substruct_logits, labels)
-            total_loss += loss
+            losses.append(loss)
 
             with torch.no_grad():
                 preds = torch.argmax(substruct_logits, dim=1)
@@ -437,8 +444,9 @@ class MultitaskEmbeddingMLP(L.LightningModule):
             self.log(f"{substruct_type}_train_acc", acc, sync_dist=True)
             self.log(f"{substruct_type}_eff_batch_size", len(labels), sync_dist=True)
 
+        total_loss = torch.stack(losses).sum()
         self.log("train_loss", total_loss, sync_dist=True)
-        return loss
+        return total_loss
 
     @torch.inference_mode()
     def validation_step(self, batch: SubstructureBatch, batch_idx):
@@ -448,7 +456,7 @@ class MultitaskEmbeddingMLP(L.LightningModule):
             dtype = substruct_logits.dtype
             break
 
-        total_loss = torch.tensor(0, device=self.device, dtype=dtype)
+        losses = []
         for substruct_type, substruct_logits in logits.items():
 
             labels = torch.tensor(
@@ -462,7 +470,7 @@ class MultitaskEmbeddingMLP(L.LightningModule):
             )
 
             loss = self.loss(substruct_logits, labels)
-            total_loss += loss
+            losses.append(loss)
 
             preds = torch.argmax(substruct_logits, dim=1)
             acc = (preds == labels).float().mean()
@@ -472,6 +480,7 @@ class MultitaskEmbeddingMLP(L.LightningModule):
             self.log(f"{substruct_type}_val_acc", acc, sync_dist=True)
             self.log(f"{substruct_type}_eff_batch_size", len(labels), sync_dist=True)
 
+        total_loss = torch.stack(losses).sum()
         self.log("val_loss", total_loss, sync_dist=True)
 
         # Calculate loss for original task

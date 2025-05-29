@@ -1,0 +1,8 @@
+tasks: ["GO:MF","GO:BP","GO:CC"]
+data_dir: "/weka/scratch/weka/kellislab/rcalef/data/protein_workshop/GeneOntology"
+model_params:
+  batch_size: 32
+  hidden_dims: [256, 256, 256]
+  dropout_rate: 0.1
+  learning_rate: 1e-2
+  weight_decay: 0.0

@@ -69,7 +69,7 @@ class ModelTrainer:
             logger = WandbLogger(
                 entity="magneton",
                 project="magneton",
-                name=f"{self.run_id}_{model.name()}",
+                name=self.run_id,
             )
             profiler = None
             dev_run = False

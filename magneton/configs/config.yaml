@@ -3,6 +3,7 @@ defaults:
   #- data: debug
   - data: interpro103_swissprot
   - embedding: gearnet
+  - evaluate: go
   - _self_
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog

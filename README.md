@@ -56,3 +56,12 @@ python magneton/cli.py \
   training.batch_size=24 \
   ++embedding.model_params.use_flash_attn=True
 ```
+## Run downstream GO term classification
+```
+python magneton/cli.py \
+  stages=["eval"] \
+  evaluate=go \
+ run_id="esmc_300m_orig" \
+  output_dir="/home/rcalef/storage/om_storage/projects/magneton/experiments/downstream_evals/esmc_300m_orig" \
+ evaluate.model_checkpoint="/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/no_finetune/esmc_300m_domain/model_esmc_300m_domain.pt" 
+ ```

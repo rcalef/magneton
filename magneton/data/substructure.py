@@ -2,22 +2,39 @@ import os
 from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Dict, List
 
 import pandas as pd
 import torch
 
 from magneton.types import (
+    DSSP_TO_NAME,
     INTERPRO_REP_TYPES,
     InterProType,
     Protein,
 )
 
+# This isn't ideal, but sort of stuck with the existing
+# `InterProType` class due to writing out a ton of pickle
+# files with that class definition. In the future, probably
+# want to rename `InterProType` to `SubstructType` and add
+# a value for secondary structure
+class SubstructType(StrEnum):
+    FAMILY = "Family"
+    DOMAIN = "Domain"
+    HOMO_FAMILY = "Homologous_superfamily"
+    CONS_SITE = "Conserved_site"
+    ACT_SITE = "Active_site"
+    BIND_SITE = "Binding_site"
+    PTM = "PTM"
+    SS = "Secondary_struct"
+
 @dataclass
 class LabeledSubstructure:
     ranges: List[torch.Tensor]
     label: int
-    element_type: InterProType
+    element_type: SubstructType
 
     def to(self, device: str):
         for i in range(len(self.ranges)):
@@ -47,20 +64,27 @@ class UnifiedSubstructureParser(BaseSubstructureParser):
     """
     def __init__(
         self,
-        want_types: List[InterProType],
+        want_types: List[SubstructType],
         labels_dir: str,
         elem_name: str = "all",
     ):
         self.want_types = sorted(want_types)
         self.elem_name = elem_name
         self.type_to_label = {}
+        self.parse_ss = False
 
         curr_label = 0
         for type in self.want_types:
-            labels = pd.read_table(os.path.join(labels_dir, f"{type}.labels.tsv"))
-            labels.label += curr_label
-            for label, interpro_id in labels[["label", "interpro_id"]].itertuples(index=False):
-                self.type_to_label[interpro_id] = label
+            if type == SubstructType.SS:
+                labels = [(i + curr_label, name) for i, name in enumerate(DSSP_TO_NAME)]
+                self.parse_ss = True
+            else:
+                labels = pd.read_table(os.path.join(labels_dir, f"{type}.labels.tsv"))
+                labels.label += curr_label
+                labels = list(labels[["label", "interpro_id"]].itertuples(index=False))
+
+            for label, name in labels:
+                self.type_to_label[name] = label
 
             curr_label += len(labels)
 
@@ -79,6 +103,14 @@ class UnifiedSubstructureParser(BaseSubstructureParser):
                 label=self.type_to_label[entry.id],
                 element_type=self.elem_name,
             ))
+
+        if self.parse_ss:
+            for ss in prot.secondary_structs:
+                parsed.append(LabeledSubstructure(
+                    ranges=[torch.tensor((ss.start, ss.end))],
+                    label=self.type_to_label[DSSP_TO_NAME[ss.dssp_type]],
+                    element_type=SubstructType.SS,
+                ))
         return parsed
 
     def num_labels(self) -> int:
@@ -94,16 +126,23 @@ class SeparatedSubstructureParser(BaseSubstructureParser):
     """
     def __init__(
         self,
-        want_types: List[InterProType],
+        want_types: List[SubstructType],
         labels_dir: str,
     ):
         self.want_types = sorted(want_types)
         self.type_to_label = defaultdict(dict)
+        self.parse_ss = False
 
         for type in self.want_types:
-            labels = pd.read_table(os.path.join(labels_dir, f"{type}.labels.tsv"))
-            for label, interpro_id in labels[["label", "interpro_id"]].itertuples(index=False):
-                self.type_to_label[type][interpro_id] = label
+            if type == SubstructType.SS:
+                self.parse_ss = True
+                labels = list(enumerate(DSSP_TO_NAME))
+            else:
+                labels = pd.read_table(os.path.join(labels_dir, f"{type}.labels.tsv"))
+                labels = list(labels[["label", "interpro_id"]].itertuples(index=False))
+
+            for label, name in labels:
+                self.type_to_label[type][name] = label
 
     def parse(self, prot: Protein) -> List[LabeledSubstructure]:
         """
@@ -122,6 +161,14 @@ class SeparatedSubstructureParser(BaseSubstructureParser):
                 label=self.type_to_label[entry.element_type][entry.id],
                 element_type=entry.element_type,
             ))
+        if self.parse_ss:
+            for ss in prot.secondary_structs:
+                parsed.append(LabeledSubstructure(
+                    ranges=[torch.tensor((ss.start, ss.end))],
+                    label=ss.dssp_type,
+                    element_type=SubstructType.SS,
+                ))
+
         return parsed
 
     def num_labels(self) -> Dict[str, int]:

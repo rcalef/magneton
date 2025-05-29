@@ -125,13 +125,6 @@ class ESMCDataModule(BaseDataModule):
     ):
         super().__init__(data_config, train_config)
 
-    def _get_loader(self, dataset: ESMCDataSet) -> torch.utils.data.DataLoader:
-        return torch.utils.data.DataLoader(
-            dataset,
-            batch_size=self.train_config.batch_size,
-            shuffle=True,
-        )
-
     def _get_split_info(self, split: str) -> Tuple[str, str]:
         if split == "all":
             return self.data_config.data_dir, self.data_config.prefix
@@ -286,7 +279,8 @@ class ESMCEmbedder(BaseEmbedder):
 
     def embed_batch(self, batch: ESMCBatch) -> torch.Tensor:
         """Embed a batch of pre-tokenized protein sequences"""
-        return self._get_embedding(batch.tokenized_seq)[:, 1:-1, :]
+        # Remove CLS token
+        return self._get_embedding(batch.tokenized_seq)[:, 1:, :]
 
     # the following two functions are deprecated for the current data module setup
     @torch.no_grad()

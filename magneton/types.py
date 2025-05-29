@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
-from enum import auto, Enum, StrEnum, unique
+from enum import auto, IntEnum, StrEnum, unique
 from pprint import pprint
 from typing import List, Tuple
 
 
 @unique
-class DsspType(Enum):
+class DsspType(IntEnum):
     H = 0
     B = auto()
     E = auto()
@@ -111,7 +111,7 @@ class DataType(StrEnum):
     SUBSTRUCT = "substructure"
 
 
-class PipelineStage(Enum):
+class PipelineStage(IntEnum):
     EMBED = 0
     TRAIN = auto()
     EVALUATE = auto()
