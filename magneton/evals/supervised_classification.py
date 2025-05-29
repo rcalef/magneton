@@ -152,15 +152,18 @@ def run_supervised_classification(
     else:
         tokenizer = None
 
-    if task in ["GO:BP", "GO:CC", "GO:MF"]:
-        go_term = task.split(":")[1]
-        go_config = DeepFRIDataConfig(
+    if task in ["GO:BP", "GO:CC", "GO:MF", "EC"]:
+        if task.startswith("GO"):
+            term = task.split(":")[1]
+        else:
+            term = task
+        data_config = DeepFRIDataConfig(
             data_dir=config.data_dir,
-            go_term=go_term,
+            task=term,
             batch_size=config.model_params["batch_size"],
         )
         module = DeepFRIDataModule(
-            config=go_config,
+            config=data_config,
             seq_tokenizer=tokenizer,
         )
     else:

@@ -1,5 +1,3 @@
-import os
-
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
@@ -9,9 +7,6 @@ import lightning as L
 import pandas as pd
 import torch
 
-from proteinworkshop.datasets.go import (
-    GeneOntologyDataset,
-)
 from pysam import FastaFile
 from sklearn.preprocessing import LabelEncoder
 from torch.utils.data import Dataset
@@ -95,6 +90,10 @@ class DeepFRIDataConfig:
     batch_size: int = 32
 
 class DeepFRIDataModule(L.LightningDataModule):
+    """Data module encompassing evaluation sets from DeepFRI (GO terms and EC numbers)
+
+    Structure largely adapted from ProteinWorkshop.
+    """
     def __init__(
         self,
         config: DeepFRIDataConfig,
@@ -107,6 +106,8 @@ class DeepFRIDataModule(L.LightningDataModule):
 
         data_dir = Path(config.data_dir)
         if self.task == "EC":
+            data_dir = data_dir / "EnzymeCommission"
+
             self.label_fname = data_dir / "nrPDB-EC_2020.04_annot.tsv"
             self.train_fname = data_dir / "nrPDB-EC_2020.04_train.txt"
             self.val_fname = data_dir / "nrPDB-EC_2020.04_valid.txt"
@@ -116,13 +117,12 @@ class DeepFRIDataModule(L.LightningDataModule):
             n_header_rows = 3
             col_names = ["PDB", "EC"]
         else:
-            module = GeneOntologyDataset(path=config.data_dir, batch_size=config.batch_size)
-            module.download()
+            data_dir = data_dir / "GeneOntology"
 
-            self.label_fname = module.label_fname
-            self.train_fname = module.train_fname
-            self.val_fname = module.val_fname
-            self.test_fname = module.test_fname
+            self.label_fname = data_dir / "nrPDB-GO_annot.tsv"
+            self.train_fname = data_dir / "nrPDB-GO_train.txt"
+            self.val_fname = data_dir / "nrPDB-GO_valid.txt"
+            self.test_fname = data_dir / "nrPDB-GO_test.txt"
             fa_path = data_dir / "nrPDB-GO_sequences.fasta"
 
             n_header_rows = 13
