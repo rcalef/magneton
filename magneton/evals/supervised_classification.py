@@ -157,7 +157,6 @@ class MultiLabelMLP(L.LightningModule):
         labels = batch.labels.to(dtype=logits.dtype)
         loss = self.loss(logits, labels)
 
-        # Revisit this if it seems slower
         self.log("train_loss", loss, sync_dist=True)
         if batch_idx % 50 == 0:
             self.train_metrics(logits, batch.labels)
@@ -171,10 +170,12 @@ class MultiLabelMLP(L.LightningModule):
         labels = batch.labels.to(dtype=logits.dtype)
         loss = self.loss(logits, labels)
 
-        # Revisit this if it seems slower
         self.log("val_loss", loss, sync_dist=True)
-        self.val_metrics(logits, batch.labels)
+        self.val_metrics.update(logits, batch.labels)
+
+    def on_validation_epoch_end(self):
         self.log_dict(self.val_metrics)
+        return super().on_validation_epoch_end()
 
     def predict_step(self, batch: SupervisedBatch, batch_idx: int, dataloader_idx: int=0):
         logits = self(batch)

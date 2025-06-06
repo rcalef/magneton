@@ -126,7 +126,7 @@ class DeepFRIDataModule(L.LightningDataModule):
             fa_path = data_dir / "nrPDB-GO_sequences.fasta"
 
             n_header_rows = 13
-            col_names = ["PDB", "MF", "BP", "EC"]
+            col_names = ["PDB", "MF", "BP", "CC"]
 
         # Parse labels
         label_line = LABEL_LINE[self.task]
