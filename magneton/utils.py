@@ -1,9 +1,9 @@
-from typing import List, Tuple
+from typing import Any, Mapping
 
 import numpy as np
 import torch
 
-def get_chunk_idxs(seq_len: int, max_len: int) -> List[Tuple[int, int]]:
+def get_chunk_idxs(seq_len: int, max_len: int) -> list[tuple[int, int]]:
     """Get indices for chunking long sequences"""
     num_pieces = (seq_len + max_len - 1) // max_len
     lo_size = seq_len // num_pieces
@@ -33,3 +33,20 @@ def describe_tensor(
 
     qs = np.quantile(vals, (0.25, 0.5, 0.75))
     print(": ".join((prefix, f"quartiles: {qs}")))
+
+def move_inputs_to_device(
+    data: torch.Tensor | Any,
+    device: torch.device,
+) -> torch.Tensor |  Any:
+    """
+    Prepares one `data` before feeding it to the model, be it a tensor or a nested list/dictionary of tensors.
+    """
+    if isinstance(data, Mapping):
+        return type(data)(
+            {k: move_inputs_to_device(v, device) for k, v in data.items()}
+        )
+    elif isinstance(data, (tuple, list)):
+        return type(data)(move_inputs_to_device(v, device) for v in data)
+    elif isinstance(data, torch.Tensor):
+        return data.to(device=device)
+    return data

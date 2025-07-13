@@ -31,6 +31,7 @@ class DataConfig:
     struct_template: Optional[str] = None
     substruct_types: Optional[List[str]] = None
     collapse_labels: bool = True
+    model_specific_params: Optional[dict[str, Any]] = None
 
 @dataclass
 class ModelConfig:

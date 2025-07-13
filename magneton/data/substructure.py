@@ -41,6 +41,20 @@ class LabeledSubstructure:
             self.ranges[i] = self.ranges[i].to(device)
         return self
 
+@dataclass
+class SubstructureBatch:
+    substructures: List[List[LabeledSubstructure]]
+    prot_ids: List[str]
+
+    def to(self, device: str):
+        for i in range(len(self.substructures)):
+            for j in range(len(self.substructures[i])):
+                self.substructures[i][j] = self.substructures[i][j].to(device)
+        return self
+
+    def total_length(self) -> int:
+        return sum(map(len, self.substructures))
+
 
 class BaseSubstructureParser(ABC):
     def parse(self, prot: Protein) -> List[LabeledSubstructure]:

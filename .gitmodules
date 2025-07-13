@@ -1,0 +1,3 @@
+[submodule "magneton/external/ProSST"]
+	path = magneton/external/ProSST
+	url = git@github.com:ai4protein/ProSST.git
