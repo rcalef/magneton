@@ -1,4 +1,5 @@
-tasks: ["GO:MF","GO:BP","GO:CC","EC"]
+#tasks: ["GO:MF","GO:BP","GO:CC","EC"]
+tasks: ["GO:BP","GO:CC","EC"]
 data_dir: "/weka/scratch/weka/kellislab/rcalef/data/magneton-data/evaluations"
 model_params:
   batch_size: 32

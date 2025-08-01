@@ -8,6 +8,8 @@ from .base_embedder import BaseConfig, BaseDataModule, BaseEmbedder
 from .esm_embedder import ESMEmbedder
 from .gearnet_embedder import GearNetEmbedder, GearNetConfig, GearNetDataModule
 from .esmc_embedder import ESMCEmbedder, ESMCConfig, ESMCDataModule
+from .prosst_embedder import ProSSTEmbedder, ProSSTConfig, ProSSTDataModule
+
 
 class EmbedderFactory:
     _embedders: Dict[str, Tuple[Type[BaseEmbedder], Type[BaseConfig], Type[BaseDataModule]]] = {
@@ -15,6 +17,7 @@ class EmbedderFactory:
         "gearnet": (GearNetEmbedder, GearNetConfig, GearNetDataModule),
         "esmc": (ESMCEmbedder, ESMCConfig, ESMCDataModule),
         "esmc_300m": (ESMCEmbedder, ESMCConfig, ESMCDataModule),
+        "prosst": (ProSSTEmbedder, ProSSTConfig, ProSSTDataModule),
     }
 
     @classmethod

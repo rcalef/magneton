@@ -1,0 +1,5 @@
+model: "prosst"
+model_params:
+  structure_vocab_size: 2048
+  weights_path: "/weka/scratch/weka/kellislab/rcalef/model_weights/ProSST-2048"
+  rep_layer: 12

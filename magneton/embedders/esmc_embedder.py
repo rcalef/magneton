@@ -19,25 +19,10 @@ from tqdm import tqdm
 
 from magneton.config import DataConfig, TrainingConfig
 from magneton.data.meta_dataset import MetaDataset
-from magneton.data.substructure import LabeledSubstructure
+from magneton.data.substructure import LabeledSubstructure, SubstructureBatch
 from magneton.embedders.base_embedder import BaseConfig, BaseDataModule, BaseEmbedder
 from magneton.types import DataType
 from magneton.utils import get_chunk_idxs
-
-
-@dataclass
-class SubstructureBatch:
-    substructures: List[List[LabeledSubstructure]]
-    prot_ids: List[str]
-
-    def to(self, device: str):
-        for i in range(len(self.substructures)):
-            for j in range(len(self.substructures[i])):
-                self.substructures[i][j] = self.substructures[i][j].to(device)
-        return self
-
-    def total_length(self) -> int:
-        return sum(map(len, self.substructures))
 
 
 @dataclass

@@ -1,3 +1,7 @@
 [submodule "external/proteingym"]
 	path = external/proteingym
 	url = https://github.com/OATML-Markslab/ProteinGym.git
+
+[submodule "magneton/external/ProSST"]
+	path = magneton/external/ProSST
+	url = git@github.com:ai4protein/ProSST.git
