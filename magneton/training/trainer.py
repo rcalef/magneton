@@ -60,10 +60,6 @@ class ModelTrainer:
                 save_dir=self.save_dir,
                 name="csv_logger",
             )
-            profiler = AdvancedProfiler(
-                dirpath=self.save_dir,
-                filename="profiler_output",
-            )
             dev_run = 10
         else:
             logger = WandbLogger(
@@ -71,8 +67,14 @@ class ModelTrainer:
                 project="magneton",
                 name=self.run_id,
             )
-            profiler = None
             dev_run = False
+        if self.config.profile:
+            profiler = AdvancedProfiler(
+                dirpath=self.save_dir,
+                filename="profiler_output",
+            )
+        else:
+            profiler = None
 
         # Create trainer
         self.trainer = L.Trainer(
@@ -85,7 +87,7 @@ class ModelTrainer:
             max_epochs=self.config.max_epochs,
             profiler=profiler,
             fast_dev_run=dev_run,
-            precision="bf16-mixed",
+            precision=self.config.precision,
             **self.config.additional_training_kwargs,
         )
 

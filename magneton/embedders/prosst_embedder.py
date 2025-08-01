@@ -16,13 +16,12 @@ from torch_scatter import scatter_mean
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 from tqdm import tqdm
 
-prosst_path = (
+PROSST_REPO_PATH = (
     Path(__file__).parent.parent /
     "external" /
     "ProSST"
 )
-print(prosst_path)
-sys.path.append(str(prosst_path))
+sys.path.append(str(PROSST_REPO_PATH))
 from prosst.structure.encoder.gvp import AutoGraphEncoder
 from prosst.structure.get_sst_seq import (
     SSTPredictor,
@@ -60,6 +59,7 @@ class ProSSTDataElem:
     substructures: list[LabeledSubstructure]
     sequence: torch.Tensor
     prot_id: str
+    protein_length: int
 
 
 @dataclass
@@ -123,6 +123,7 @@ class ProSSTDataSet(MetaDataset):
             substructures=elem.substructures,
             sequence=tokenized_seq,
             prot_id=prot_id,
+            protein_length=len(result_dict["aa_seq"]),
         )
 
 
@@ -147,8 +148,7 @@ def prosst_collate(
         substructs.append(e.substructures)
         prot_ids.append(e.prot_id)
         seqs.append(e.sequence)
-        # -2 for EOS and BOS
-        lens.append(len(e.sequence - 2))
+        lens.append(e.protein_length)
 
     # Below copied from prosst.structure.get_sst_seq.py:324-325
     batch_graphs = Batch.from_data_list(all_pdb_subgraphs)
@@ -233,11 +233,13 @@ class ProSSTDataModule(BaseDataModule):
 
 @dataclass
 class ProSSTConfig(BaseConfig):
-    model_path: str = field(kw_only=True)
+    weights_path: str = field(kw_only=True)
     structure_vocab_size: int = field(kw_only=True, default=2048)
     max_distance: int = field(kw_only=True, default=10)
     max_batch_nodes: int = field(kw_only=True, default=10000)
     num_pdb_procs: int = field(kw_only=True, default=16)
+    # Default to final layer hidden states
+    rep_layer: int = field(kw_only=True, default=12)
 
 
 class ProSSTEmbedder(BaseEmbedder):
@@ -252,10 +254,11 @@ class ProSSTEmbedder(BaseEmbedder):
         self.max_distance = config.max_distance
         self.max_batch_ndes = config.max_batch_nodes
         self.num_pdb_procs = config.num_pdb_procs
+        self.rep_layer = config.rep_layer
 
         # Below copied from prosst.structure.get_sst_seq.py:396-411
         static_path = (
-            prosst_path /
+            PROSST_REPO_PATH /
             "prosst" /
             "structure" /
             "static"
@@ -274,10 +277,12 @@ class ProSSTEmbedder(BaseEmbedder):
         self.encoder_model = graph_encoder_model
         self.cluster_model = joblib.load(str(static_path / f"{self.vocab_size}.joblib"))
 
-        self.model = AutoModelForMaskedLM.from_pretrained(config.model_path, trust_remote_code=True)
-        self.tokenizer = AutoTokenizer.from_pretrained(config.model_path, trust_remote_code=True)
+        self.model = AutoModelForMaskedLM.from_pretrained(config.weights_path, trust_remote_code=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(config.weights_path, trust_remote_code=True)
+        self.embed_dim = self.model.get_output_embeddings().in_features
 
         if frozen:
+            self.encoder_model = self.encoder_model.eval()
             self.model = self.model.eval()
             self._freeze()
         # Freeze everything after the layer we're
@@ -291,6 +296,8 @@ class ProSSTEmbedder(BaseEmbedder):
 
     def _freeze(self):
         for params in self.model.parameters():
+            params.requires_grad = False
+        for params in self.encoder_model.parameters():
             params.requires_grad = False
 
     def _unfreeze(
@@ -361,16 +368,16 @@ class ProSSTEmbedder(BaseEmbedder):
         structure_tokens = self._get_structure_toks_batch(batch)
         attention_mask = torch.ones_like(batch.tokenized_seqs)
         attention_mask[batch.tokenized_seqs == self.tokenizer.pad_token_id] = 0
-        print(batch.tokenized_seqs.shape)
-        print(structure_tokens.shape)
-        print(attention_mask.shape)
 
-
-        return self.model(
+        out = self.model(
             input_ids=batch.tokenized_seqs,
             ss_input_ids=structure_tokens,
             attention_mask=attention_mask,
+            output_hidden_states=True,
         )
+
+        # Normalize along the embedding dimension
+        return F.normalize(out.hidden_states[self.rep_layer], dim=-1)
 
     # the following two functions are deprecated for the current data module setup
     @torch.no_grad()
@@ -389,7 +396,7 @@ class ProSSTEmbedder(BaseEmbedder):
         reduction: str = "mean",
     ) -> torch.Tensor:
         """NOTE: this modifies the original tokenized seq tensor, call last."""
-        pass
+        return 0
 
     def get_embed_dim(self):
         return self.embed_dim
