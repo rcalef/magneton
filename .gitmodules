@@ -1,0 +1,3 @@
+[submodule "external/proteingym"]
+	path = external/proteingym
+	url = https://github.com/OATML-Markslab/ProteinGym.git

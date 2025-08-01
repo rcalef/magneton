@@ -19,6 +19,10 @@ model:
   # checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc/checkpoints_esmc_embed_domain/epoch=3-val_f1=0.97.ckpt"
   # checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc/checkpoints_esmc_embed_superfam/epoch=2-val_f1=0.92.ckpt"
   checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc/checkpoints_esmc_embed_conserved_sites/epoch=2-val_f1=0.96.ckpt"
+  # checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/gearnet/checkpoints_gearnet_embed_conserved_site/epoch=0-val_f1=0.98.ckpt"
+  # checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/gearnet/checkpoints_gearnet_embed_domain/epoch=0-val_f1=0.94.ckpt"
+  # checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/gearnet/checkpoints_gearnet_embed_superfam/epoch=0-val_f1=0.93.ckpt"
+  # checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc/checkpoints_esmc_embed_domain_small_mlp/epoch=1-val_f1=0.97.ckpt"
 
 training:
   max_epochs: 5
