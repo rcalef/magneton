@@ -2,7 +2,7 @@ import os
 
 from dataclasses import dataclass, field, replace
 from functools import partial
-from typing import List, Set, Tuple
+from typing import List, Literal, Set, Tuple
 
 import torch
 
@@ -165,10 +165,13 @@ class ESMCDataModule(BaseDataModule):
             shuffle=False,
         )
 
+ESMC_300M = "300m"
+ESMC_600M = "600m"
+
 
 @dataclass
 class ESMCConfig(BaseConfig):
-    model_size: str = field(kw_only=True, default="600m")
+    model_size: Literal[ESMC_300M, ESMC_600M] = field(kw_only=True, default=ESMC_600M)
     weights_path: str = field(kw_only=True)
     use_flash_attn: bool = field(kw_only=True, default=False)
     rep_layer: int = field(kw_only=True, default=35)
@@ -188,7 +191,7 @@ class ESMCEmbedder(BaseEmbedder):
         self.rep_layer = config.rep_layer
         self.model_size = config.model_size
 
-        if config.model_size == "600m":
+        if config.model_size == ESMC_600M:
             self.model = ESMC(
                 d_model=1152,
                 n_heads=18,
@@ -197,7 +200,7 @@ class ESMCEmbedder(BaseEmbedder):
                 use_flash_attn=config.use_flash_attn,
             )
             self.embed_dim=1152
-        elif config.model_size == "300m":
+        elif config.model_size == ESMC_300M:
             self.model = ESMC(
                 d_model=960,
                 n_heads=15,
@@ -258,7 +261,7 @@ class ESMCEmbedder(BaseEmbedder):
         self,
         protein_tensor: torch.Tensor,
     ) -> torch.Tensor:
-        logits_out = self.model.forward(protein_tensor)
+        logits_out = self.model(protein_tensor)
 
         return self.model.transformer.norm(logits_out.hidden_states[self.rep_layer])
 
@@ -268,11 +271,11 @@ class ESMCEmbedder(BaseEmbedder):
         return self._get_embedding(batch.tokenized_seq)[:, 1:, :]
 
     # the following two functions are deprecated for the current data module setup
-    @torch.no_grad()
+    @torch.inference_mode()
     def embed_single_protein(self, seq: str) -> torch.Tensor:
         """Process a single protein sequence through ESM"""
         protein = ESMProtein(sequence=seq)
-        protein_tensor = self.model.encode(protein)
+        protein_tensor = self.model.encode(protein).sequence.unsqueeze(0)
 
         seq_len = len(seq) + 2  # +2 for EOS and BOS
         if seq_len <= self.max_len:
@@ -282,15 +285,13 @@ class ESMCEmbedder(BaseEmbedder):
             idxs = get_chunk_idxs(seq_len, max_len=self.config.max_seq_length)
             outputs = []
             for start, end in idxs:
-                sub_tensor = ESMProteinTensor(
-                    sequence=protein_tensor.sequence[start:end]
-                ).to(protein_tensor.device)
+                sub_tensor = protein_tensor[:, start:end]
                 outputs.append(self._get_embedding(sub_tensor))
             ret = torch.cat(outputs, dim=1)
 
         return ret.squeeze()[1 : len(seq) + 1]
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def embed_sequences(self, sequences: List[str]) -> List[torch.Tensor]:
         """Embed multiple protein sequences"""
         all_embeddings = []
@@ -300,6 +301,7 @@ class ESMCEmbedder(BaseEmbedder):
                 embedding = self.embed_single_protein(seq)
                 all_embeddings.append(embedding)
             except Exception as e:
+                raise e
                 print(f"Error processing sequence: {str(e)}")
                 continue
 
