@@ -31,7 +31,8 @@ class DataConfig:
     struct_template: Optional[str] = None
     substruct_types: Optional[List[str]] = None
     collapse_labels: bool = True
-    model_specific_params: Optional[dict[str, Any]] = None
+    num_loader_workers: int = 4
+    model_specific_params: dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class ModelConfig:
@@ -55,7 +56,7 @@ class TrainingConfig:
     precision: str = "bf16-mixed"
     devices: Optional[Any] = "auto"
     additional_training_kwargs: Optional[Dict[str, Any]] = field(default_factory=dict)
-    dev_run: bool = False
+    dev_run: int | None = None
     profile: bool = False
     loss_strategy: str = "standard"
     ewc_weight: float = 400

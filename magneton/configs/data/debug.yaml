@@ -4,6 +4,3 @@ prefix: "swissprot.with_ss"
 labels_path: "/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/label_sets/selected_subset"
 substruct_types: ["Domain"]
 struct_template: "/weka/scratch/weka/kellislab/rcalef/data/pdb_alphafolddb/AF-%s-F1-model_v4.pdb"
-model_specific_params:
-  model_path: "/weka/scratch/weka/kellislab/rcalef/model_weights/ProSST-2048"
-  num_threads: 4

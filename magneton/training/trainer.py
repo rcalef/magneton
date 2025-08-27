@@ -55,12 +55,12 @@ class ModelTrainer:
         ]
 
         # Set up logger
-        if self.config.dev_run:
+        if self.config.dev_run is not None:
             logger = CSVLogger(
                 save_dir=self.save_dir,
                 name="csv_logger",
             )
-            dev_run = 10
+            dev_run = self.config.dev_run
         else:
             logger = WandbLogger(
                 entity="magneton",
