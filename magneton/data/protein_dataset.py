@@ -2,6 +2,7 @@ import os
 
 from bisect import bisect
 from functools import partial
+from pathlib import Path
 from typing import Generator, List
 
 import pandas as pd
@@ -16,7 +17,6 @@ from magneton.io.internal import (
 )
 from magneton.data.substructure import BaseSubstructureParser
 from magneton.types import (
-    InterProType,
     Protein,
 )
 
@@ -115,7 +115,7 @@ def passthrough_filter_func(prot: Protein) -> bool:
     return True
 
 def get_protein_dataset(
-    input_path: str,
+    input_path: str | Path,
     compression: str = "bz2",
     in_memory: bool = False,
     prefix: str = "sharded_proteins",
@@ -127,7 +127,12 @@ def get_protein_dataset(
     else:
         filter_func = passthrough_filter_func
 
-    if os.path.isdir(input_path):
+    if isinstance(input_path, str):
+        input_path = Path(input_path)
+    if not input_path.exists():
+        raise ValueError(f"path not found: {str(input_path)}")
+
+    if input_path.is_dir():
         if in_memory:
             return InMemoryProteinDataset(
                 list(filter_proteins(
@@ -144,9 +149,9 @@ def get_protein_dataset(
                 compression=compression,
                 prefix=prefix,
             )
-    elif ".pkl" in input_path:
+    elif ".pkl" in str(input_path):
         return InMemoryProteinDataset(
             [x for x in parse_from_pkl(input_path, compression=compression) if filter_func(x)]
         )
     else:
-        raise ValueError(f"expected dir or pickle file, got: {input_path}")
+        raise ValueError(f"expected dir or pickle file, got: {str(input_path)}")
