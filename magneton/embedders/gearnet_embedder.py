@@ -15,8 +15,8 @@ from torchdrug.data import PackedProtein as torchPackedProtein
 from tqdm import tqdm
 
 from magneton.config import DataConfig, TrainingConfig
-from magneton.data.meta_dataset import MetaDataset
-from magneton.data.substructure import LabeledSubstructure
+from magneton.data.core.core_dataset import CoreDataset
+from magneton.data.core.substructure import LabeledSubstructure
 from magneton.embedders.base_embedder import BaseConfig, BaseDataModule, BaseEmbedder
 from magneton.types import DataType, Protein
 
@@ -113,7 +113,7 @@ def gearnet_collate(
     )
 
 
-class GearNetDataSet(MetaDataset):
+class GearNetDataSet(CoreDataset):
     def __init__(
         self,
         data_config: DataConfig,

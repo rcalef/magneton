@@ -22,8 +22,8 @@ from torchmetrics import (
 from torchmetrics.functional.classification import multilabel_average_precision
 
 from magneton.config import EvalConfig
-from magneton.data.supervised_dataset import (
-    SupervisedBatch,
+from magneton.data.core import Batch
+from magneton.data.core.supervised_dataset import (
     DeepFRIDataConfig,
     DeepFRIDataModule,
 )
@@ -126,7 +126,7 @@ class MultiLabelMLP(L.LightningModule):
 
     def forward(
         self,
-        batch: SupervisedBatch,
+        batch: Batch,
     ) -> torch.Tensor:
         # batch_size (num_proteins) X max_len X embed_dim
         protein_embeds = self.embedder.embed_batch(batch)
@@ -151,7 +151,7 @@ class MultiLabelMLP(L.LightningModule):
         # proteins X num_classes
         return self.mlp(pooled_embeddings)
 
-    def training_step(self, batch: SupervisedBatch, batch_idx: int) -> torch.Tensor:
+    def training_step(self, batch: Batch, batch_idx: int) -> torch.Tensor:
         logits = self(batch)
 
         labels = batch.labels.to(dtype=logits.dtype)
@@ -164,7 +164,7 @@ class MultiLabelMLP(L.LightningModule):
 
         return loss
 
-    def validation_step(self, batch: SupervisedBatch, batch_idx):
+    def validation_step(self, batch: Batch, batch_idx):
         logits = self(batch)
 
         labels = batch.labels.to(dtype=logits.dtype)
@@ -177,7 +177,7 @@ class MultiLabelMLP(L.LightningModule):
         self.log_dict(self.val_metrics)
         return super().on_validation_epoch_end()
 
-    def predict_step(self, batch: SupervisedBatch, batch_idx: int, dataloader_idx: int=0):
+    def predict_step(self, batch: Batch, batch_idx: int, dataloader_idx: int=0):
         logits = self(batch)
         labels = batch.labels
 

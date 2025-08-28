@@ -12,28 +12,7 @@ from sklearn.preprocessing import LabelEncoder
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizerBase
 
-@dataclass
-class SupervisedBatch:
-    protein_ids: List[str]
-    labels: torch.Tensor
-    tokenized_seq: torch.Tensor | None
-    structure_paths: List[str] | None = None
-
-    def to(self, device: str):
-        self.tokenized_seq = self.tokenized_seq.to(device)
-        self.labels = self.labels.to(device)
-        return self
-
-    def total_length(self) -> int:
-        return sum(map(len, self.substructures))
-
-
-@dataclass
-class SupervisedElem:
-    protein_id: str
-    labels: torch.Tensor
-    seq: str | None = None
-    structure_path: str | None = None
+from .core_dataset import DataElement
 
 class SupervisedDataset(Dataset):
     def __init__(
@@ -56,25 +35,12 @@ class SupervisedDataset(Dataset):
             row.labels,
             num_classes=self.num_classes,
         ).sum(dim=0)
-        return SupervisedElem(
+        return DataElement(
             protein_id=row.protein_id,
             labels=one_hot_labels,
             seq=row.seq,
             structure_path=row.structure_path,
         )
-
-def supervised_collate(
-    elems: List[SupervisedElem],
-    tokenizer: PreTrainedTokenizerBase,
-) -> SupervisedBatch:
-    seqs = [x.seq for x in elems]
-    seqs = tokenizer(seqs, return_tensors="pt", padding=True, return_attention_mask=False)["input_ids"]
-    return SupervisedBatch(
-        protein_ids=[x.protein_id for x in elems],
-        labels=torch.stack([x.labels for x in elems]),
-        tokenized_seq=seqs,
-        structure_paths=[x.structure_path for x in elems],
-    )
 
 LABEL_LINE: Dict[str, int] = {
     "MF": 1,

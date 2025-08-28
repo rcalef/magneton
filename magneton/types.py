@@ -75,6 +75,15 @@ INTERPRO_REP_TYPES = [
 
 @dataclass
 class InterproEntry:
+    """A single InterPro entry.
+
+    - id (str): InterPro ID for this entry's element.
+    - element_type (InterProType): Type of InterPro element.
+    - match_id (str): ID of the specific match.
+    - element_name (str): Human-readable name of the InterPro element.
+    - representative (bool): Whether or not this is the representative entry of this element for this protein.
+    - positions (List[Tuple[int]]): List of [start, end) positions for this entry, 1-indexed as in InterPro.
+    """
     id: str
     element_type: InterProType
     match_id: str
@@ -89,6 +98,17 @@ class InterproEntry:
 
 @dataclass
 class Protein:
+    """A single parsed protein.
+
+    - uniprot_id (str): UniProt ID of the protein.
+    - kb_id (str): UniProtKB ID of the protein (for fasta indexing)
+    - name (str): Human-readable name of protein, if any
+    - length (int): Length in AAs.
+    - parsed_entries (int): Number of parsed substructure entries.
+    - total_entries (int): Total number of substructure entries, including filtered entries.
+    - entries (List[InterproEntry]): List of InterPro substructure entries
+    - secondary_structs (List[SecondaryStructure]): List of secondary structures.
+    """
     uniprot_id: str
     kb_id: str
     name: str

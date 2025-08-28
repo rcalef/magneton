@@ -1,37 +1,62 @@
 from dataclasses import dataclass
 from typing import Generator, List
 
+import torch
 from pysam import FastaFile
 from torch.utils.data import Dataset
 
 from magneton.config import DataConfig
-from magneton.data.protein_dataset import get_protein_dataset
-from magneton.data.substructure import (
-    LabeledSubstructure,
-    SeparatedSubstructureParser,
-    UnifiedSubstructureParser,
-)
 from magneton.types import DataType, Protein
 
+from .protein_dataset import get_protein_dataset
+from .substructure import (
+    get_substructure_parser,
+    LabeledSubstructure,
+)
 
-@dataclass
+@dataclass(kw_only=True)
 class Batch:
     protein_ids: List[str]
-    seqs: List[str] | None
+    seqs: List[str] | None = None
     # First element is ranges, second element is labels
-    substructures: List[List[LabeledSubstructure]] | None
+    substructures: List[List[LabeledSubstructure]] | None = None
     structure_list: List[str] | None = None
+    labels: torch.Tensor | None = None
 
-@dataclass
-class BatchElement:
+    def to(self, device: str):
+        if self.labels is not None:
+            self.labels = self.labels.to(device)
+        if self.substructures is not None:
+            for i in range(len(self.substructures)):
+                for j in range(len(self.substructures[i])):
+                    self.substructures[i][j] = self.substructures[i][j].to(device)
+        return self
+
+    def total_length(self) -> int:
+        return sum(map(len, self.substructures))
+
+@dataclass(kw_only=True)
+class DataElement:
+    """Single dataset entry.
+
+    - protein_id (str): UniProt ID for this protein.
+    - length (int): Length in AAs.
+    - seq (str | None): AA sequence of protein.
+    - substructures (List[LabeledSubstructure] | None): Annotated substructures.
+    - structure_path (str | None): Path to structure (.pdb) file.
+    - labels: (torch.Tensor | None): Labels for supervised tasks.
+    """
     protein_id: str
+    length: int
     seq: str | None = None
     # First element is ranges, second element is labels
     substructures: List[LabeledSubstructure] | None = None
     structure_path: str | None = None
+    # For any downstream supervised tasks
+    labels: torch.Tensor | None = None
 
 
-class MetaDataset(Dataset):
+class CoreDataset(Dataset):
     def __init__(
         self,
         data_config: DataConfig,
@@ -56,19 +81,8 @@ class MetaDataset(Dataset):
                     "Forcing collapse_labels to True for simplicity."
                 )
                 data_config.collapse_labels = True
+            self.substruct_parser = get_substructure_parser(data_config)
 
-            if data_config.collapse_labels:
-                # TODO: write out what this unified label set actually is
-                self.substruct_parser = UnifiedSubstructureParser(
-                    want_types=data_config.substruct_types,
-                    labels_dir=data_config.labels_path,
-                    elem_name="all" if len(data_config.substruct_types) > 1 else data_config.substruct_types[0],
-                )
-            else:
-                self.substruct_parser = SeparatedSubstructureParser(
-                    want_types=data_config.substruct_types,
-                    labels_dir=data_config.labels_path,
-                )
         if DataType.STRUCT in self.datatypes:
             assert data_config.struct_template is not None, "Structure path is required for structure data"
             self.struct_template = data_config.struct_template
@@ -82,8 +96,8 @@ class MetaDataset(Dataset):
             in_memory=True,
         )
 
-    def _prot_to_elem(self, prot: Protein) -> BatchElement:
-        ret = BatchElement(protein_id=prot.uniprot_id)
+    def _prot_to_elem(self, prot: Protein) -> DataElement:
+        ret = DataElement(protein_id=prot.uniprot_id, length=prot.length)
         if DataType.SEQ in self.datatypes:
             ret.seq = self.fasta[prot.kb_id]
         if DataType.SUBSTRUCT in self.datatypes:
@@ -97,7 +111,7 @@ class MetaDataset(Dataset):
     def __len__(self) -> int:
         return len(self.dataset)
 
-    def __iter__(self) -> Generator[BatchElement, None, None]:
+    def __iter__(self) -> Generator[DataElement, None, None]:
         for prot in self.dataset:
             yield self._prot_to_elem(prot)
 
@@ -105,7 +119,7 @@ class MetaDataset(Dataset):
         return self._prot_to_elem(self.dataset[index])
 
 def collate_meta_datasets(
-    entries: List[BatchElement],
+    entries: List[DataElement],
     filter_empty_substruct=True,
 ) -> Batch:
     """

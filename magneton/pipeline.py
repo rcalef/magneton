@@ -6,9 +6,10 @@ from pprint import pprint
 import torch
 
 from magneton.config import PipelineConfig
+from magneton.data import MagnetonDataModule
+from magneton.data.core import get_substructure_parser
 from magneton.evals.substructure_classification import classify_substructs
 from magneton.evals.supervised_classification import run_supervised_classification
-from magneton.embedders.factory import EmbedderFactory
 from magneton.training.trainer import ModelTrainer
 from magneton.training.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
 
@@ -36,8 +37,10 @@ class EmbeddingPipeline:
         self.ckpt = self.config.model.checkpoint
 
         # Initialize dataset
-        _, _, data_cls  = EmbedderFactory.fetch_embedder_classes(self.config.embedding.model)
-        self.data_module = data_cls(self.config.data, self.config.training)
+        self.data_module = MagnetonDataModule(
+            data_config=self.config.data,
+            model_type=self.config.embedding.model,
+        )
 
     def run(self):
         """Run complete pipeline"""
@@ -59,16 +62,21 @@ class EmbeddingPipeline:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Training Device: {device}")
 
+        # Not really a great way to get number of substructures being used without
+        # reaching deep into the dataset which could be nested at different levels
+        # depending on the model/config. So easiest to just get a new parser (which
+        # really just counts the labels).
+        substruct_parser = get_substructure_parser(self.config.data)
         # Train model
         if self.config.data.collapse_labels:
             model = EmbeddingMLP(
                 config=self.config,
-                num_classes=train_loader.dataset.substruct_parser.num_labels(),
+                num_classes=substruct_parser.num_labels(),
             )
         else:
             model = MultitaskEmbeddingMLP(
                 config=self.config,
-                num_classes=train_loader.dataset.substruct_parser.num_labels(),
+                num_classes=substruct_parser.num_labels(),
             )
             self.config.training.strategy = "ddp_find_unused_parameters_true"
 

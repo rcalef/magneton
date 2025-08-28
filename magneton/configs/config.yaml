@@ -1,9 +1,7 @@
 defaults:
   - base_pipeline
-  #- data: debug
   - data: interpro103_swissprot
   - embedding: gearnet
-  #- evaluate: None
   - _self_
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
@@ -31,8 +29,8 @@ training:
   learning_rate: 0.001
   weight_decay: 0.01
   additional_training_kwargs:
-    limit_val_batches: 0.2
-    val_check_interval: 0.25
+    limit_val_batches: 128
+    val_check_interval: 1024
 
 hydra:
   run:

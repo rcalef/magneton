@@ -15,7 +15,7 @@ from magneton.io.internal import (
     parse_from_dir,
     parse_from_pkl,
 )
-from magneton.data.substructure import BaseSubstructureParser
+from magneton.data.core.substructure import BaseSubstructureParser
 from magneton.types import (
     Protein,
 )

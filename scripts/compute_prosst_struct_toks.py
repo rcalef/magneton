@@ -12,7 +12,7 @@ from hydra.utils import instantiate
 from tqdm import tqdm
 
 from magneton.config import PipelineConfig, DataConfig
-from magneton.data import MetaDataset
+from magneton.data.core import CoreDataset
 from magneton.types import DataType
 
 
@@ -24,7 +24,7 @@ PROSST_REPO_PATH = (
 )
 print(PROSST_REPO_PATH)
 sys.path.append(str(PROSST_REPO_PATH))
-from prosst.structure.get_sst_seq import SSTPredictor, init_pdb_shared_pool, init_shared_pool
+from prosst.structure.get_sst_seq import SSTPredictor, init_shared_pool
 
 logger = logging.Logger(__file__)
 logger.setLevel(logging.INFO)
@@ -36,6 +36,7 @@ def compute_prosst_toks(
     prefix: str,
     fasta_path: str,
     struct_template: str,
+    resume_path: str| None = None,
     pdbs_batch_size: int = 128,
     max_len: int | None = None,
     shard_num: int | None = None,
@@ -56,7 +57,7 @@ def compute_prosst_toks(
         struct_template=struct_template,
     )
 
-    dataset = MetaDataset(
+    dataset = CoreDataset(
         data_config=data_config,
         want_datatypes=[DataType.STRUCT, DataType.SEQ],
     )
@@ -83,6 +84,18 @@ def compute_prosst_toks(
         num_pdbs = len(all_pdb_paths)
         print(f"shard {shard_num} / {num_shards}, running [{my_start}:{my_end}]")
 
+    if resume_path is not None:
+        keep = []
+        with bz2.open(resume_path, "rt") as fh:
+            present = {l.split("\t")[0] for l in fh}
+        for (uniprot_id, path) in all_pdb_paths:
+            if uniprot_id in present:
+                continue
+            keep.append((uniprot_id, path))
+        print(f"resuming with {len(keep)} / {len(all_pdb_paths)} remaining")
+        all_pdb_paths = keep
+        num_pdbs = len(all_pdb_paths)
+
     predictor = SSTPredictor(
         structure_vocab_size=2048,
         num_processes=4,
@@ -90,7 +103,7 @@ def compute_prosst_toks(
     ) # can be 20, 128, 512, 1024, 2048, 4096
     num_batches = (num_pdbs + pdbs_batch_size - 1) // pdbs_batch_size
     start = 0
-    end = min(len(all_pdb_paths), pdbs_batch_size)
+    end = min(num_pdbs, pdbs_batch_size)
 
     with bz2.open(output_path, "wt") as fh, torch.inference_mode():
         for _ in tqdm(range(num_batches)):

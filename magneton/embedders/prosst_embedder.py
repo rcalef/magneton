@@ -29,8 +29,8 @@ from prosst.structure.get_sst_seq import (
 )
 
 from magneton.config import DataConfig, TrainingConfig
-from magneton.data.meta_dataset import MetaDataset
-from magneton.data.substructure import LabeledSubstructure, SubstructureBatch
+from magneton.data.core import CoreDataset, Batch
+from magneton.data.core.substructure import LabeledSubstructure
 from magneton.embedders.base_embedder import BaseConfig, BaseDataModule, BaseEmbedder
 from magneton.types import DataType
 from magneton.utils import get_chunk_idxs, move_inputs_to_device
@@ -63,7 +63,7 @@ class ProSSTDataElem:
 
 
 @dataclass
-class ProSSTBatch(SubstructureBatch):
+class ProSSTBatch(Batch):
     batch_graphs: Batch
     tokenized_seqs: torch.Tensor
     protein_lengths: list[int]
@@ -75,7 +75,7 @@ class ProSSTBatch(SubstructureBatch):
         return self
 
 
-class ProSSTDataSet(MetaDataset):
+class ProSSTDataSet(CoreDataset):
     def __init__(
         self,
         data_config: DataConfig,

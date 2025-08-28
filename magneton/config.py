@@ -26,6 +26,7 @@ class DataConfig:
     data_dir: str = MISSING
     compression: str = "bz2"
     prefix: str = "sharded_proteins"
+    batch_size: int = 32
     fasta_path: Optional[str] = None
     labels_path: Optional[str] = None
     struct_template: Optional[str] = None
@@ -46,7 +47,6 @@ class ModelConfig:
 class TrainingConfig:
     _target_: str = "magneton.config.TrainingConfig"
     max_epochs: int = 100
-    batch_size: int = 32
     learning_rate: float = 1e-2
     weight_decay: float = 0.0
     embedding_learning_rate: float = 1e-5

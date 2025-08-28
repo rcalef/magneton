@@ -8,10 +8,10 @@ from typing import Dict, List
 import pandas as pd
 import torch
 
+from magneton.config import DataConfig
 from magneton.types import (
     DSSP_TO_NAME,
     INTERPRO_REP_TYPES,
-    InterProType,
     Protein,
 )
 
@@ -41,28 +41,12 @@ class LabeledSubstructure:
             self.ranges[i] = self.ranges[i].to(device)
         return self
 
-@dataclass
-class SubstructureBatch:
-    substructures: List[List[LabeledSubstructure]]
-    prot_ids: List[str]
-
-    def to(self, device: str):
-        for i in range(len(self.substructures)):
-            for j in range(len(self.substructures[i])):
-                self.substructures[i][j] = self.substructures[i][j].to(device)
-        return self
-
-    def total_length(self) -> int:
-        return sum(map(len, self.substructures))
-
-
 class BaseSubstructureParser(ABC):
     def parse(self, prot: Protein) -> List[LabeledSubstructure]:
         """
         Parse the protein and return a tensor of ranges and labels.
         """
         raise NotImplementedError("Must be implemented in subclass")
-
 
 class UnifiedSubstructureParser(BaseSubstructureParser):
     """Converts substructures to labels and ranges. All substructures share a label set.
@@ -187,3 +171,17 @@ class SeparatedSubstructureParser(BaseSubstructureParser):
 
     def num_labels(self) -> Dict[str, int]:
         return {type: len(labels) for type, labels in self.type_to_label.items()}
+
+def get_substructure_parser(data_config: DataConfig) -> BaseSubstructureParser:
+    if data_config.collapse_labels:
+        # TODO: write out what this unified label set actually is
+        return UnifiedSubstructureParser(
+            want_types=data_config.substruct_types,
+            labels_dir=data_config.labels_path,
+            elem_name="all" if len(data_config.substruct_types) > 1 else data_config.substruct_types[0],
+        )
+    else:
+        return SeparatedSubstructureParser(
+            want_types=data_config.substruct_types,
+            labels_dir=data_config.labels_path,
+        )

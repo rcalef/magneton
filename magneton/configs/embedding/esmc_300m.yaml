@@ -1,4 +1,4 @@
-model: "esmc_300m"
+model: "esmc"
 model_params:
   model_size: "300m"
   weights_path: "/weka/scratch/weka/kellislab/rcalef/model_weights/esmc-300m-2024-12"

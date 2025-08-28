@@ -5,11 +5,11 @@ import lightning as L
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-from torchmetrics import Accuracy, F1Score, MetricCollection
+from torchmetrics import Accuracy, F1Score
 from torch_scatter import scatter_mean
 
 from magneton.config import PipelineConfig
-from magneton.embedders.esmc_embedder import SubstructureBatch
+from magneton.data.core import Batch
 from magneton.embedders.factory import EmbedderFactory
 from magneton.utils import describe_tensor
 
@@ -92,7 +92,7 @@ class EmbeddingMLP(L.LightningModule):
 
     def predict_step(
         self,
-        batch: SubstructureBatch,
+        batch: Batch,
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> torch.Tensor:
@@ -178,7 +178,7 @@ class EmbeddingMLP(L.LightningModule):
         self,
         # num_proteins X max_length X embed_dim
         protein_embeds: torch.Tensor,
-        batch: SubstructureBatch,
+        batch: Batch,
     ) -> torch.Tensor:
         embed_dim = protein_embeds.shape[-1]
         dtype = protein_embeds.dtype
@@ -219,7 +219,7 @@ class EmbeddingMLP(L.LightningModule):
 
     def forward(
         self,
-        batch: SubstructureBatch,
+        batch: Batch,
     ) -> torch.Tensor:
         # num_substructs X embed_dim
         protein_embeds = self.embedder.embed_batch(batch)
@@ -230,7 +230,7 @@ class EmbeddingMLP(L.LightningModule):
 
     def _calc_substruct_outputs(
             self,
-            batch: SubstructureBatch,
+            batch: Batch,
         ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         logits = self(batch)
         labels = torch.tensor(
@@ -245,7 +245,7 @@ class EmbeddingMLP(L.LightningModule):
         return loss, logits, labels
 
 
-    def training_step(self, batch: SubstructureBatch, batch_idx) -> torch.Tensor:
+    def training_step(self, batch: Batch, batch_idx) -> torch.Tensor:
         loss, logits, labels = self._calc_substruct_outputs(batch)
 
         preds = torch.argmax(logits, dim=1)
@@ -266,7 +266,7 @@ class EmbeddingMLP(L.LightningModule):
         self.log("eff_batch_size", batch.total_length(), sync_dist=True)
         return loss
 
-    def validation_step(self, batch: SubstructureBatch, batch_idx):
+    def validation_step(self, batch: Batch, batch_idx):
         loss, logits, labels = self._calc_substruct_outputs(batch)
 
         preds = torch.argmax(logits, dim=1)
@@ -355,7 +355,7 @@ class MultitaskEmbeddingMLP(L.LightningModule):
         self,
         # num_proteins X max_length X embed_dim
         protein_embeds: torch.Tensor,
-        batch: SubstructureBatch,
+        batch: Batch,
     ) -> Dict[str, torch.Tensor]:
 
         embed_dim = protein_embeds.shape[-1]
@@ -400,7 +400,7 @@ class MultitaskEmbeddingMLP(L.LightningModule):
             ret[substruct_type] = torch.stack(embeds)
         return ret
 
-    def forward(self, batch: SubstructureBatch) -> Dict[str, torch.Tensor]:
+    def forward(self, batch: Batch) -> Dict[str, torch.Tensor]:
         protein_embeds = self.embedder.embed_batch(batch)
 
         # num_substructs X embed_dim
@@ -412,7 +412,7 @@ class MultitaskEmbeddingMLP(L.LightningModule):
             logits[substruct_type] = self.mlps[substruct_type](embeds)
         return logits
 
-    def training_step(self, batch: SubstructureBatch, batch_idx) -> torch.Tensor:
+    def training_step(self, batch: Batch, batch_idx) -> torch.Tensor:
         logits = self(batch)
 
         for substruct_type, substruct_logits in logits.items():
@@ -449,7 +449,7 @@ class MultitaskEmbeddingMLP(L.LightningModule):
         return total_loss
 
     @torch.inference_mode()
-    def validation_step(self, batch: SubstructureBatch, batch_idx):
+    def validation_step(self, batch: Batch, batch_idx):
         logits = self(batch)
 
         for substruct_type, substruct_logits in logits.items():

@@ -9,165 +9,19 @@ import torch
 from esm.models.esmc import ESMC
 from esm.sdk.api import (
     ESMProtein,
-    ESMProteinTensor,
-    LogitsConfig,
 )
 from esm.tokenization import get_esmc_model_tokenizers
-from esm.utils.misc import stack_variable_length_tensors
 from torch.nn import CrossEntropyLoss
 from tqdm import tqdm
 
-from magneton.config import DataConfig, TrainingConfig
-from magneton.data.meta_dataset import MetaDataset
-from magneton.data.substructure import LabeledSubstructure, SubstructureBatch
-from magneton.embedders.base_embedder import BaseConfig, BaseDataModule, BaseEmbedder
+from magneton.data.model_specific.esmc import ESMCBatch
+from magneton.embedders.base_embedder import BaseConfig, BaseEmbedder
 from magneton.types import DataType
 from magneton.utils import get_chunk_idxs
 
 
-@dataclass
-class ESMCDataElem:
-    tokenized_seq: torch.Tensor
-    substructures: List[LabeledSubstructure]
-    prot_id: str
-
-
-@dataclass
-class ESMCBatch(SubstructureBatch):
-    tokenized_seq: torch.Tensor
-
-    def to(self, device: str):
-        super().to(device)
-        self.tokenized_seq = self.tokenized_seq.to(device)
-        return self
-
-
-class ESMCDataSet(MetaDataset):
-    def __init__(
-        self,
-        data_config: DataConfig,
-    ):
-        super().__init__(
-            data_config=data_config,
-            want_datatypes=[DataType.SEQ, DataType.SUBSTRUCT],
-            load_fasta_in_mem=True,
-        )
-        self.tokenizer = get_esmc_model_tokenizers()
-
-    def __len__(self):
-        return super().__len__()
-
-    def __getitem__(self, idx: int) -> ESMCDataElem:
-        # elem: BatchElem
-        elem = self._prot_to_elem(self.dataset[idx])
-        prot_id = elem.protein_id
-        return ESMCDataElem(
-            tokenized_seq=torch.tensor(self.tokenizer.encode(elem.seq)),
-            substructures=elem.substructures,
-            prot_id=prot_id,
-        )
-
-
-def esmc_collate(
-    entries: List[ESMCDataElem],
-    pad_id: int,
-    drop_empty_substructures: bool = True,
-) -> ESMCBatch:
-    """
-    Collate the entries into a batch.
-    """
-    if drop_empty_substructures:
-        entries = [e for e in entries if len(e.substructures) > 0]
-        if len(entries) == 0:
-            entries = [
-                ESMCDataElem(
-                    tokenized_seq=torch.zeros(128, dtype=torch.long),
-                    substructures=[],
-                    prot_id="",
-                )
-            ]
-
-    # print(len(entries), [x.tokenized_seq for x in entries])
-
-    padded_tensor = stack_variable_length_tensors(
-        [x.tokenized_seq for x in entries],
-        constant_value=pad_id,
-    )
-    substructs = [x.substructures for x in entries]
-    prot_ids = [x.prot_id for x in entries]
-    return ESMCBatch(
-        tokenized_seq=padded_tensor,
-        substructures=substructs,
-        prot_ids=prot_ids,
-    )
-
-
-class ESMCDataModule(BaseDataModule):
-    def __init__(
-        self,
-        data_config: DataConfig,
-        train_config: TrainingConfig,
-    ):
-        super().__init__(data_config, train_config)
-
-    def _get_split_info(self, split: str) -> Tuple[str, str]:
-        if split == "all":
-            return self.data_config.data_dir, self.data_config.prefix
-        else:
-            return (
-                os.path.join(self.data_config.data_dir, f"{split}_sharded"),
-                f"swissprot.with_ss.{split}",
-            )
-
-    def _get_dataloader(
-        self,
-        split: str,
-        **kwargs,
-    ) -> torch.utils.data.DataLoader:
-        data_dir, prefix = self._get_split_info(split)
-        config = replace(
-            self.data_config,
-            data_dir=data_dir,
-            prefix=prefix,
-        )
-        dataset = ESMCDataSet(
-            data_config=config,
-        )
-        return torch.utils.data.DataLoader(
-            dataset,
-            batch_size=self.train_config.batch_size,
-            collate_fn=partial(esmc_collate, pad_id=dataset.tokenizer.pad_token_id),
-            num_workers=3,
-            **kwargs,
-        )
-
-    def train_dataloader(self):
-        return self._get_dataloader(
-            "train",
-            shuffle=True,
-        )
-
-    def val_dataloader(self):
-        return self._get_dataloader(
-            "val",
-            shuffle=False,
-        )
-
-    def test_dataloader(self):
-        return self._get_dataloader(
-            "test",
-            shuffle=False,
-        )
-
-    def predict_dataloader(self):
-        return self._get_dataloader(
-            "all",
-            shuffle=False,
-        )
-
 ESMC_300M = "300m"
 ESMC_600M = "600m"
-
 
 @dataclass
 class ESMCConfig(BaseConfig):
@@ -345,7 +199,6 @@ class ESMCEmbedder(BaseEmbedder):
     @classmethod
     def get_required_input_type(cls) -> Set[DataType]:
         return {DataType.SEQ}
-
 
 
 def get_seq_mask(
