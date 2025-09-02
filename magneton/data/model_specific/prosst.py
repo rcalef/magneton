@@ -10,6 +10,7 @@ from pathlib import Path
 import torch
 
 from torchdata.nodes import BaseNode, ParallelMapper
+from transformers import AutoTokenizer
 from tqdm import tqdm
 
 from esm.tokenization import get_esmc_model_tokenizers
@@ -85,6 +86,7 @@ class ProSSTTransformNode(ParallelMapper):
         self,
         source_node: BaseNode,
         data_dir: str | Path,
+        tokenizer_path: str | Path = "/home/rcalef/storage/om_storage/model_weights/ProSST-2048",
         num_workers: int = 2,
     ):
         if isinstance(data_dir, str):
@@ -102,9 +104,8 @@ class ProSSTTransformNode(ParallelMapper):
         else:
             logger.info(f"ProSST tokens file found at: {struct_tokens_path}")
 
-        self.tokenizer = get_esmc_model_tokenizers()
-        self.pad_token_id = self.tokenizer.pad_token_id
-        self.eos_token_id = self.tokenizer.eos_token_id
+        print(tokenizer_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
 
         self.struct_tokens = {}
         with bz2.open(struct_tokens_path, "rt") as fh:
@@ -116,10 +117,10 @@ class ProSSTTransformNode(ParallelMapper):
                 # see cell 6 here:
                 #  https://github.com/ai4protein/ProSST/blob/main/zero_shot/score_mutant.ipynb
                 raw_tokens = list(map(lambda x: int(x)+3, tokens.split()))
-                # Similar to above, prepending 1 and appending 2 tokens from same notebook.
-                # These correspond to the ESM tokenizer's pad token and EOS token (although it
-                # seems like they should've used BOS instead of pad).
-                modified_tokens = [self.pad_token_id] + raw_tokens + [self.eos_token_id]
+                # Similar to above, from same notebook,  prepending 1 and appending 2 tokens.
+                # These correspond to the CLS and EOS tokens from their tokenizer, which
+                # is in fact different from ESM's tokenizer.
+                modified_tokens = [self.tokenizer.cls_token_id] + raw_tokens + [self.tokenizer.eos_token_id]
                 self.struct_tokens[uniprot_id] = torch.tensor(modified_tokens)
 
         logger.info(f"read ProSST structure tokens for {len(self.struct_tokens)} proteins")
@@ -141,9 +142,8 @@ class ProSSTTransformNode(ParallelMapper):
             labels=x.labels,
         )
 
-def get_prosst_collate_fn() -> Callable:
-    tokenizer = get_esmc_model_tokenizers()
-    return partial(prosst_collate, pad_id=tokenizer.pad_token_id)
+    def get_collate_fn(self) -> Callable:
+        return partial(prosst_collate, pad_id=self.tokenizer.pad_token_id)
 
 
 def prosst_collate(

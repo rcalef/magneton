@@ -29,13 +29,11 @@ from .core import (
 from .model_specific import (
     ESMCTransformNode,
     ProSSTTransformNode,
-    get_esmc_collate_fn,
-    get_prosst_collate_fn,
 )
 
 model_data = {
-    "esmc": (ESMCTransformNode, get_esmc_collate_fn(), [DataType.SEQ]),
-    "prosst": (ProSSTTransformNode, get_prosst_collate_fn(), [DataType.SEQ, DataType.STRUCT])
+    "esmc": (ESMCTransformNode, [DataType.SEQ]),
+    "prosst": (ProSSTTransformNode, [DataType.SEQ, DataType.STRUCT])
 }
 
 class MagnetonDataModule(L.LightningDataModule):
@@ -48,9 +46,8 @@ class MagnetonDataModule(L.LightningDataModule):
     ):
         super().__init__()
         self.data_config = data_config
-        transform_cls, collate_fn, want_datatypes = model_data[model_type]
+        transform_cls, want_datatypes = model_data[model_type]
         self.transform_cls = transform_cls
-        self.collate_fn = collate_fn
         self.want_datatypes = want_datatypes + [DataType.SUBSTRUCT]
         self.distributed = distributed
 
@@ -71,8 +68,10 @@ class MagnetonDataModule(L.LightningDataModule):
             self.data_config.data_dir,
             **self.data_config.model_specific_params,
         )
+        collate_fn = node.get_collate_fn()
+
         node = Batcher(node, batch_size=self.data_config.batch_size)
-        node = Mapper(node, self.collate_fn)
+        node = Mapper(node, collate_fn)
 
         return Loader(node)
 
@@ -111,9 +110,8 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         distributed: bool = False,
     ):
         super().__init__()
-        transform_cls, collate_fn, _ = model_data[model_type]
+        transform_cls, _ = model_data[model_type]
         self.transform_cls = transform_cls
-        self.collate_fn = collate_fn
         self.task = task
         self.data_config = data_config
         self.data_dir = Path(data_dir)
@@ -175,9 +173,12 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         node = self.transform_cls(
             node,
             this_data_dir,
+            **self.data_config.model_specific_params,
         )
+        collate_fn = node.get_collate_fn()
+
         node = Batcher(node, batch_size=self.data_config.batch_size)
-        node = Mapper(node, self.collate_fn)
+        node = Mapper(node, collate_fn)
 
         return Loader(node)
 

@@ -54,9 +54,9 @@ class ESMCTransformNode(ParallelMapper):
         super().__init__(source=source_node, map_fn=_process, num_workers=num_workers)
 
 
-def get_esmc_collate_fn() -> Callable:
-    tokenizer = get_esmc_model_tokenizers()
-    return partial(esmc_collate, pad_id=tokenizer.pad_token_id)
+    def get_collate_fn(self) -> Callable:
+        tokenizer = get_esmc_model_tokenizers()
+        return partial(esmc_collate, pad_id=tokenizer.pad_token_id)
 
 
 def esmc_collate(
