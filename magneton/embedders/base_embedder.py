@@ -23,7 +23,7 @@ class BaseDataModule(L.LightningDataModule, ABC):
         self.data_config = data_config
         self.train_config = train_config
 
-@dataclass
+@dataclass(kw_only=True)
 class BaseConfig:
     pass
 
@@ -47,6 +47,7 @@ class BaseEmbedder(nn.Module, ABC):
     def embed_batch(
         self,
         batch: List[Any],
+        protein_level: bool,
     ) -> torch.Tensor:
         """Embed multiple sequences"""
         pass

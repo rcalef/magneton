@@ -11,7 +11,7 @@ from .prosst_embedder import ProSSTEmbedder, ProSSTConfig
 
 class EmbedderFactory:
     _embedders: Dict[str, Tuple[Type[BaseEmbedder], Type[BaseConfig]]] = {
-        "esm": (ESMEmbedder, None, None),
+        "esm": (ESMEmbedder, None),
         "gearnet": (GearNetEmbedder, GearNetConfig),
         "esmc": (ESMCEmbedder, ESMCConfig),
         "prosst": (ProSSTEmbedder, ProSSTConfig),
@@ -42,10 +42,10 @@ class EmbedderFactory:
     ) -> Tuple[BaseEmbedder]:
         """Create an embedder instance based on config"""
         model_type = config.model
-        embedder_class, config_class = cls._embedders.get(model_type)
-
-        if embedder_class is None:
+        if model_type not in cls._embedders:
             raise ValueError(f"Unknown embedder type: {model_type}")
+
+        embedder_class, config_class = cls._embedders.get(model_type)
 
         # Print debug info
         print(f"\n=== Creating {model_type} embedder ===")

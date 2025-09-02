@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from magneton.config import PipelineConfig, DataConfig
 from magneton.data.core import CoreDataset
+from magneton.data import SupervisedDownstreamTaskDataModule
 from magneton.types import DataType
 
 
@@ -36,6 +37,7 @@ def compute_prosst_toks(
     prefix: str,
     fasta_path: str,
     struct_template: str,
+    eval_task: str | None = None,
     resume_path: str| None = None,
     pdbs_batch_size: int = 128,
     max_len: int | None = None,
@@ -57,10 +59,20 @@ def compute_prosst_toks(
         struct_template=struct_template,
     )
 
-    dataset = CoreDataset(
-        data_config=data_config,
-        want_datatypes=[DataType.STRUCT, DataType.SEQ],
-    )
+    if eval_task is not None:
+        module = SupervisedDownstreamTaskDataModule(
+            data_config=data_config,
+            task=eval_task,
+            data_dir=data_dir,
+            model_type="prosst",
+        )
+        dataset = module.module.get_dataset("val")
+
+    else:
+        dataset = CoreDataset(
+            data_config=data_config,
+            want_datatypes=[DataType.STRUCT, DataType.SEQ],
+        )
 
     print(f"collecting PDB paths from dataset: {len(dataset)}")
     all_pdb_paths = []
@@ -72,6 +84,7 @@ def compute_prosst_toks(
 #    all_pdb_paths = all_pdb_paths[:16]
     num_pdbs = len(all_pdb_paths)
     print(f"got {num_pdbs} pdb paths")
+    print(all_pdb_paths[:5])
 
     if num_shards is not None:
         prots_per_shard = num_pdbs // num_shards
@@ -100,7 +113,7 @@ def compute_prosst_toks(
         structure_vocab_size=2048,
         num_processes=4,
         num_threads=32,
-    ) # can be 20, 128, 512, 1024, 2048, 4096
+    )
     num_batches = (num_pdbs + pdbs_batch_size - 1) // pdbs_batch_size
     start = 0
     end = min(num_pdbs, pdbs_batch_size)

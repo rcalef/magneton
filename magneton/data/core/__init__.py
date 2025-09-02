@@ -3,7 +3,9 @@ from .core_dataset import (
     CoreDataset,
     DataElement,
     collate_meta_datasets,
+    get_core_node,
 )
-from .loader import get_core_node
+from .deepfri_dataset import DeepFriModule
 from .protein_dataset import get_protein_dataset
+from .protein_workshop_dataset import WorkshopDataModule, TASK_TO_CONFIGS
 from .substructure import SubstructType, get_substructure_parser

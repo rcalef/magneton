@@ -13,6 +13,14 @@ from magneton.data.core import Batch
 from magneton.embedders.factory import EmbedderFactory
 from magneton.utils import describe_tensor
 
+# Some older runs used different namings, use this function as a catch-all for compatibility
+# fixes
+def compatibility_fixes(
+    cfg: PipelineConfig,
+):
+    if cfg.embedding.model == "esmc_300m":
+        cfg.embedding.model = "esmc"
+
 
 class EmbeddingMLP(L.LightningModule):
     def __init__(
@@ -22,6 +30,7 @@ class EmbeddingMLP(L.LightningModule):
         load_pretrained_fisher: bool = False,
     ):
         super().__init__()
+        compatibility_fixes(config)
         self.save_hyperparameters()
         self.model_config = config.model
         self.train_config = config.training
@@ -70,9 +79,6 @@ class EmbeddingMLP(L.LightningModule):
                 placeholder_vec,
                 persistent=True,
             )
-
-    def configure_model(self):
-        print(f"MLP Device: {self.device}")
 
     def on_predict_start(self):
         super().on_predict_start()

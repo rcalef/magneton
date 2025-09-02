@@ -1,7 +1,6 @@
 import os
 
-from dataclasses import dataclass, field, replace
-from functools import partial
+from dataclasses import dataclass
 from typing import List, Literal, Set, Tuple
 
 import torch
@@ -15,22 +14,23 @@ from torch.nn import CrossEntropyLoss
 from tqdm import tqdm
 
 from magneton.data.model_specific.esmc import ESMCBatch
-from magneton.embedders.base_embedder import BaseConfig, BaseEmbedder
 from magneton.types import DataType
 from magneton.utils import get_chunk_idxs
 
+from .base_embedder import BaseConfig, BaseEmbedder
+from .utils import pool_residue_embeddings
 
 ESMC_300M = "300m"
 ESMC_600M = "600m"
 
-@dataclass
+@dataclass(kw_only=True)
 class ESMCConfig(BaseConfig):
-    model_size: Literal[ESMC_300M, ESMC_600M] = field(kw_only=True, default=ESMC_600M)
-    weights_path: str = field(kw_only=True)
-    use_flash_attn: bool = field(kw_only=True, default=False)
-    rep_layer: int = field(kw_only=True, default=35)
-    max_seq_length: int = field(kw_only=True, default=2048)
-    mask_prob: float = field(kw_only=True, default=0.15)
+    weights_path: str
+    model_size: Literal[ESMC_300M, ESMC_600M] = ESMC_600M
+    use_flash_attn: bool = False
+    rep_layer: int = 35
+    max_seq_length: int = 2048
+    mask_prob: float = 0.15
 
 
 class ESMCEmbedder(BaseEmbedder):
@@ -119,10 +119,23 @@ class ESMCEmbedder(BaseEmbedder):
 
         return self.model.transformer.norm(logits_out.hidden_states[self.rep_layer])
 
-    def embed_batch(self, batch: ESMCBatch) -> torch.Tensor:
+    def embed_batch(
+        self,
+        batch: ESMCBatch,
+        protein_level: bool = False,
+    ) -> torch.Tensor:
         """Embed a batch of pre-tokenized protein sequences"""
         # Remove CLS token
-        return self._get_embedding(batch.tokenized_seq)[:, 1:, :]
+        residue_embeddings = self._get_embedding(batch.tokenized_seq)[:, 1:, :]
+        if protein_level:
+            residue_mask = torch.ones_like(batch.tokenized_seq)
+            residue_mask.masked_fill_(
+                mask=(batch.tokenized_seq == self.model.tokenizer.pad_token_id) | (batch.tokenized_seq == self.model.tokenizer.eos_token_id),
+                value=0,
+            )
+            return pool_residue_embeddings(residue_embeddings, residue_mask=residue_mask[:, 1:])
+        else:
+            return residue_embeddings
 
     # the following two functions are deprecated for the current data module setup
     @torch.inference_mode()

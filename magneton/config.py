@@ -18,6 +18,7 @@ class EvalConfig:
     model_checkpoint: str = MISSING
     # Whether or not the saved model used EWC loss
     has_fisher_info: bool = False
+    dev_run: bool = False
     model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
 
 @dataclass

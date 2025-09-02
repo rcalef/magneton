@@ -21,12 +21,9 @@ from torchmetrics import (
 )
 from torchmetrics.functional.classification import multilabel_average_precision
 
-from magneton.config import EvalConfig
+from magneton.config import DataConfig, EvalConfig
 from magneton.data.core import Batch
-from magneton.data.core.supervised_dataset import (
-    DeepFRIDataConfig,
-    DeepFRIDataModule,
-)
+from magneton.data import SupervisedDownstreamTaskDataModule
 from magneton.embedders.base_embedder import BaseEmbedder
 from magneton.training.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
 
@@ -80,8 +77,6 @@ class MultiLabelMLP(L.LightningModule):
         embedder: BaseEmbedder,
         task: str,
         num_classes: int,
-        pad_id: int,
-        eos_id: int,
         config: EvalConfig,
     ):
         super().__init__()
@@ -89,8 +84,6 @@ class MultiLabelMLP(L.LightningModule):
         self.task = task
         self.num_classes = num_classes
         self.embedder = embedder
-        self.pad_id = pad_id
-        self.eos_id = eos_id
 
         self.embedder._freeze()
         self.embedder.eval()
@@ -129,27 +122,10 @@ class MultiLabelMLP(L.LightningModule):
         batch: Batch,
     ) -> torch.Tensor:
         # batch_size (num_proteins) X max_len X embed_dim
-        protein_embeds = self.embedder.embed_batch(batch)
-
-        attention_mask = (
-            (batch.tokenized_seq != self.pad_id) &
-            (batch.tokenized_seq != self.eos_id)
-        )[:, 1:].unsqueeze(-1)
-
-        # Zero out the embeddings of pad tokens
-        masked_embeddings = protein_embeds * attention_mask
-
-        # Sum the embeddings along the sequence length dimension
-        summed_embeddings = torch.sum(masked_embeddings, dim=1)
-
-        # Get the actual sequence lengths (number of non-pad tokens)
-        seq_lengths = attention_mask.sum(dim=1, dtype=protein_embeds.dtype)
-
-        # Divide the summed embeddings by the sequence lengths
-        pooled_embeddings = summed_embeddings / seq_lengths
+        protein_embeds = self.embedder.embed_batch(batch, protein_level=True)
 
         # proteins X num_classes
-        return self.mlp(pooled_embeddings)
+        return self.mlp(protein_embeds)
 
     def training_step(self, batch: Batch, batch_idx: int) -> torch.Tensor:
         logits = self(batch)
@@ -204,38 +180,22 @@ def run_supervised_classification(
     task: str,
     output_dir: str,
     run_id: str,
-    config: EvalConfig,
+    eval_config: EvalConfig,
+    data_config: DataConfig,
 ):
-    embedder_type = model.embed_config.model
-    if embedder_type in ["esmc", "esmc_300m"]:
-        tokenizer = get_esmc_model_tokenizers()
-    else:
-        tokenizer = None
-
-    if task in ["GO:BP", "GO:CC", "GO:MF", "EC"]:
-        if task.startswith("GO"):
-            term = task.split(":")[1]
-        else:
-            term = task
-        data_config = DeepFRIDataConfig(
-            data_dir=config.data_dir,
-            task=term,
-            batch_size=config.model_params["batch_size"],
-        )
-        module = DeepFRIDataModule(
-            config=data_config,
-            seq_tokenizer=tokenizer,
-        )
-    else:
-        raise ValueError(f"unknown supervised classification dataset: {task}")
+    module = SupervisedDownstreamTaskDataModule(
+        data_config=data_config,
+        task=task,
+        data_dir=eval_config.data_dir,
+        model_type = model.embed_config.model,
+        distributed=False,
+    )
 
     classifier = MultiLabelMLP(
         embedder=model.embedder,
         task=task,
-        num_classes=module.num_classes,
-        config=config,
-        pad_id=tokenizer.pad_token_id,
-        eos_id=tokenizer.eos_token_id,
+        num_classes=module.num_classes(),
+        config=eval_config,
     )
 
     # Set up callbacks
@@ -253,11 +213,14 @@ def run_supervised_classification(
         #     patience=4,
         # ),
     ]
-    logger = WandbLogger(
-        entity="magneton",
-        project="magneton",
-        name=run_id,
-    )
+    if eval_config.dev_run:
+        logger = None
+    else:
+        logger = WandbLogger(
+            entity="magneton",
+            project="magneton",
+            name=run_id,
+        )
 
     # Create trainer
     trainer = L.Trainer(
@@ -269,7 +232,7 @@ def run_supervised_classification(
         default_root_dir=output_dir,
         max_epochs=15,
         precision="bf16-mixed",
-        val_check_interval=0.25,
+        val_check_interval=1.0,
     )
     trainer.fit(
         classifier,
@@ -293,7 +256,7 @@ def run_supervised_classification(
     final_auprc = multilabel_average_precision(
         all_logits,
         all_labels,
-        num_labels=module.num_classes,
+        num_labels=module.num_classes(),
     )
     print(f"Final Fmax: {final_fmax.item():0.3f}")
     print(f"Final AUPRC: {final_auprc.item():0.3f}")

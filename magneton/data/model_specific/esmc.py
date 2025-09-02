@@ -1,8 +1,8 @@
-import os
+from pathlib import Path
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from functools import partial
-from typing import Callable, List, Tuple
+from typing import Callable, List
 
 import torch
 
@@ -10,9 +10,7 @@ from esm.tokenization import get_esmc_model_tokenizers
 from esm.utils.misc import stack_variable_length_tensors
 from torchdata.nodes import BaseNode, ParallelMapper
 
-from magneton.config import DataConfig, TrainingConfig
 from ..core import Batch, DataElement
-from magneton.embedders.base_embedder import BaseDataModule
 
 @dataclass(kw_only=True)
 class ESMCDataElement(DataElement):
@@ -39,6 +37,7 @@ class ESMCTransformNode(ParallelMapper):
     def __init__(
         self,
         source_node: BaseNode,
+        data_dir: str | Path = None,
         num_workers: int = 2,
     ):
         tokenizer = get_esmc_model_tokenizers()
@@ -68,6 +67,7 @@ def esmc_collate(
     Collate the entries into a batch.
     """
     protein_ids = [x.protein_id for x in entries]
+    lengths = [x.length for x in entries]
     padded_tensor = stack_variable_length_tensors(
         [x.tokenized_seq for x in entries],
         constant_value=pad_id,
@@ -83,71 +83,8 @@ def esmc_collate(
         labels = torch.stack([x.labels for x in entries])
     return ESMCBatch(
         protein_ids=protein_ids,
+        lengths=lengths,
         tokenized_seq=padded_tensor,
         substructures=substructs,
         labels=labels,
     )
-
-
-class ESMCDataModule(BaseDataModule):
-    def __init__(
-        self,
-        data_config: DataConfig,
-        train_config: TrainingConfig,
-    ):
-        super().__init__(data_config, train_config)
-
-    def _get_split_info(self, split: str) -> Tuple[str, str]:
-        if split == "all":
-            return self.data_config.data_dir, self.data_config.prefix
-        else:
-            return (
-                os.path.join(self.data_config.data_dir, f"{split}_sharded"),
-                f"swissprot.with_ss.{split}",
-            )
-
-    def _get_dataloader(
-        self,
-        split: str,
-        **kwargs,
-    ) -> torch.utils.data.DataLoader:
-        data_dir, prefix = self._get_split_info(split)
-        config = replace(
-            self.data_config,
-            data_dir=data_dir,
-            prefix=prefix,
-        )
-        dataset = ESMCDataSet(
-            data_config=config,
-        )
-        return torch.utils.data.DataLoader(
-            dataset,
-            batch_size=self.train_config.batch_size,
-            collate_fn=partial(esmc_collate, pad_id=dataset.tokenizer.pad_token_id),
-            num_workers=3,
-            **kwargs,
-        )
-
-    def train_dataloader(self):
-        return self._get_dataloader(
-            "train",
-            shuffle=True,
-        )
-
-    def val_dataloader(self):
-        return self._get_dataloader(
-            "val",
-            shuffle=False,
-        )
-
-    def test_dataloader(self):
-        return self._get_dataloader(
-            "test",
-            shuffle=False,
-        )
-
-    def predict_dataloader(self):
-        return self._get_dataloader(
-            "all",
-            shuffle=False,
-        )

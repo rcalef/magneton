@@ -36,12 +36,6 @@ class EmbeddingPipeline:
 
         self.ckpt = self.config.model.checkpoint
 
-        # Initialize dataset
-        self.data_module = MagnetonDataModule(
-            data_config=self.config.data,
-            model_type=self.config.embedding.model,
-        )
-
     def run(self):
         """Run complete pipeline"""
         #self.run_embedding()
@@ -56,8 +50,14 @@ class EmbeddingPipeline:
         """Train and evaluate model using Lightning"""
         print("Training model...")
         assert self.config.training is not None, "No training config specified"
-        train_loader = self.data_module.train_dataloader()
-        val_loader = self.data_module.val_dataloader()
+        # Initialize dataset
+        data_module = MagnetonDataModule(
+            data_config=self.config.data,
+            model_type=self.config.embedding.model,
+        )
+
+        train_loader = data_module.train_dataloader()
+        val_loader = data_module.val_dataloader()
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Training Device: {device}")
@@ -112,11 +112,15 @@ class EmbeddingPipeline:
         for task in self.config.evaluate.tasks:
             print(f"{task} - evaluation start")
             if task == "substructure":
+                data_module = MagnetonDataModule(
+                    data_config=self.config.data,
+                    model_type=self.config.embedding.model,
+                )
                 classify_substructs(
                     model,
-                    self.data_module.test_dataloader(),
+                    data_module.test_dataloader(),
                 )
-            elif task in ["GO:BP", "GO:MF", "GO:CC", "EC"]:
+            else:
                 output_dir = os.path.join(self.config.output_dir, task)
                 os.makedirs(output_dir, exist_ok=True)
 
@@ -126,7 +130,6 @@ class EmbeddingPipeline:
                     task=task,
                     output_dir=output_dir,
                     run_id=run_id,
-                    config=self.config.evaluate,
+                    eval_config=self.config.evaluate,
+                    data_config=self.config.data,
                 )
-            else:
-                raise ValueError(f"unknown task type: {task}")

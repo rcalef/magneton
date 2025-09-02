@@ -1,27 +1,41 @@
-import os
+from pathlib import Path
 
-from dataclasses import dataclass, replace
-from functools import partial
-from typing import List, Tuple
-
-import torch
 import lightning as L
-
-from esm.tokenization import get_esmc_model_tokenizers
-from esm.utils.misc import stack_variable_length_tensors
-from torchdata.nodes import Batcher, Loader, Mapper
+import torch
+from torch.utils.data import (
+    Dataset,
+    DistributedSampler,
+    RandomSampler,
+    SequentialSampler,
+)
+from torchdata.nodes import (
+    BaseNode,
+    Batcher,
+    Mapper,
+    MapStyleWrapper,
+    Filter,
+    Loader,
+)
 
 from magneton.config import DataConfig
 from magneton.types import DataType
 
-from .core import get_core_node
+from .core import (
+    get_core_node,
+    DeepFriModule,
+    WorkshopDataModule,
+    TASK_TO_CONFIGS,
+)
 from .model_specific import (
     ESMCTransformNode,
+    ProSSTTransformNode,
     get_esmc_collate_fn,
+    get_prosst_collate_fn,
 )
 
 model_data = {
     "esmc": (ESMCTransformNode, get_esmc_collate_fn(), [DataType.SEQ]),
+    "prosst": (ProSSTTransformNode, get_prosst_collate_fn(), [DataType.SEQ, DataType.STRUCT])
 }
 
 class MagnetonDataModule(L.LightningDataModule):
@@ -32,6 +46,7 @@ class MagnetonDataModule(L.LightningDataModule):
         model_type: str,
         distributed: bool = False,
     ):
+        super().__init__()
         self.data_config = data_config
         transform_cls, collate_fn, want_datatypes = model_data[model_type]
         self.transform_cls = transform_cls
@@ -51,7 +66,116 @@ class MagnetonDataModule(L.LightningDataModule):
             distributed=self.distributed,
             **kwargs,
         )
-        node = self.transform_cls(node)
+        node = self.transform_cls(
+            node,
+            self.data_config.data_dir,
+            **self.data_config.model_specific_params,
+        )
+        node = Batcher(node, batch_size=self.data_config.batch_size)
+        node = Mapper(node, self.collate_fn)
+
+        return Loader(node)
+
+    def train_dataloader(self):
+        return self._get_dataloader(
+            "train",
+            shuffle=True,
+        )
+
+    def val_dataloader(self):
+        return self._get_dataloader(
+            "val",
+            shuffle=False,
+        )
+
+    def test_dataloader(self):
+        return self._get_dataloader(
+            "test",
+            shuffle=False,
+        )
+
+    def predict_dataloader(self):
+        return self._get_dataloader(
+            "all",
+            shuffle=False,
+        )
+
+class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
+    def __init__(
+        self,
+        data_config: DataConfig,
+        task: str,
+        data_dir: str,
+        model_type: str,
+        max_len: int | None = 2048,
+        distributed: bool = False,
+    ):
+        super().__init__()
+        transform_cls, collate_fn, _ = model_data[model_type]
+        self.transform_cls = transform_cls
+        self.collate_fn = collate_fn
+        self.task = task
+        self.data_config = data_config
+        self.data_dir = Path(data_dir)
+        self.distributed = distributed
+        self.max_len = max_len
+
+        if task in ["GO:BP", "GO:CC", "GO:MF", "EC"]:
+            task = task.replace("GO:", "")
+            self.module = DeepFriModule(
+                task,
+                self.data_dir,
+                struct_template=self.data_config.struct_template,
+                num_workers=32,
+            )
+        elif task in TASK_TO_CONFIGS:
+            self.module = WorkshopDataModule(
+                task,
+                self.data_dir,
+            )
+        else:
+            raise ValueError(f"unknown eval task: {task}")
+
+    def num_classes(self) -> int:
+        return self.module.num_classes()
+
+    def _get_dataloader(
+        self,
+        split: str,
+        shuffle: bool = False,
+        seed: int = 42,
+        drop_last: bool = False,
+    ) -> Loader:
+        dataset = self.module.get_dataset(split)
+        if self.distributed:
+            sampler = DistributedSampler(
+                dataset=dataset,
+                shuffle=shuffle,
+                seed=seed,
+                drop_last=drop_last,
+        )
+        else:
+            if shuffle:
+                generator = torch.Generator()
+                generator.manual_seed(seed)
+                sampler = RandomSampler(
+                    data_source=dataset,
+                    replacement=False,
+                    generator=generator,
+                )
+            else:
+                sampler = SequentialSampler(
+                    data_source=dataset,
+                )
+        node = MapStyleWrapper(map_dataset=dataset, sampler=sampler)
+        if self.max_len is not None:
+            node = Filter(node, filter_fn=lambda x: x.length <= self.max_len)
+
+        this_data_dir = self.data_dir / self.task / split
+        node = self.transform_cls(
+            node,
+            this_data_dir,
+        )
         node = Batcher(node, batch_size=self.data_config.batch_size)
         node = Mapper(node, self.collate_fn)
 
