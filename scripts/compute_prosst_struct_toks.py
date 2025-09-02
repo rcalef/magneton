@@ -66,7 +66,7 @@ def compute_prosst_toks(
             data_dir=data_dir,
             model_type="prosst",
         )
-        dataset = module.module.get_dataset("val")
+        dataset = module.module.get_dataset("train")
 
     else:
         dataset = CoreDataset(
@@ -81,7 +81,6 @@ def compute_prosst_toks(
             continue
         all_pdb_paths.append((prot.protein_id, prot.structure_path))
 
-#    all_pdb_paths = all_pdb_paths[:16]
     num_pdbs = len(all_pdb_paths)
     print(f"got {num_pdbs} pdb paths")
     print(all_pdb_paths[:5])

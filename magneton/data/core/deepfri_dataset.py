@@ -104,14 +104,14 @@ def _parse_one_pdb_seq(
         raise ValueError(f"expected single chain, got {len(chains)}: {path}")
     return "".join([str(pp.get_sequence()) for pp in ppb.build_peptides(chains[0])])
 
-LABEL_LINE: Dict[str, int] = {
+LABEL_LINE: dict[str, int] = {
     "MF": 1,
     "BP": 5,
     "CC": 9,
     "EC": 1,
 }
 
-NUM_SUPERVISED_CLASSES: Dict[str, int] = {
+NUM_SUPERVISED_CLASSES: dict[str, int] = {
     "BP": 1943,
     "CC": 320,
     "MF": 489,
@@ -224,8 +224,13 @@ class DeepFriModule:
 
         # Extract sequences from PDB files to make sure they match the downloaded
         # structure
-        sequences = self.extract_sequence_from_pdbs(dataset.structure_path.to_list())
-        dataset = dataset.assign(seq=sequences)
+        fasta_path = data_dir / f"{self.task}.seqs_from_pdbs.fa"
+        sequence_dict = self.extract_sequence_from_pdbs(
+            fasta_path,
+            dataset.structure_path.to_list(),
+            dataset.pdb_id.to_list(),
+        )
+        dataset = dataset.assign(seq=lambda x: x.pdb_id.map(sequence_dict))
 
         if split == "train":
             data = pd.read_csv(train_fname, sep="\t", header=None)[0]
@@ -250,7 +255,7 @@ class DeepFriModule:
     ) -> pd.DataFrame:
         if path.exists():
             logger.info(f"found PDB-UniProt mapping at: {path}")
-            return pd.read_table(path)
+            return pd.read_table(path).loc[lambda x: x.uniprot_id.notna()]
 
         ids_and_chains = pdb_ids.str.split("-").to_list()
         logger.info(f"mapping PDB IDs for {len(ids_and_chains)} proteins")
@@ -262,6 +267,7 @@ class DeepFriModule:
             "uniprot_id": uniprot_ids,
         })
         logger.info(f"mapped PDB IDs for {id_map.uniprot_id.notna().sum()} / {len(id_map)}")
+        id_map = id_map.loc[lambda x: x.uniprot_id.notna()]
         id_map.to_csv(path, sep="\t", index=False)
         return id_map
 
@@ -281,9 +287,23 @@ class DeepFriModule:
 
     def extract_sequence_from_pdbs(
         self,
+        fasta_path: Path,
         file_paths: list[Path],
-    ) -> list[str]:
-        logger.info("Parsing sequences from PDB files")
+        pdb_ids: list[str],
+    ) -> dict[str, str]:
+        if fasta_path.exists():
+            logger.info(f"FASTA file found at {fasta_path}")
+            fa = FastaFile(fasta_path)
+            return {pdb_id: fa.fetch(pdb_id) for pdb_id in pdb_ids}
+
+        logger.info("No FASTA file found, parsing sequences from PDB files")
         with Pool(self.num_workers) as p:
             sequences = list(tqdm(p.imap(_parse_one_pdb_seq, file_paths), total=len(file_paths)))
-        return sequences
+
+        ret_dict = {}
+        with open(fasta_path, "w") as fh:
+            for pdb_id, seq in zip(pdb_ids, sequences):
+                fh.write(f">{pdb_id}\n{seq}\n")
+                ret_dict[pdb_id] = seq
+
+        return ret_dict

@@ -169,7 +169,7 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
                 )
         node = MapStyleWrapper(map_dataset=dataset, sampler=sampler)
         if self.max_len is not None:
-            node = Filter(node, filter_fn=lambda x: x.length <= self.max_len)
+            node = Filter(node, filter_fn=lambda x: x.length < self.max_len)
 
         this_data_dir = self.data_dir / self.task / split
         node = self.transform_cls(

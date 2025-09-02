@@ -25,10 +25,8 @@ PROSST_REPO_PATH = (
 sys.path.append(str(PROSST_REPO_PATH))
 from prosst.structure.get_sst_seq import SSTPredictor, init_shared_pool
 
-
-logger = logging.Logger(__file__)
-logger.setLevel(logging.INFO)
-
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def precompute_struct_tokens(
     data_source: BaseNode,
@@ -40,8 +38,6 @@ def precompute_struct_tokens(
     init_shared_pool(num_workers)
     all_pdb_paths = []
     for data_elem in data_source:
-        if data_elem.length >= max_len:
-            continue
         all_pdb_paths.append((data_elem.protein_id, data_elem.structure_path))
     num_pdbs = len(all_pdb_paths)
     logger.info(f"got {num_pdbs} pdb paths")
@@ -103,6 +99,8 @@ class ProSSTTransformNode(ParallelMapper):
             )
             data_dir.mkdir(parents=True, exist_ok=True)
             precompute_struct_tokens(source_node, struct_tokens_path)
+        else:
+            logger.info(f"ProSST tokens file found at: {struct_tokens_path}")
 
         self.tokenizer = get_esmc_model_tokenizers()
         self.pad_token_id = self.tokenizer.pad_token_id
