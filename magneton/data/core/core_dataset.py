@@ -151,13 +151,6 @@ def collate_meta_datasets(
     )
     return batch
 
-def max_len_filter(
-    x: DataElement,
-    max_len: int,
-) -> bool:
-    """Keep proteins below max_len."""
-    return x.length <= max_len
-
 def get_core_node(
     data_config: DataConfig,
     want_datatypes: list[DataType],
@@ -205,6 +198,6 @@ def get_core_node(
             )
     node = MapStyleWrapper(map_dataset=prot_dataset, sampler=sampler)
     if max_len is not None:
-        node = Filter(node, filter_fn=partial(max_len_filter, max_len=max_len))
+        node = Filter(node, filter_fn=lambda x: x.length < max_len)
 
     return node

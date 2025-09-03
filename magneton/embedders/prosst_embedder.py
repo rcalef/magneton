@@ -39,9 +39,6 @@ class ProSSTEmbedder(BaseEmbedder):
         if frozen:
             self.model = self.model.eval()
             self._freeze()
-        # Freeze everything after the layer we're
-        # using for extracting representations to
-        # avoid DDP errors.
         else:
             self._unfreeze(unfreeze_all=False)
 
@@ -56,17 +53,24 @@ class ProSSTEmbedder(BaseEmbedder):
         self,
         unfreeze_all: bool = False,
     ):
-        for param in self.model.parameters():
+        for name, param in self.model.named_parameters():
             param.requires_grad = True
+
         if not unfreeze_all:
             # Freeze layers that do not contribute to the embeddings
             # that we're extracting to prevent DDP exceptions.
-            num_blocks = len(self.model.transformer.blocks)
+            num_blocks = len(self.model.prosst.encoder.layer)
             if self.rep_layer != num_blocks-1:
-                for block in self.model.transformer.blocks[self.rep_layer+1:]:
+                for block in self.model.prosst.encoder.layer[self.rep_layer+1:]:
                     for param in block.parameters():
                         param.requires_grad = False
-            for param in self.model.sequence_head.parameters():
+            for param in self.model.cls.parameters():
+                param.requires_grad = False
+
+        # Not sure if this is a bug in ProSST or not, but these layers never get used.
+        # See https://github.com/ai4protein/ProSST/issues/15 for details
+        for name, param in self.model.named_parameters():
+            if "ss_q_proj" in name:
                 param.requires_grad = False
 
     def embed_batch(
