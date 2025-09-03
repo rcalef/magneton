@@ -4,4 +4,4 @@
 
 [submodule "magneton/external/ProSST"]
 	path = magneton/external/ProSST
-	url = git@github.com:ai4protein/ProSST.git
+	url = git@github.com:rcalef/ProSST.git

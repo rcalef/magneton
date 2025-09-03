@@ -13,7 +13,6 @@ from torchdata.nodes import BaseNode, ParallelMapper
 from transformers import AutoTokenizer
 from tqdm import tqdm
 
-from esm.tokenization import get_esmc_model_tokenizers
 from esm.utils.misc import stack_variable_length_tensors
 
 from magneton.data.core import Batch, DataElement
