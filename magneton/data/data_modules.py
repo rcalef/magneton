@@ -21,8 +21,8 @@ from magneton.types import DataType
 from .core import (
     get_core_node,
     DeepFriModule,
-    WorkshopDataModule,
-    TASK_TO_CONFIGS,
+    #WorkshopDataModule,
+    #TASK_TO_CONFIGS,
 )
 from .model_specific import (
     ESMCTransformNode,
@@ -124,11 +124,11 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
                 struct_template=self.data_config.struct_template,
                 num_workers=32,
             )
-        elif task in TASK_TO_CONFIGS:
-            self.module = WorkshopDataModule(
-                task,
-                self.data_dir,
-            )
+        # elif task in TASK_TO_CONFIGS:
+        #     self.module = WorkshopDataModule(
+        #         task,
+        #         self.data_dir,
+        #     )
         else:
             raise ValueError(f"unknown eval task: {task}")
 

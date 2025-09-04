@@ -13,6 +13,7 @@ dependencies = [
     "certifi>=2025.4.26",
     "easydict>=1.13",
     "esm>=3.1.2",
+    "flash-attn",
     "fire>=0.7.0",
     "gpustat>=1.1.1",
     "h5py>=3.13.0",
@@ -30,6 +31,9 @@ dependencies = [
     "scikit-learn>=1.6.0",
     "seaborn>=0.13.2",
     "torch==2.6.0",
+    "torch-geometric>=2.6.1",
+    "torch-scatter>=2.1.2",
+    "torchdata",
     "torchvision>=0.21.0",
     "tqdm>=4.67.1",
     "umap>=0.1.1",
@@ -44,25 +48,30 @@ classifiers = [
 [project.urls]
 Source-code = "https://github.com/rcalef/magneton/"
 
+[build-system]
+requires = ["uv_build>=0.8.15,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+
 [tool.setuptools]
 packages = ["magneton"]
 
-[project.optional-dependencies]
-build = ["setuptools"]
-compile = ["flash-attn"]
-
 [tool.uv]
-no-build-isolation-package = ["torchdrug", "torch-cluster", "torch-scatter", "flash-attn"]
+no-build-isolation-package = ["torch-cluster", "torch-scatter", "flash-attn"]
+find-links = ["https://data.pyg.org/whl/torch-2.6.0+cu124.html"]
 
-# TODO add back in flash-attn once we resolve cuda version mismatches
-# on OpenMind
-#[tool.uv]
-#no-build-isolation-package = ["torch-scatter", "torch-cluster", "flash-attn"]
+[tool.uv.sources]
+torchdata = { index = "torchdata_nightly" }
 
-#[project.optional-dependencies]
-#build = ["torch", "setuptools", "packaging"]
-#compile = ["flash-attn"]
+[[tool.uv.index]]
+name = "torchdata_nightly"
+url = "https://download.pytorch.org/whl/nightly/cpu"
+explicit = true
 
-[[tool.uv.dependency-metadata]]
-name = "flash-attn"
-requires-dist = ["torch", "einops"]
+[tool.uv.extra-build-dependencies]
+flash-attn = [{ requirement = "torch", match-runtime = true }]
+
+[tool.uv.extra-build-variables]
+flash-attn = { FLASH_ATTENTION_SKIP_CUDA_BUILD = "TRUE" }

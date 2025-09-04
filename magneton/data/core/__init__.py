@@ -7,5 +7,5 @@ from .core_dataset import (
 )
 from .deepfri_dataset import DeepFriModule
 from .protein_dataset import get_protein_dataset
-from .protein_workshop_dataset import WorkshopDataModule, TASK_TO_CONFIGS
+#from .protein_workshop_dataset import WorkshopDataModule, TASK_TO_CONFIGS
 from .substructure import SubstructType, get_substructure_parser

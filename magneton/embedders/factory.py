@@ -4,7 +4,7 @@ from typing import Dict, Tuple, Type
 from magneton.config import EmbeddingConfig
 from .base_embedder import BaseConfig, BaseEmbedder
 from .esm_embedder import ESMEmbedder
-from .gearnet_embedder import GearNetEmbedder, GearNetConfig
+#from .gearnet_embedder import GearNetEmbedder, GearNetConfig
 from .esmc_embedder import ESMCEmbedder, ESMCConfig
 from .prosst_embedder import ProSSTEmbedder, ProSSTConfig
 
@@ -12,7 +12,7 @@ from .prosst_embedder import ProSSTEmbedder, ProSSTConfig
 class EmbedderFactory:
     _embedders: Dict[str, Tuple[Type[BaseEmbedder], Type[BaseConfig]]] = {
         "esm": (ESMEmbedder, None),
-        "gearnet": (GearNetEmbedder, GearNetConfig),
+        #"gearnet": (GearNetEmbedder, GearNetConfig),
         "esmc": (ESMCEmbedder, ESMCConfig),
         "prosst": (ProSSTEmbedder, ProSSTConfig),
     }
