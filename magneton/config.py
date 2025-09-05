@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
@@ -18,8 +18,6 @@ class EvalConfig:
     model_checkpoint: str = MISSING
     # Whether or not the saved model used EWC loss
     has_fisher_info: bool = False
-    dev_run: bool = False
-    model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
 
 @dataclass
 class DataConfig:

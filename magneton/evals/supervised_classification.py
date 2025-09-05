@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import lightning as L
 
-from esm.tokenization import get_esmc_model_tokenizers
 from lightning.pytorch.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
@@ -13,6 +12,7 @@ from lightning.pytorch.loggers import (
     CSVLogger,
     WandbLogger,
 )
+from torchdata.nodes import Loader
 from torchmetrics import (
     Accuracy,
     AveragePrecision,
@@ -21,11 +21,10 @@ from torchmetrics import (
 )
 from torchmetrics.functional.classification import multilabel_average_precision
 
-from magneton.config import DataConfig, EvalConfig
+from magneton.config import PipelineConfig
 from magneton.data.core import Batch
 from magneton.data import SupervisedDownstreamTaskDataModule
-from magneton.embedders.base_embedder import BaseEmbedder
-from magneton.training.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
+from magneton.training.embedding_mlp import EmbeddingMLP
 
 
 def _calc_fmax(
@@ -74,29 +73,39 @@ class FMaxScore(Metric):
 class MultiLabelMLP(L.LightningModule):
     def __init__(
         self,
-        embedder: BaseEmbedder,
+        config: PipelineConfig,
         task: str,
         num_classes: int,
-        config: EvalConfig,
     ):
         super().__init__()
+        self.save_hyperparameters()
+
         self.config = config
         self.task = task
         self.num_classes = num_classes
-        self.embedder = embedder
 
-        self.embedder._freeze()
-        self.embedder.eval()
+        # Load embedder
+        model = EmbeddingMLP.load_from_checkpoint(
+            self.config.evaluate.model_checkpoint,
+            load_pretrained_fisher=self.config.evaluate.has_fisher_info,
+        )
+        self.embedder = model.embedder
+
+        if self.config.model.frozen_embedder:
+            self.embedder._freeze()
+            self.embedder.eval()
+        else:
+            self.embedder._unfreeze(unfreeze_all=False)
 
         # Build MLP layers
         layers = []
         prev_dim = self.embedder.get_embed_dim()
-        for hidden_dim in self.config.model_params["hidden_dims"]:
+        for hidden_dim in self.config.model.model_params["hidden_dims"]:
             layers.extend(
                 [
                     nn.Linear(prev_dim, hidden_dim),
                     nn.ReLU(),
-                    nn.Dropout(self.config.model_params["dropout_rate"]),
+                    nn.Dropout(self.config.model.model_params["dropout_rate"]),
                 ]
             )
             prev_dim = hidden_dim
@@ -164,9 +173,17 @@ class MultiLabelMLP(L.LightningModule):
         # MLP params
         optim_params.append({
             "params": self.mlp.parameters(),
-            "lr": self.config.model_params["learning_rate"],
-            "weight_decay": self.config.model_params["weight_decay"],
+            "lr": self.config.training.learning_rate,
+            "weight_decay": self.config.training.weight_decay,
         })
+
+        # Embedder params
+        if not self.config.model.frozen_embedder:
+            optim_params.append({
+                "params": self.embedder.parameters(),
+                "lr": self.config.training.embedding_learning_rate,
+                "weight_decay": self.config.training.embedding_weight_decay,
+            })
         optimizer = torch.optim.AdamW(
             optim_params,
         )
@@ -175,27 +192,65 @@ class MultiLabelMLP(L.LightningModule):
     def name(self) -> str:
         return f"{self.task}-mlp"
 
+def run_final_predictions(
+    model: MultiLabelMLP,
+    trainer: L.Trainer,
+    loader: Loader,
+    num_classes: int,
+    output_dir: Path,
+    prefix: str,
+):
+    final_predictions = trainer.predict(
+        model=model,
+        dataloaders=loader,
+        return_predictions=True
+    )
+
+    all_logits, all_labels = zip(*final_predictions)
+    all_logits = torch.cat(all_logits)
+    all_labels = torch.cat(all_labels)
+
+    # Make another pass through dataset to collect IDs
+    protein_ids = []
+    for batch in loader:
+        protein_ids.extend(batch.protein_ids)
+
+    results_dict = {
+        "protein_ids": protein_ids,
+        "logits": all_logits,
+        "labels": all_labels,
+    }
+
+    torch.save(results_dict, output_dir / f"{prefix}_results.pt")
+
+    final_fmax = _calc_fmax(all_logits, all_labels)
+    final_auprc = multilabel_average_precision(
+        all_logits,
+        all_labels,
+        num_labels=num_classes,
+    )
+    print(f"{prefix} final Fmax: {final_fmax.item():0.3f}")
+    print(f"{prefix} final AUPRC: {final_auprc.item():0.3f}")
+
+
 def run_supervised_classification(
-    model: EmbeddingMLP | MultitaskEmbeddingMLP,
+    config: PipelineConfig,
     task: str,
     output_dir: str,
     run_id: str,
-    eval_config: EvalConfig,
-    data_config: DataConfig,
 ):
     module = SupervisedDownstreamTaskDataModule(
-        data_config=data_config,
+        data_config=config.data,
         task=task,
-        data_dir=eval_config.data_dir,
-        model_type = model.embed_config.model,
+        data_dir=config.evaluate.data_dir,
+        model_type=config.embedding.model,
         distributed=False,
     )
 
     classifier = MultiLabelMLP(
-        embedder=model.embedder,
+        config=config,
         task=task,
         num_classes=module.num_classes(),
-        config=eval_config,
     )
 
     # Set up callbacks
@@ -203,17 +258,13 @@ def run_supervised_classification(
         ModelCheckpoint(
             dirpath=output_dir,
             monitor="valid_auprc",
-            mode="min",
+            mode="max",
             save_top_k=3,
-            filename="{epoch}-{valid_auprc:.2f}"
+            filename="{epoch}-{valid_auprc:.2f}",
+            save_last="link",
         ),
-        # EarlyStopping(
-        #     monitor="valid_auprc",
-        #     mode="max",
-        #     patience=4,
-        # ),
     ]
-    if eval_config.dev_run:
+    if config.training.dev_run is not None:
         logger = None
     else:
         logger = WandbLogger(
@@ -230,7 +281,7 @@ def run_supervised_classification(
         accelerator="gpu",
         devices="auto",
         default_root_dir=output_dir,
-        max_epochs=15,
+        max_epochs=config.training.max_epochs,
         precision="bf16-mixed",
         val_check_interval=1.0,
     )
@@ -238,27 +289,62 @@ def run_supervised_classification(
         classifier,
         datamodule=module,
     )
-    final_predictions = trainer.predict(
-        model=classifier,
-        dataloaders=module.val_dataloader(),
-        return_predictions=True
-    )
-
-    all_logits, all_labels = zip(*final_predictions)
-    all_logits = torch.cat(all_logits)
-    all_labels = torch.cat(all_labels)
 
     output_dir = Path(output_dir)
-    torch.save(all_logits, output_dir / "val_logits.pt")
-    torch.save(all_labels, output_dir / "val_labels.pt")
-
-    final_fmax = _calc_fmax(all_logits, all_labels)
-    final_auprc = multilabel_average_precision(
-        all_logits,
-        all_labels,
-        num_labels=module.num_classes(),
+    run_final_predictions(
+        model=classifier,
+        trainer=trainer,
+        loader=module.val_dataloader(),
+        num_classes=module.num_classes(),
+        output_dir=output_dir,
+        prefix="validation",
     )
-    print(f"Final Fmax: {final_fmax.item():0.3f}")
-    print(f"Final AUPRC: {final_auprc.item():0.3f}")
 
-    logger.experiment.finish()
+    run_final_predictions(
+        model=classifier,
+        trainer=trainer,
+        loader=module.test_dataloader(),
+        num_classes=module.num_classes(),
+        output_dir=output_dir,
+        prefix="test",
+    )
+
+    if logger is not None:
+        logger.experiment.finish()
+
+
+def run_test_set_eval(
+    config: PipelineConfig,
+    task: str,
+    output_dir: str,
+):
+    module = SupervisedDownstreamTaskDataModule(
+        data_config=config.data,
+        task=task,
+        data_dir=config.evaluate.data_dir,
+        model_type=config.embedding.model,
+        distributed=False,
+    )
+
+    classifier = MultiLabelMLP.load_from_checkpoint(
+        config.evaluate.model_checkpoint,
+    )
+
+    # Create trainer
+    trainer = L.Trainer(
+        accelerator="gpu",
+        devices=1,
+        default_root_dir=output_dir,
+        precision="bf16-mixed",
+    )
+
+    output_dir = Path(output_dir)
+
+    run_final_predictions(
+        model=classifier,
+        trainer=trainer,
+        loader=module.test_dataloader(),
+        num_classes=module.num_classes(),
+        output_dir=output_dir,
+        prefix="test",
+    )

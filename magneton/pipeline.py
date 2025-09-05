@@ -100,18 +100,17 @@ class EmbeddingPipeline:
     def run_evals(self):
         """Generate visualizations and evals"""
         assert self.config.evaluate is not None, "No evaluation config specified"
-        print("Evaluating and generating visualizations...")
+        print("Evaluating...")
 
-        # Load model and data
-        model = EmbeddingMLP.load_from_checkpoint(
-            self.config.evaluate.model_checkpoint,
-            load_pretrained_fisher=self.config.evaluate.has_fisher_info,
-        )
-        model.eval()
 
         for task in self.config.evaluate.tasks:
             print(f"{task} - evaluation start")
             if task == "substructure":
+                model = EmbeddingMLP.load_from_checkpoint(
+                    self.config.evaluate.model_checkpoint,
+                    load_pretrained_fisher=self.config.evaluate.has_fisher_info,
+                )
+                model.eval()
                 data_module = MagnetonDataModule(
                     data_config=self.config.data,
                     model_type=self.config.embedding.model,
@@ -126,10 +125,8 @@ class EmbeddingPipeline:
 
                 run_id = f"{self.config.run_id}_{task}"
                 run_supervised_classification(
-                    model=model,
+                    config=self.config,
                     task=task,
                     output_dir=output_dir,
                     run_id=run_id,
-                    eval_config=self.config.evaluate,
-                    data_config=self.config.data,
                 )
