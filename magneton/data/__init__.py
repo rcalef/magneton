@@ -1,1 +1,1 @@
-from .data_modules import MagnetonDataModule, SupervisedDownstreamTaskDataModule
+from .data_modules import MagnetonDataModule, SupervisedDownstreamTaskDataModule, TASK_TYPE

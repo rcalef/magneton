@@ -77,6 +77,7 @@ class ProSSTEmbedder(BaseEmbedder):
         self,
         batch: ProSSTBatch,
         protein_level: bool = False,
+        zero_non_residue_embeds: bool = False,
     ) -> torch.Tensor:
         """Embed a batch of pre-tokenized protein sequences"""
         attention_mask = torch.ones_like(batch.tokenized_seq)
@@ -99,6 +100,9 @@ class ProSSTEmbedder(BaseEmbedder):
             )
             return pool_residue_embeddings(residue_embeddings, attention_mask[:, 1:])
         else:
+            if zero_non_residue_embeds:
+                non_residue_mask = ~(attention_mask[:, 1:].unsqueeze(-1).bool())
+                residue_embeddings.masked_fill_(non_residue_mask, 0)
             return residue_embeddings
 
 

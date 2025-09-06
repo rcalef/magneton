@@ -54,14 +54,22 @@ class ESMCTransformNode(ParallelMapper):
         super().__init__(source=source_node, map_fn=_process, num_workers=num_workers)
 
 
-    def get_collate_fn(self) -> Callable:
+    def get_collate_fn(
+        self,
+        stack_labels: bool = True,
+    ) -> Callable:
         tokenizer = get_esmc_model_tokenizers()
-        return partial(esmc_collate, pad_id=tokenizer.pad_token_id)
+        return partial(
+            esmc_collate,
+            pad_id=tokenizer.pad_token_id,
+            stack_labels=stack_labels,
+        )
 
 
 def esmc_collate(
     entries: List[ESMCDataElement],
     pad_id: int,
+    stack_labels: bool = True,
 ) -> ESMCBatch:
     """
     Collate the entries into a batch.
@@ -80,7 +88,11 @@ def esmc_collate(
     if entries[0].labels is None:
         labels = None
     else:
-        labels = torch.stack([x.labels for x in entries])
+        labels = [x.labels for x in entries]
+        if stack_labels:
+            labels = torch.stack(labels)
+        else:
+            labels = torch.cat(labels)
     return ESMCBatch(
         protein_ids=protein_ids,
         lengths=lengths,

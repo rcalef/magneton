@@ -141,13 +141,21 @@ class ProSSTTransformNode(ParallelMapper):
             labels=x.labels,
         )
 
-    def get_collate_fn(self) -> Callable:
-        return partial(prosst_collate, pad_id=self.tokenizer.pad_token_id)
+    def get_collate_fn(
+        self,
+        stack_labels: bool = True,
+    ) -> Callable:
+        return partial(
+            prosst_collate,
+            pad_id=self.tokenizer.pad_token_id,
+            stack_labels=stack_labels,
+        )
 
 
 def prosst_collate(
     entries: list[ProSSTDataElement],
     pad_id: int,
+    stack_labels: bool = True,
 ) -> ProSSTBatch:
     """
     Collate ProSST data elements into a batch.
@@ -171,7 +179,11 @@ def prosst_collate(
     if entries[0].labels is None:
         labels = None
     else:
-        labels = torch.stack([x.labels for x in entries])
+        labels = [x.labels for x in entries]
+        if stack_labels:
+            labels = torch.stack(labels)
+        else:
+            labels = torch.cat(labels)
     return ProSSTBatch(
         protein_ids=protein_ids,
         lengths=lengths,

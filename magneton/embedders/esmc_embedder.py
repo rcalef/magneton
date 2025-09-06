@@ -123,18 +123,24 @@ class ESMCEmbedder(BaseEmbedder):
         self,
         batch: ESMCBatch,
         protein_level: bool = False,
+        zero_non_residue_embeds: bool = False,
     ) -> torch.Tensor:
         """Embed a batch of pre-tokenized protein sequences"""
         # Remove CLS token
         residue_embeddings = self._get_embedding(batch.tokenized_seq)[:, 1:, :]
+
+        # Make mask that's 1 at every position that corresponds to an actual
+        # residue position, 0 otherwise.
+        residue_mask = torch.ones_like(batch.tokenized_seq)
+        residue_mask.masked_fill_(
+            mask=(batch.tokenized_seq == self.model.tokenizer.pad_token_id) | (batch.tokenized_seq == self.model.tokenizer.eos_token_id),
+            value=0,
+        )
         if protein_level:
-            residue_mask = torch.ones_like(batch.tokenized_seq)
-            residue_mask.masked_fill_(
-                mask=(batch.tokenized_seq == self.model.tokenizer.pad_token_id) | (batch.tokenized_seq == self.model.tokenizer.eos_token_id),
-                value=0,
-            )
             return pool_residue_embeddings(residue_embeddings, residue_mask=residue_mask[:, 1:])
         else:
+            if zero_non_residue_embeds:
+                residue_embeddings.masked_fill_(~(residue_mask[:, 1:].unsqueeze(-1).bool()), 0)
             return residue_embeddings
 
     # the following two functions are deprecated for the current data module setup

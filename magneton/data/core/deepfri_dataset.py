@@ -1,23 +1,23 @@
-import json
 import logging
-import requests
 
 from multiprocessing import Pool
 from pathlib import Path
-from typing import Dict, Literal
+from typing import Literal
 
 import pandas as pd
 import torch
-from Bio.PDB import PDBParser, PPBuilder
 from torch.utils.data import (
     Dataset,
 )
-from pysam import FastaFile
-from six.moves.urllib.request import urlopen
 from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
 
 from .core_dataset import DataElement
+from .utils import (
+    download_afdb_files,
+    parse_seqs_from_pdbs,
+    pdb_id_to_uniprot,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,59 +50,6 @@ class SupervisedDataset(Dataset):
             seq=row.seq,
             structure_path=str(row.structure_path),
         )
-
-
-def _map_one_pdb_id(pdb: str, chain: str) -> str | None:
-    try:
-        content = urlopen('https://www.ebi.ac.uk/pdbe/api/mappings/uniprot/' + pdb).read()
-    except Exception as e:
-        logger.debug(f"{pdb} {chain} PDB Not Found (HTTP Error 404). Skipped. {e}")
-        return None
-
-    content = json.loads(content.decode('utf-8'))
-
-    # find uniprot id
-    for uniprot in content[pdb.lower()]['UniProt'].keys():
-        for mapping in content[pdb.lower()]['UniProt'][uniprot]['mappings']:
-            if mapping['chain_id'] == chain:
-                return uniprot
-
-    logger.debug(f"{pdb} {chain} PDB Found but Chain Not Found. Skipped.")
-    return None
-
-def _download_one_file(
-    path: Path,
-) -> bool:
-    base_url = "https://alphafold.ebi.ac.uk/files/"
-    url = base_url + path.name
-
-    try:
-        r = requests.get(url, timeout=20)
-        if r.status_code == 200:
-            with open(path, "wb") as f:
-                f.write(r.content)
-        else:
-            return False
-    except Exception as e:
-        logger.debug(f"failed to fetch AFDB file ({path}): {e}")
-        return False
-    return True
-
-def _parse_one_pdb_seq(
-    path: Path,
-) -> str:
-    parser = PDBParser(QUIET=True)
-    ppb = PPBuilder()
-    structure = parser.get_structure("protein", path)
-
-        # AFDB structures all consist of one chain, so just take the first one.
-        # This seems to be what folks must do for using these classic splits based
-        # on PDB IDs (both ProSST and SaProt use AFDB structures instead of the
-        # available PDB structures).
-    chains = list(list(structure)[0])
-    if len(chains) != 1:
-        raise ValueError(f"expected single chain, got {len(chains)}: {path}")
-    return "".join([str(pp.get_sequence()) for pp in ppb.build_peptides(chains[0])])
 
 LABEL_LINE: dict[str, int] = {
     "MF": 1,
@@ -215,7 +162,7 @@ class DeepFriModule:
         file_paths = dataset.structure_path.dropna().to_list()
         missing_files = [path for path in file_paths if not path.exists()]
         logger.info(f"downloading {len(missing_files)} / {len(file_paths)} missing files")
-        self.download_struct_files(missing_files)
+        download_afdb_files(missing_files, num_workers=self.num_workers)
 
         # Remove entries with no structures
         dataset = dataset.loc[
@@ -225,10 +172,11 @@ class DeepFriModule:
         # Extract sequences from PDB files to make sure they match the downloaded
         # structure
         fasta_path = data_dir / f"{self.task}.seqs_from_pdbs.fa"
-        sequence_dict = self.extract_sequence_from_pdbs(
-            fasta_path,
-            dataset.structure_path.to_list(),
-            dataset.pdb_id.to_list(),
+        sequence_dict = parse_seqs_from_pdbs(
+            fasta_path=fasta_path,
+            file_paths=dataset.structure_path.to_list(),
+            uniprot_ids=dataset.pdb_id.to_list(),
+            num_workers=self.num_workers,
         )
         dataset = dataset.assign(seq=lambda x: x.pdb_id.map(sequence_dict))
 
@@ -260,7 +208,7 @@ class DeepFriModule:
         ids_and_chains = pdb_ids.str.split("-").to_list()
         logger.info(f"mapping PDB IDs for {len(ids_and_chains)} proteins")
         with Pool(self.num_workers) as p:
-            uniprot_ids = p.starmap(_map_one_pdb_id, tqdm(ids_and_chains))
+            uniprot_ids = p.starmap(pdb_id_to_uniprot, tqdm(ids_and_chains))
 
         id_map = pd.DataFrame({
             "pdb_id": pdb_ids,
@@ -271,39 +219,4 @@ class DeepFriModule:
         id_map.to_csv(path, sep="\t", index=False)
         return id_map
 
-    def download_struct_files(
-        self,
-        file_paths: list[Path],
-    ):
-        with Pool(self.num_workers) as p:
-            download_results = list(
-                tqdm(
-                    p.imap_unordered(_download_one_file, file_paths),
-                    total=len(file_paths)
-                )
-            )
-        success = sum(download_results)
-        logger.info(f"succesfully downloaded {success}  / {len(file_paths)} files")
 
-    def extract_sequence_from_pdbs(
-        self,
-        fasta_path: Path,
-        file_paths: list[Path],
-        pdb_ids: list[str],
-    ) -> dict[str, str]:
-        if fasta_path.exists():
-            logger.info(f"FASTA file found at {fasta_path}")
-            fa = FastaFile(fasta_path)
-            return {pdb_id: fa.fetch(pdb_id) for pdb_id in pdb_ids}
-
-        logger.info("No FASTA file found, parsing sequences from PDB files")
-        with Pool(self.num_workers) as p:
-            sequences = list(tqdm(p.imap(_parse_one_pdb_seq, file_paths), total=len(file_paths)))
-
-        ret_dict = {}
-        with open(fasta_path, "w") as fh:
-            for pdb_id, seq in zip(pdb_ids, sequences):
-                fh.write(f">{pdb_id}\n{seq}\n")
-                ret_dict[pdb_id] = seq
-
-        return ret_dict

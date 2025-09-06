@@ -1,3 +1,4 @@
+from enum import StrEnum
 from pathlib import Path
 
 import lightning as L
@@ -21,6 +22,7 @@ from magneton.types import DataType
 from .core import (
     get_core_node,
     DeepFriModule,
+    FlipModule,
     PeerDataModule,
     PEER_TASK_TO_CONFIGS,
     #WorkshopDataModule,
@@ -35,6 +37,11 @@ model_data = {
     "esmc": (ESMCTransformNode, [DataType.SEQ]),
     # "prosst": (ProSSTTransformNode, [DataType.SEQ, DataType.STRUCT])
 }
+
+class TASK_TYPE(StrEnum):
+    PROTEIN_CLASSIFICATION = "protein_classification"
+    RESIDUE_CLASSIFICATION = "residue_classification"
+
 
 class MagnetonDataModule(L.LightningDataModule):
     """DataModule for substructure-aware fine-tuning."""
@@ -108,6 +115,7 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         model_type: str,
         max_len: int | None = 2048,
         distributed: bool = False,
+        num_workers: int = 32
     ):
         super().__init__()
         transform_cls, _ = model_data[model_type]
@@ -124,18 +132,28 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
                 task,
                 self.data_dir,
                 struct_template=self.data_config.struct_template,
-                num_workers=32,
+                num_workers=num_workers,
             )
+            self.task_type = TASK_TYPE.PROTEIN_CLASSIFICATION
         elif task in PEER_TASK_TO_CONFIGS:
             self.module = PeerDataModule(
                 task,
                 self.data_dir,
             )
+            self.task_type = TASK_TYPE.PROTEIN_CLASSIFICATION
         # elif task in TASK_TO_CONFIGS:
         #     self.module = WorkshopDataModule(
         #         task,
         #         self.data_dir,
         #     )
+        elif task == "FLIP_bind":
+            self.module = FlipModule(
+                data_dir=self.data_dir / "FLIP_bind",
+                struct_template=self.data_config.struct_template,
+                num_workers=num_workers,
+            )
+            self.task_type = TASK_TYPE.RESIDUE_CLASSIFICATION
+
         else:
             raise ValueError(f"unknown eval task: {task}")
 
@@ -180,7 +198,9 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
             this_data_dir,
             **self.data_config.model_specific_params,
         )
-        collate_fn = node.get_collate_fn()
+        collate_fn = node.get_collate_fn(
+            stack_labels=self.task_type == TASK_TYPE.PROTEIN_CLASSIFICATION,
+        )
 
         node = Batcher(node, batch_size=self.data_config.batch_size)
         node = Mapper(node, collate_fn)
