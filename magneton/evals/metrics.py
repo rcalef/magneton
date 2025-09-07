@@ -1,4 +1,5 @@
 import torch
+import torch.distributed as dist
 from torchmetrics import (
     Metric,
 )
@@ -37,11 +38,21 @@ class FMaxScore(Metric):
         if preds.shape != target.shape:
             raise ValueError("preds and target must have the same shape")
 
-        self.preds.append(preds.detach().cpu())
-        self.labels.append(target.detach().cpu())
+        # Revisit this if it becomes a memory issue. Previously was
+        # moving these to CPU, but this would require also handling
+        # a gloo backend when running with more than one GPU.
+        self.preds.append(preds.detach())
+        self.labels.append(target.detach())
 
     def compute(self) -> torch.Tensor:
-        all_preds = torch.cat(self.preds)
-        all_labels = torch.cat(self.labels)
+        # Probably a better way to handle this, but the list of
+        # tensors is already torch.cat'd if running in distributed
+        # setting.
+        if not dist.is_initialized:
+            all_preds = torch.cat(self.preds)
+            all_labels = torch.cat(self.labels)
+        else:
+            all_preds = self.preds
+            all_labels = self.labels
 
         return _calc_fmax(all_preds, all_labels)

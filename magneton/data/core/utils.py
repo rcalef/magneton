@@ -10,8 +10,6 @@ from pysam import FastaFile
 from six.moves.urllib.request import urlopen
 from tqdm import tqdm
 
-
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

@@ -6,12 +6,14 @@ from typing import Literal
 
 import pandas as pd
 import torch
+import torch.distributed as dist
 from torch.utils.data import (
     Dataset,
 )
 from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
 
+from magneton.utils import should_run_single_process
 from .core_dataset import DataElement
 from .utils import (
     download_afdb_files,
@@ -146,6 +148,7 @@ class DeepFriModule:
         )
         dataset = df[["pdb_id", self.task, "labels"]]
 
+
         # Add in PDB IDs
         pdb_id_map_path = data_dir / f"{self.task}.pdb_to_uniprot.tsv"
         pdb_id_map = self.map_pdb_ids(dataset.pdb_id, pdb_id_map_path)
@@ -158,11 +161,14 @@ class DeepFriModule:
             )
         )
 
-        # Download any missing structures
-        file_paths = dataset.structure_path.dropna().to_list()
-        missing_files = [path for path in file_paths if not path.exists()]
-        logger.info(f"downloading {len(missing_files)} / {len(file_paths)} missing files")
-        download_afdb_files(missing_files, num_workers=self.num_workers)
+        # Download any missing structures, only want to do this on one process
+        if should_run_single_process():
+            file_paths = dataset.structure_path.dropna().to_list()
+            missing_files = [path for path in file_paths if not path.exists()]
+            logger.info(f"downloading {len(missing_files)} / {len(file_paths)} missing files")
+            download_afdb_files(missing_files, num_workers=self.num_workers)
+        if dist.is_initialized():
+            dist.barrier()
 
         # Remove entries with no structures
         dataset = dataset.loc[
@@ -201,22 +207,26 @@ class DeepFriModule:
         pdb_ids: pd.Series,
         path: Path,
     ) -> pd.DataFrame:
-        if path.exists():
-            logger.info(f"found PDB-UniProt mapping at: {path}")
-            return pd.read_table(path).loc[lambda x: x.uniprot_id.notna()]
+        # Need to generate PDB ID mapping if not generated
+        if not path.exists():
+            # Only want to run on single process
+            if should_run_single_process():
+                ids_and_chains = pdb_ids.str.split("-").to_list()
+                logger.info(f"mapping PDB IDs for {len(ids_and_chains)} proteins")
+                with Pool(self.num_workers) as p:
+                    uniprot_ids = p.starmap(pdb_id_to_uniprot, tqdm(ids_and_chains))
 
-        ids_and_chains = pdb_ids.str.split("-").to_list()
-        logger.info(f"mapping PDB IDs for {len(ids_and_chains)} proteins")
-        with Pool(self.num_workers) as p:
-            uniprot_ids = p.starmap(pdb_id_to_uniprot, tqdm(ids_and_chains))
+                id_map = pd.DataFrame({
+                    "pdb_id": pdb_ids,
+                    "uniprot_id": uniprot_ids,
+                })
+                logger.info(f"mapped PDB IDs for {id_map.uniprot_id.notna().sum()} / {len(id_map)}")
+                id_map = id_map.loc[lambda x: x.uniprot_id.notna()]
+                id_map.to_csv(path, sep="\t", index=False)
 
-        id_map = pd.DataFrame({
-            "pdb_id": pdb_ids,
-            "uniprot_id": uniprot_ids,
-        })
-        logger.info(f"mapped PDB IDs for {id_map.uniprot_id.notna().sum()} / {len(id_map)}")
-        id_map = id_map.loc[lambda x: x.uniprot_id.notna()]
-        id_map.to_csv(path, sep="\t", index=False)
-        return id_map
+            if dist.is_initialized():
+                dist.barrier()
 
+        logger.info(f"found PDB-UniProt mapping at: {path}")
+        return pd.read_table(path).loc[lambda x: x.uniprot_id.notna()]
 

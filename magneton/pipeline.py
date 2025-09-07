@@ -4,13 +4,18 @@ from pathlib import Path
 from pprint import pprint
 
 import torch
+import torch.distributed as dist
 
 from magneton.config import PipelineConfig
 from magneton.data import MagnetonDataModule
 from magneton.data.core import get_substructure_parser
 from magneton.evals.substructure_classification import classify_substructs
+<<<<<<< HEAD
 from magneton.evals.supervised_classification import run_supervised_classification
 from magneton.evals.zero_shot_evaluation import run_zero_shot_evaluation
+=======
+from magneton.evals.supervised_classification import run_supervised_classification, run_test_set_eval_dry_run
+>>>>>>> c472e53... Updates for DDP training
 from magneton.training.trainer import ModelTrainer
 from magneton.training.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
 
@@ -51,10 +56,13 @@ class EmbeddingPipeline:
         """Train and evaluate model using Lightning"""
         print("Training model...")
         assert self.config.training is not None, "No training config specified"
+
         # Initialize dataset
+        want_distributed_sampler = dist.is_initialized() and self.config.training.strategy in ["ddp", "fsdp"]
         data_module = MagnetonDataModule(
             data_config=self.config.data,
             model_type=self.config.embedding.model,
+            distributed=want_distributed_sampler,
         )
 
         train_loader = data_module.train_dataloader()

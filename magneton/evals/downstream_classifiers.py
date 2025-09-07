@@ -182,7 +182,7 @@ class MultiLabelMLP(L.LightningModule):
                 self.train_metrics(logits.squeeze(), int_labels)
             else:
                 self.train_metrics(logits, labels)
-            self.log_dict(self.train_metrics)
+            self.log_dict(self.train_metrics, sync_dist=True)
 
         return loss
 
@@ -222,7 +222,7 @@ class MultiLabelMLP(L.LightningModule):
 
 
     def on_validation_epoch_end(self):
-        self.log_dict(self.val_metrics)
+        self.log_dict(self.val_metrics, sync_dist=True)
         return super().on_validation_epoch_end()
 
     def predict_step(self, batch: Batch, batch_idx: int, dataloader_idx: int=0):
@@ -234,7 +234,7 @@ class MultiLabelMLP(L.LightningModule):
     def configure_optimizers(self):
         return _get_optimizer(
             model=self,
-            config=self.config,
+            config=self.config.training,
             frozen_embedder=self.config.model.frozen_embedder,
         )
 

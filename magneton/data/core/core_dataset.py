@@ -6,8 +6,9 @@ from typing import Generator, List
 import torch
 from torchdata.nodes import (
     BaseNode,
-    MapStyleWrapper,
+    Mapper,
     Filter,
+    SamplerWrapper,
 )
 from torch.utils.data import (
     Dataset,
@@ -177,6 +178,7 @@ def get_core_node(
         load_fasta_in_mem=load_fasta_in_mem,
     )
     if distributed:
+        print("using distributed sampler")
         sampler = DistributedSampler(
             dataset=prot_dataset,
             shuffle=shuffle,
@@ -196,7 +198,10 @@ def get_core_node(
             sampler = SequentialSampler(
                 data_source=prot_dataset,
             )
-    node = MapStyleWrapper(map_dataset=prot_dataset, sampler=sampler)
+    sampler_node = SamplerWrapper(
+        sampler=sampler,
+    )
+    node = Mapper(sampler_node, prot_dataset.__getitem__)
     if max_len is not None:
         node = Filter(node, filter_fn=lambda x: x.length < max_len)
 

@@ -10,10 +10,11 @@ from torch.utils.data import (
 )
 from torchdata.nodes import (
     Batcher,
-    Mapper,
-    MapStyleWrapper,
     Filter,
+    Header,
     Loader,
+    Mapper,
+    SamplerWrapper,
 )
 
 from magneton.config import DataConfig
@@ -165,17 +166,19 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         split: str,
         shuffle: bool = False,
         seed: int = 42,
-        drop_last: bool = False,
+        drop_last: bool = True,
     ) -> Loader:
         dataset = self.module.get_dataset(split)
         if self.distributed:
+            print("using distributed sampler")
             sampler = DistributedSampler(
                 dataset=dataset,
                 shuffle=shuffle,
                 seed=seed,
                 drop_last=drop_last,
-        )
+            )
         else:
+            print("not using distributed sampler")
             if shuffle:
                 generator = torch.Generator()
                 generator.manual_seed(seed)
@@ -188,7 +191,10 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
                 sampler = SequentialSampler(
                     data_source=dataset,
                 )
-        node = MapStyleWrapper(map_dataset=dataset, sampler=sampler)
+        sampler_node = SamplerWrapper(
+            sampler=sampler,
+        )
+        node = Mapper(sampler_node, dataset.__getitem__)
         if self.max_len is not None:
             node = Filter(node, filter_fn=lambda x: x.length < self.max_len)
 

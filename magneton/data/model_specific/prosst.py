@@ -8,6 +8,7 @@ from functools import partial
 from pathlib import Path
 
 import torch
+import torch.distributed as dist
 
 from torchdata.nodes import BaseNode, ParallelMapper
 from transformers import AutoTokenizer
@@ -16,6 +17,7 @@ from tqdm import tqdm
 from esm.utils.misc import stack_variable_length_tensors
 
 from magneton.data.core import Batch, DataElement
+from magneton.utils import should_run_single_process
 
 PROSST_REPO_PATH = (
     Path(__file__).parent.parent.parent /
@@ -92,7 +94,7 @@ class ProSSTTransformNode(ParallelMapper):
             data_dir = Path(data_dir)
         struct_tokens_path = data_dir / "prosst_toks.tsv.bz2"
 
-        if not struct_tokens_path.exists():
+        if should_run_single_process() and not struct_tokens_path.exists():
             logger.info(
                 f"ProSST structure tokens not found: {struct_tokens_path}\n"
                 "Pre-computing. If data is large (>50k), using the standalone "
@@ -100,10 +102,10 @@ class ProSSTTransformNode(ParallelMapper):
             )
             data_dir.mkdir(parents=True, exist_ok=True)
             precompute_struct_tokens(source_node, struct_tokens_path)
-        else:
-            logger.info(f"ProSST tokens file found at: {struct_tokens_path}")
+        if dist.is_initialized():
+            dist.barrier()
 
-        print(tokenizer_path)
+        logger.info(f"ProSST tokens file found at: {struct_tokens_path}")
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
 
         self.struct_tokens = {}

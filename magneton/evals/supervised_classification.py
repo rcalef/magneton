@@ -3,6 +3,7 @@ import json
 
 import torch
 import lightning as L
+import torch.distributed as dist
 
 from lightning.pytorch.callbacks import (
     ModelCheckpoint,
@@ -149,31 +150,68 @@ def run_supervised_classification(
     ]
     if config.training.dev_run is not None:
         logger = None
+        dev_run = config.training.dev_run
     else:
         logger = WandbLogger(
             entity="magneton",
             project="magneton",
             name=run_id,
         )
+        dev_run=False
 
     # Create trainer
     trainer = L.Trainer(
-        strategy="auto",
+        strategy=config.training.strategy,
         callbacks=callbacks,
         logger=logger,
-        accelerator="gpu",
-        devices="auto",
+        accelerator=config.training.accelerator,
+        devices=config.training.devices,
         default_root_dir=output_dir,
         max_epochs=config.training.max_epochs,
-        precision="bf16-mixed",
+        precision=config.training.precision,
         val_check_interval=1.0,
+        use_distributed_sampler=False,
     )
+
+    want_distributed_sampler = torch.cuda.device_count() > 1
+    module = SupervisedDownstreamTaskDataModule(
+        data_config=config.data,
+        task=task,
+        data_dir=config.evaluate.data_dir,
+        model_type=config.embedding.model,
+        distributed=want_distributed_sampler,
+    )
+    if module.task_type == TASK_TYPE.PROTEIN_CLASSIFICATION:
+        classifier = MultiLabelMLP(
+            config=config,
+            task=task,
+            num_classes=module.num_classes(),
+        )
+    elif module.task_type == TASK_TYPE.RESIDUE_CLASSIFICATION:
+        classifier = ResidueClassifier(
+            config=config,
+            task=task,
+            num_classes=module.num_classes(),
+        )
+    else:
+        raise ValueError(f"unknown task type: {module.task_type}")
+
     trainer.fit(
         classifier,
         datamodule=module,
     )
 
     output_dir = Path(output_dir)
+    # Disable distributed sampler for final validations for reproducibility
+    module.distributed = False
+    run_final_predictions(
+        model=classifier,
+        trainer=trainer,
+        loader=module.val_dataloader(),
+        num_classes=module.num_classes(),
+        output_dir=output_dir,
+        prefix="validation",
+    )
 
     # Run final predictions
     final_predictions = trainer.predict(
@@ -257,3 +295,25 @@ def run_supervised_classification(
 
     if logger is not None:
         logger.experiment.finish()
+    run_final_predictions(
+        model=classifier,
+        trainer=trainer,
+        loader=module.test_dataloader(),
+        num_classes=module.num_classes(),
+        output_dir=output_dir,
+        prefix="test",
+    )
+
+def run_test_set_eval_dry_run(
+    config: PipelineConfig,
+    task: str,
+    output_dir: str,
+):
+    module = SupervisedDownstreamTaskDataModule(
+        data_config=config.data,
+        task=task,
+        data_dir=config.evaluate.data_dir,
+        model_type=config.embedding.model,
+        distributed=False,
+    )
+    _ = module.test_dataloader()
