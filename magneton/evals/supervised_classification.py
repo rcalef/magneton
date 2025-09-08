@@ -16,15 +16,19 @@ from torchdata.nodes import Loader
 from torchmetrics import (
     Accuracy,
     AveragePrecision,
+    MeanAbsoluteError,
+    MeanSquaredError,
     Metric,
     MetricCollection,
+    SpearmanCorrCoef,
 )
 from torchmetrics.functional.classification import multilabel_average_precision
 
 from magneton.config import PipelineConfig
 from magneton.data.core import Batch
 from magneton.data import SupervisedDownstreamTaskDataModule
-from magneton.training.embedding_mlp import EmbeddingMLP
+from magneton.embedders.base_embedder import BaseEmbedder
+from magneton.training.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
 
 
 def _calc_fmax(
@@ -76,12 +80,14 @@ class MultiLabelMLP(L.LightningModule):
         config: PipelineConfig,
         task: str,
         num_classes: int,
+        task_type: str = "multilabel",
     ):
         super().__init__()
         self.save_hyperparameters()
 
         self.config = config
         self.task = task
+        self.task_type = task_type
         self.num_classes = num_classes
 
         # Load embedder
@@ -113,18 +119,56 @@ class MultiLabelMLP(L.LightningModule):
         layers.append(nn.Linear(prev_dim, num_classes))
         self.mlp = nn.Sequential(*layers)
 
-        self.loss = nn.BCEWithLogitsLoss()
+        # Choose loss function based on task type
+        if task_type == "multilabel":
+            self.loss = nn.BCEWithLogitsLoss()
+        elif task_type == "multiclass":
+            self.loss = nn.CrossEntropyLoss()
+        elif task_type == "binary":
+            self.loss = nn.BCEWithLogitsLoss()
+        elif task_type == "regression":
+            self.loss = nn.MSELoss()
+        else:
+            raise ValueError(f"Unknown task_type: {task_type}")
 
-        # Metrics
-        self.train_metrics = MetricCollection(
-            {
-                "accuracy": Accuracy(task="multilabel", num_labels=num_classes),
-                "auprc": AveragePrecision(task="multilabel", num_labels=num_classes),
-            },
-            prefix="train_",
-        )
-        self.val_metrics = self.train_metrics.clone(prefix="valid_")
-        self.val_metrics.add_metrics({"fmax": FMaxScore(num_thresh_steps=101)})
+        # Metrics based on task type
+        if task_type == "multilabel":
+            self.train_metrics = MetricCollection(
+                {
+                    "accuracy": Accuracy(task="multilabel", num_labels=num_classes),
+                    "auprc": AveragePrecision(task="multilabel", num_labels=num_classes),
+                },
+                prefix="train_",
+            )
+            self.val_metrics = self.train_metrics.clone(prefix="valid_")
+            self.val_metrics.add_metrics({"fmax": FMaxScore(num_thresh_steps=101)})
+        elif task_type == "multiclass":
+            self.train_metrics = MetricCollection(
+                {
+                    "accuracy": Accuracy(task="multiclass", num_classes=num_classes),
+                },
+                prefix="train_",
+            )
+            self.val_metrics = self.train_metrics.clone(prefix="valid_")
+        elif task_type == "binary":
+            self.train_metrics = MetricCollection(
+                {
+                    "accuracy": Accuracy(task="binary"),
+                    "auprc": AveragePrecision(task="binary"),
+                },
+                prefix="train_",
+            )
+            self.val_metrics = self.train_metrics.clone(prefix="valid_")
+        elif task_type == "regression":
+            self.train_metrics = MetricCollection(
+                {
+                    "mae": MeanAbsoluteError(),
+                    "rmse": MeanSquaredError(squared=False),  # RMSE instead of MSE
+                    "spearman": SpearmanCorrCoef(),
+                },
+                prefix="train_",
+            )
+            self.val_metrics = self.train_metrics.clone(prefix="valid_")
 
     def forward(
         self,
@@ -139,12 +183,28 @@ class MultiLabelMLP(L.LightningModule):
     def training_step(self, batch: Batch, batch_idx: int) -> torch.Tensor:
         logits = self(batch)
 
-        labels = batch.labels.to(dtype=logits.dtype)
+        if self.task_type == "multilabel":
+            labels = batch.labels.to(dtype=logits.dtype)
+        elif self.task_type == "multiclass":
+            labels = batch.labels.long()  # CrossEntropy expects long integers
+        elif self.task_type == "binary":
+            labels = batch.labels.to(dtype=logits.dtype)
+        elif self.task_type == "regression":
+            labels = batch.labels.to(dtype=logits.dtype)
+            # Ensure labels match logits shape [batch_size, 1] for regression
+            if labels.dim() == 1:
+                labels = labels.unsqueeze(-1)
+        else:
+            raise ValueError(f"Unknown task_type: {self.task_type}")
+            
         loss = self.loss(logits, labels)
 
         self.log("train_loss", loss, sync_dist=True)
         if batch_idx % 50 == 0:
-            self.train_metrics(logits, batch.labels)
+            if self.task_type == "multilabel":
+                self.train_metrics(logits, batch.labels)
+            else:
+                self.train_metrics(logits, labels)
             self.log_dict(self.train_metrics)
 
         return loss
@@ -152,11 +212,31 @@ class MultiLabelMLP(L.LightningModule):
     def validation_step(self, batch: Batch, batch_idx):
         logits = self(batch)
 
-        labels = batch.labels.to(dtype=logits.dtype)
+        if self.task_type == "multilabel":
+            labels = batch.labels.to(dtype=logits.dtype)
+        elif self.task_type == "multiclass":
+            labels = batch.labels.long()
+        elif self.task_type == "binary":
+            labels = batch.labels.to(dtype=logits.dtype)
+        elif self.task_type == "regression":
+            labels = batch.labels.to(dtype=logits.dtype)
+            # Ensure labels match logits shape [batch_size, 1] for regression
+            if labels.dim() == 1:
+                labels = labels.unsqueeze(-1)
+        else:
+            raise ValueError(f"Unknown task_type: {self.task_type}")
+            
         loss = self.loss(logits, labels)
 
         self.log("val_loss", loss, sync_dist=True)
-        self.val_metrics.update(logits, batch.labels)
+        if self.task_type == "multilabel":
+            self.val_metrics.update(logits, batch.labels)
+        elif self.task_type == "multiclass":
+            self.val_metrics.update(logits, labels)
+        elif self.task_type == "binary":
+            self.val_metrics.update(logits, labels)
+        elif self.task_type == "regression":
+            self.val_metrics.update(logits, labels)
 
     def on_validation_epoch_end(self):
         self.log_dict(self.val_metrics)
@@ -247,22 +327,57 @@ def run_supervised_classification(
         distributed=False,
     )
 
+    # Determine task type based on the task name
+    task_type = "multilabel"  # Default for non-PEER tasks
+    
+    # PEER multiclass classification tasks
+    if task in ["fold", "subcellular_localization"]:
+        task_type = "multiclass"
+    # PEER binary classification tasks  
+    elif task in ["solubility", "binary_localization"]:
+        task_type = "binary" 
+    # PEER regression tasks (single sequence)
+    elif task in ["fluorescence", "stability", "beta_lactamase", "aav", "gb1", "thermostability"]:
+        task_type = "regression"
+    
     classifier = MultiLabelMLP(
         config=config,
         task=task,
         num_classes=module.num_classes(),
+        task_type=task_type,
     )
 
-    # Set up callbacks
+    # Set up callbacks with appropriate monitoring metric
+    if task_type == "multiclass":
+        monitor_metric = "valid_accuracy"
+        mode = "max"
+        filename = "{epoch}-{valid_accuracy:.2f}"
+    elif task_type == "binary":
+        monitor_metric = "valid_auprc"
+        mode = "max"
+        filename = "{epoch}-{valid_auprc:.2f}"
+    elif task_type == "regression":
+        monitor_metric = "valid_spearman"
+        mode = "max"
+        filename = "{epoch}-{valid_spearman:.2f}"
+    else:  # multilabel
+        monitor_metric = "valid_auprc"
+        mode = "max"
+        filename = "{epoch}-{valid_auprc:.2f}"
+    
     callbacks = [
         ModelCheckpoint(
             dirpath=output_dir,
-            monitor="valid_auprc",
-            mode="max",
+            monitor=monitor_metric,
+            mode=mode,
             save_top_k=3,
-            filename="{epoch}-{valid_auprc:.2f}",
-            save_last="link",
+            filename=filename
         ),
+        # EarlyStopping(
+        #     monitor=monitor_metric,
+        #     mode=mode,
+        #     patience=4,
+        # ),
     ]
     if config.training.dev_run is not None:
         logger = None
@@ -291,60 +406,57 @@ def run_supervised_classification(
     )
 
     output_dir = Path(output_dir)
-    run_final_predictions(
+    
+    # Run final predictions
+    final_predictions = trainer.predict(
         model=classifier,
-        trainer=trainer,
-        loader=module.val_dataloader(),
-        num_classes=module.num_classes(),
-        output_dir=output_dir,
-        prefix="validation",
+        dataloaders=module.val_dataloader(),
+        return_predictions=True
     )
 
-    run_final_predictions(
-        model=classifier,
-        trainer=trainer,
-        loader=module.test_dataloader(),
-        num_classes=module.num_classes(),
-        output_dir=output_dir,
-        prefix="test",
-    )
+    all_logits, all_labels = zip(*final_predictions)
+    all_logits = torch.cat(all_logits)
+    all_labels = torch.cat(all_labels)
+
+    torch.save(all_logits, output_dir / "val_logits.pt")
+    torch.save(all_labels, output_dir / "val_labels.pt")
+
+    # Calculate task-specific metrics
+    if task_type == "multilabel":
+        final_fmax = _calc_fmax(all_logits, all_labels)
+        final_auprc = multilabel_average_precision(
+            all_logits,
+            all_labels,
+            num_labels=module.num_classes(),
+        )
+        print(f"Final Fmax: {final_fmax.item():0.3f}")
+        print(f"Final AUPRC: {final_auprc.item():0.3f}")
+    elif task_type == "multiclass":
+        # For multiclass, calculate accuracy
+        predicted_classes = all_logits.argmax(dim=1)
+        accuracy = (predicted_classes == all_labels).float().mean()
+        print(f"Final Accuracy: {accuracy.item():0.3f}")
+    elif task_type == "binary":
+        # For binary classification
+        predicted_probs = all_logits.sigmoid()
+        predicted_classes = (predicted_probs >= 0.5).float()
+        accuracy = (predicted_classes == all_labels).float().mean()
+        auprc = AveragePrecision(task="binary")(all_logits, all_labels.long())
+        print(f"Final Accuracy: {accuracy.item():0.3f}")
+        print(f"Final AUPRC: {auprc.item():0.3f}")
+    elif task_type == "regression":
+        # For regression tasks - ensure shape compatibility
+        if all_labels.dim() == 1:
+            all_labels = all_labels.unsqueeze(-1)  # Match logits shape [N, 1]
+        
+        mae = MeanAbsoluteError()(all_logits, all_labels)
+        rmse = MeanSquaredError(squared=False)(all_logits, all_labels)
+        spearman = SpearmanCorrCoef()(all_logits.squeeze(), all_labels.squeeze())
+        print(f"Final MAE: {mae.item():0.3f}")
+        print(f"Final RMSE: {rmse.item():0.3f}")
+        print(f"Final Spearman: {spearman.item():0.3f}")
+    else:
+        print(f"No final metrics defined for task_type: {task_type}")
 
     if logger is not None:
         logger.experiment.finish()
-
-
-def run_test_set_eval(
-    config: PipelineConfig,
-    task: str,
-    output_dir: str,
-):
-    module = SupervisedDownstreamTaskDataModule(
-        data_config=config.data,
-        task=task,
-        data_dir=config.evaluate.data_dir,
-        model_type=config.embedding.model,
-        distributed=False,
-    )
-
-    classifier = MultiLabelMLP.load_from_checkpoint(
-        config.evaluate.model_checkpoint,
-    )
-
-    # Create trainer
-    trainer = L.Trainer(
-        accelerator="gpu",
-        devices=1,
-        default_root_dir=output_dir,
-        precision="bf16-mixed",
-    )
-
-    output_dir = Path(output_dir)
-
-    run_final_predictions(
-        model=classifier,
-        trainer=trainer,
-        loader=module.test_dataloader(),
-        num_classes=module.num_classes(),
-        output_dir=output_dir,
-        prefix="test",
-    )

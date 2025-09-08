@@ -21,17 +21,19 @@ from magneton.types import DataType
 from .core import (
     get_core_node,
     DeepFriModule,
+    PeerDataModule,
+    PEER_TASK_TO_CONFIGS,
     #WorkshopDataModule,
     #TASK_TO_CONFIGS,
 )
 from .model_specific import (
     ESMCTransformNode,
-    ProSSTTransformNode,
+    # ProSSTTransformNode,
 )
 
 model_data = {
     "esmc": (ESMCTransformNode, [DataType.SEQ]),
-    "prosst": (ProSSTTransformNode, [DataType.SEQ, DataType.STRUCT])
+    # "prosst": (ProSSTTransformNode, [DataType.SEQ, DataType.STRUCT])
 }
 
 class MagnetonDataModule(L.LightningDataModule):
@@ -123,6 +125,11 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
                 self.data_dir,
                 struct_template=self.data_config.struct_template,
                 num_workers=32,
+            )
+        elif task in PEER_TASK_TO_CONFIGS:
+            self.module = PeerDataModule(
+                task,
+                self.data_dir,
             )
         # elif task in TASK_TO_CONFIGS:
         #     self.module = WorkshopDataModule(

@@ -1,7 +1,7 @@
 defaults:
   - base_pipeline
   - data: interpro103_swissprot
-  - embedding: gearnet
+  - embedding: esmc
   - _self_
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
