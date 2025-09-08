@@ -152,17 +152,12 @@ def collate_meta_datasets(
     )
     return batch
 
-def get_core_node(
+def get_core_dataset(
     data_config: DataConfig,
     want_datatypes: list[DataType],
     split: str = "train",
-    max_len: int | None = 2048,
     load_fasta_in_mem: bool = True,
-    seed: int = 42,
-    shuffle: bool = False,
-    distributed: bool = False,
-    drop_last: bool = False,
-) -> BaseNode:
+) -> Dataset:
     if split != "all":
         split_dir = os.path.join(data_config.data_dir, f"{split}_sharded")
         prefix = f"swissprot.with_ss.{split}"
@@ -177,32 +172,4 @@ def get_core_node(
         want_datatypes=want_datatypes,
         load_fasta_in_mem=load_fasta_in_mem,
     )
-    if distributed:
-        print("using distributed sampler")
-        sampler = DistributedSampler(
-            dataset=prot_dataset,
-            shuffle=shuffle,
-            seed=seed,
-            drop_last=drop_last,
-        )
-    else:
-        if shuffle:
-            generator = torch.Generator()
-            generator.manual_seed(seed)
-            sampler = RandomSampler(
-                data_source=prot_dataset,
-                replacement=False,
-                generator=generator,
-            )
-        else:
-            sampler = SequentialSampler(
-                data_source=prot_dataset,
-            )
-    sampler_node = SamplerWrapper(
-        sampler=sampler,
-    )
-    node = Mapper(sampler_node, prot_dataset.__getitem__)
-    if max_len is not None:
-        node = Filter(node, filter_fn=lambda x: x.length < max_len)
-
-    return node
+    return prot_dataset

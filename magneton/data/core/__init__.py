@@ -3,7 +3,7 @@ from .core_dataset import (
     CoreDataset,
     DataElement,
     collate_meta_datasets,
-    get_core_node,
+    get_core_dataset,
 )
 from .deepfri_dataset import DeepFriModule
 from .flip_dataset import FlipModule

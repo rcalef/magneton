@@ -4,14 +4,16 @@ from pathlib import Path
 import lightning as L
 import torch
 from torch.utils.data import (
+    Dataset,
     DistributedSampler,
     RandomSampler,
     SequentialSampler,
+    Subset,
 )
 from torchdata.nodes import (
     Batcher,
+    BaseNode,
     Filter,
-    Header,
     Loader,
     Mapper,
     SamplerWrapper,
@@ -21,7 +23,7 @@ from magneton.config import DataConfig
 from magneton.types import DataType
 
 from .core import (
-    get_core_node,
+    get_core_dataset,
     DeepFriModule,
     FlipModule,
     PeerDataModule,
@@ -44,6 +46,50 @@ class TASK_TYPE(StrEnum):
     RESIDUE_CLASSIFICATION = "residue_classification"
 
 
+def filter_and_sample(
+    dataset: Dataset,
+    shuffle: bool,
+    max_len: int | None = 2048,
+    distributed: bool = False,
+    seed: int = 42,
+    drop_last: bool = True,
+) -> BaseNode:
+    if max_len is not None:
+        valid_indices = []
+        for i in range(len(dataset)):
+            if dataset[i].length < max_len:
+                valid_indices.append(i)
+        dataset = Subset(dataset, valid_indices)
+        print(f"remaining samples after length filter: {len(valid_indices)}")
+
+    if distributed:
+        print("using distributed sampler")
+        sampler = DistributedSampler(
+            dataset=dataset,
+            shuffle=shuffle,
+            seed=seed,
+            drop_last=drop_last,
+        )
+    else:
+        print("not using distributed sampler")
+        if shuffle:
+            generator = torch.Generator()
+            generator.manual_seed(seed)
+            sampler = RandomSampler(
+                data_source=dataset,
+                replacement=False,
+                generator=generator,
+            )
+        else:
+            sampler = SequentialSampler(
+                data_source=dataset,
+            )
+    sampler_node = SamplerWrapper(
+        sampler=sampler,
+    )
+    return Mapper(sampler_node, dataset.__getitem__)
+
+
 class MagnetonDataModule(L.LightningDataModule):
     """DataModule for substructure-aware fine-tuning."""
     def __init__(
@@ -51,6 +97,7 @@ class MagnetonDataModule(L.LightningDataModule):
         data_config: DataConfig,
         model_type: str,
         distributed: bool = False,
+        max_len: int | None = 2048
     ):
         super().__init__()
         self.data_config = data_config
@@ -58,18 +105,23 @@ class MagnetonDataModule(L.LightningDataModule):
         self.transform_cls = transform_cls
         self.want_datatypes = want_datatypes + [DataType.SUBSTRUCT]
         self.distributed = distributed
+        self.max_len = max_len
 
     def _get_dataloader(
         self,
         split: str,
-        **kwargs,
+        shuffle: bool,
     ) -> Loader:
-        node = get_core_node(
+        dataset = get_core_dataset(
             data_config=self.data_config,
             want_datatypes=self.want_datatypes,
             split=split,
+        )
+        node = filter_and_sample(
+            dataset=dataset,
             distributed=self.distributed,
-            **kwargs,
+            max_len=self.max_len,
+            shuffle=shuffle,
         )
         node = self.transform_cls(
             node,
@@ -169,34 +221,14 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         drop_last: bool = True,
     ) -> Loader:
         dataset = self.module.get_dataset(split)
-        if self.distributed:
-            print("using distributed sampler")
-            sampler = DistributedSampler(
-                dataset=dataset,
-                shuffle=shuffle,
-                seed=seed,
-                drop_last=drop_last,
-            )
-        else:
-            print("not using distributed sampler")
-            if shuffle:
-                generator = torch.Generator()
-                generator.manual_seed(seed)
-                sampler = RandomSampler(
-                    data_source=dataset,
-                    replacement=False,
-                    generator=generator,
-                )
-            else:
-                sampler = SequentialSampler(
-                    data_source=dataset,
-                )
-        sampler_node = SamplerWrapper(
-            sampler=sampler,
+        node = filter_and_sample(
+            dataset=dataset,
+            distributed=self.distributed,
+            max_len=self.max_len,
+            shuffle=shuffle,
+            drop_last=drop_last,
+            seed=seed,
         )
-        node = Mapper(sampler_node, dataset.__getitem__)
-        if self.max_len is not None:
-            node = Filter(node, filter_fn=lambda x: x.length < self.max_len)
 
         this_data_dir = self.data_dir / self.task / split
         node = self.transform_cls(

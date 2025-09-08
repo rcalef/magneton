@@ -9,6 +9,8 @@ def _calc_fmax(
     labels: torch.Tensor,
     num_thresh_steps: int=101,
 ) -> torch.Tensor:
+    assert ((labels == 0) | (labels == 1)).all()
+
     probs = logits.sigmoid()
     f1s = []
     for thresh in torch.linspace(start=0, end=1, steps=num_thresh_steps):
