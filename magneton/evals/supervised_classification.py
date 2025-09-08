@@ -189,6 +189,9 @@ class MultiLabelMLP(L.LightningModule):
             labels = batch.labels.long()  # CrossEntropy expects long integers
         elif self.task_type == "binary":
             labels = batch.labels.to(dtype=logits.dtype)
+            # Ensure labels match logits shape [batch_size, 1] for BCEWithLogitsLoss
+            if labels.dim() == 1:
+                labels = labels.unsqueeze(-1)
         elif self.task_type == "regression":
             labels = batch.labels.to(dtype=logits.dtype)
             # Ensure labels match logits shape [batch_size, 1] for regression
@@ -203,6 +206,10 @@ class MultiLabelMLP(L.LightningModule):
         if batch_idx % 50 == 0:
             if self.task_type == "multilabel":
                 self.train_metrics(logits, batch.labels)
+            elif self.task_type == "binary":
+                # For binary metrics, convert labels to int
+                int_labels = labels.squeeze().long()
+                self.train_metrics(logits.squeeze(), int_labels)
             else:
                 self.train_metrics(logits, labels)
             self.log_dict(self.train_metrics)
@@ -218,6 +225,9 @@ class MultiLabelMLP(L.LightningModule):
             labels = batch.labels.long()
         elif self.task_type == "binary":
             labels = batch.labels.to(dtype=logits.dtype)
+            # Ensure labels match logits shape [batch_size, 1] for BCEWithLogitsLoss
+            if labels.dim() == 1:
+                labels = labels.unsqueeze(-1)
         elif self.task_type == "regression":
             labels = batch.labels.to(dtype=logits.dtype)
             # Ensure labels match logits shape [batch_size, 1] for regression
@@ -234,7 +244,9 @@ class MultiLabelMLP(L.LightningModule):
         elif self.task_type == "multiclass":
             self.val_metrics.update(logits, labels)
         elif self.task_type == "binary":
-            self.val_metrics.update(logits, labels)
+            # For binary metrics, convert labels to int (AveragePrecision expects int targets)
+            int_labels = labels.squeeze().long()
+            self.val_metrics.update(logits.squeeze(), int_labels)
         elif self.task_type == "regression":
             self.val_metrics.update(logits, labels)
 
@@ -331,10 +343,10 @@ def run_supervised_classification(
     task_type = "multilabel"  # Default for non-PEER tasks
     
     # PEER multiclass classification tasks
-    if task in ["fold", "subcellular_localization"]:
+    if task in ["fold"]:
         task_type = "multiclass"
     # PEER binary classification tasks  
-    elif task in ["solubility", "binary_localization"]:
+    elif task in ["solubility", "binary_localization", "subcellular_localization"]:
         task_type = "binary" 
     # PEER regression tasks (single sequence)
     elif task in ["fluorescence", "stability", "beta_lactamase", "aav", "gb1", "thermostability"]:
@@ -353,7 +365,7 @@ def run_supervised_classification(
         mode = "max"
         filename = "{epoch}-{valid_accuracy:.2f}"
     elif task_type == "binary":
-        monitor_metric = "valid_auprc"
+        monitor_metric = "valid_accuracy"
         mode = "max"
         filename = "{epoch}-{valid_auprc:.2f}"
     elif task_type == "regression":

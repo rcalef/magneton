@@ -47,6 +47,7 @@ PEER_DATASET_INFO = {
         "extracted_dir": "fluorescence",
         "lmdb_pattern": "fluorescence/fluorescence_{split}.lmdb",
         "task_type": "regression",
+        "target_field": "log_fluorescence"
     },
     
     "stability": {
@@ -56,6 +57,7 @@ PEER_DATASET_INFO = {
         "extracted_dir": "stability",
         "lmdb_pattern": "stability/stability_{split}.lmdb",
         "task_type": "regression",
+        "target_field": "stability_score"
     },
     
     "beta_lactamase": {
@@ -65,7 +67,7 @@ PEER_DATASET_INFO = {
         "extracted_dir": "beta_lactamase",
         "lmdb_pattern": "beta_lactamase/beta_lactamase_{split}.lmdb",
         "task_type": "regression",
-        "target_field": "scaled_effect1",  # Special field name
+        "target_field": "scaled_effect1",
     },
     
     "solubility": {
@@ -83,8 +85,8 @@ PEER_DATASET_INFO = {
         "archive_type": "tar.gz",
         "extracted_dir": "subcellular_localization",
         "lmdb_pattern": "subcellular_localization/subcellular_localization_{split}.lmdb",
-        "task_type": "multiclass",
-        "target_field": "location",
+        "task_type": "binary",
+        "target_field": "localization",
     },
     
     "binary_localization": {
@@ -104,10 +106,10 @@ PEER_DATASET_INFO = {
         "archive_type": "zip",
         "extracted_dir": "splits",
         "csv_files": {
-            "train": "splits/one_vs_many.csv",
-            "valid": "splits/one_vs_many.csv",
-            "val": "splits/one_vs_many.csv",  # Lightning uses "val"
-            "test": "splits/one_vs_many.csv",
+            "train": "splits/two_vs_many.csv",
+            "valid": "splits/two_vs_many.csv",
+            "val": "splits/two_vs_many.csv",  # Lightning uses "val"
+            "test": "splits/two_vs_many.csv",
         },
         "task_type": "regression",
         "sequence_col": "sequence",
@@ -120,10 +122,10 @@ PEER_DATASET_INFO = {
         "archive_type": "zip",
         "extracted_dir": "splits",
         "csv_files": {
-            "train": "splits/one_vs_many.csv",
-            "valid": "splits/one_vs_many.csv",
-            "val": "splits/one_vs_many.csv",  # Lightning uses "val"
-            "test": "splits/one_vs_many.csv",
+            "train": "splits/two_vs_rest.csv",
+            "valid": "splits/two_vs_rest.csv",
+            "val": "splits/two_vs_rest.csv",  # Lightning uses "val"
+            "test": "splits/two_vs_rest.csv",
         },
         "task_type": "regression",
         "sequence_col": "sequence",
@@ -136,10 +138,10 @@ PEER_DATASET_INFO = {
         "archive_type": "zip",
         "extracted_dir": "splits",
         "csv_files": {
-            "train": "splits/mixed_split.csv",
-            "valid": "splits/mixed_split.csv",
-            "val": "splits/mixed_split.csv",  # Lightning uses "val"
-            "test": "splits/mixed_split.csv",
+            "train": "splits/human_cell.csv",
+            "valid": "splits/human_cell.csv",
+            "val": "splits/human_cell.csv",  # Lightning uses "val"
+            "test": "splits/human_cell.csv",
         },
         "task_type": "regression",
         "sequence_col": "sequence",
@@ -163,10 +165,7 @@ class PeerDataset(Dataset):
         
         # Try to find existing directory with different cases
         possible_dirs = [
-            self.data_dir / task.upper(),
-            self.data_dir / task.capitalize(),
             self.data_dir / task.lower(),
-            self.data_dir / task,
         ]
         
         self.task_dir = None
@@ -175,9 +174,9 @@ class PeerDataset(Dataset):
                 self.task_dir = pdir
                 break
         
-        # If no existing directory found, create with uppercase
+        # If no existing directory found, create with lowercase
         if self.task_dir is None:
-            self.task_dir = self.data_dir / task.upper()
+            self.task_dir = self.data_dir / task.lower()
             self.task_dir.mkdir(parents=True, exist_ok=True)
         
         # Download and extract if needed
@@ -247,6 +246,9 @@ class PeerDataset(Dataset):
                 for key, value in txn.cursor():
                     try:
                         item = pickle.loads(value)
+                        # Skip metadata entries that aren't protein data
+                        if not isinstance(item, dict):
+                            continue
                         item['_key'] = key.decode()
                         data.append(item)
                     except Exception as e:
@@ -256,7 +258,8 @@ class PeerDataset(Dataset):
     
     def _load_csv_data(self) -> List[Dict]:
         """Load data from CSV file"""
-        csv_file = self.task_dir / self.info["csv_files"][self.split]
+        csv_file_path = self.info["csv_files"][self.split]
+        csv_file = self.task_dir / csv_file_path
         
         if not csv_file.exists():
             raise FileNotFoundError(f"CSV not found: {csv_file}")
@@ -264,7 +267,13 @@ class PeerDataset(Dataset):
         df = pd.read_csv(csv_file)
         
         # For FLIP datasets, we need to filter by split column
+        split_column = None
         if "split" in df.columns:
+            split_column = "split"
+        elif "set" in df.columns:
+            split_column = "set"
+            
+        if split_column is not None:
             # Map our split names to FLIP split values
             split_mapping = {
                 "train": "train",
@@ -273,7 +282,7 @@ class PeerDataset(Dataset):
                 "test": "test"
             }
             flip_split = split_mapping.get(self.split, self.split)
-            df = df[df["split"] == flip_split]
+            df = df[df[split_column] == flip_split]
             
             if len(df) == 0:
                 raise ValueError(f"No data found for split '{flip_split}' in {csv_file}")
@@ -311,9 +320,7 @@ class PeerDataset(Dataset):
             target_field = "stability_score"
         elif self.task == "solubility":
             target_field = "solubility"
-        elif self.task == "subcellular_localization":
-            target_field = "location"
-        elif self.task == "binary_localization":
+        elif self.task == "subcellular_localization" or self.task == "binary_localization":
             target_field = "localization"
         
         labels = item.get(target_field)
@@ -367,7 +374,7 @@ class PeerDataModule:
         if "num_classes" in info:
             return info["num_classes"]
         elif info.get("task_type") == "binary":
-            return 2
+            return 1  # BCEWithLogitsLoss expects 1 output for binary classification
         elif info.get("task_type") == "regression":
             return 1
         elif info.get("task_type") == "multiclass":
