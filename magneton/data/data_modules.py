@@ -13,9 +13,9 @@ from torch.utils.data import (
 from torchdata.nodes import (
     Batcher,
     BaseNode,
-    Filter,
     Loader,
     Mapper,
+    Prefetcher,
     SamplerWrapper,
 )
 
@@ -33,12 +33,14 @@ from .core import (
 )
 from .model_specific import (
     ESMCTransformNode,
-    # ProSSTTransformNode,
+    ProSSTTransformNode,
+    SaProtTransformNode
 )
 
 model_data = {
     "esmc": (ESMCTransformNode, [DataType.SEQ]),
-    # "prosst": (ProSSTTransformNode, [DataType.SEQ, DataType.STRUCT])
+    "prosst": (ProSSTTransformNode, [DataType.SEQ, DataType.STRUCT]),
+    "saprot": (SaProtTransformNode, [DataType.SEQ, DataType.STRUCT]),
 }
 
 class TASK_TYPE(StrEnum):
@@ -131,6 +133,7 @@ class MagnetonDataModule(L.LightningDataModule):
         collate_fn = node.get_collate_fn()
 
         node = Batcher(node, batch_size=self.data_config.batch_size)
+        node = Prefetcher(node, prefetch_factor=16)
         node = Mapper(node, collate_fn)
 
         return Loader(node)
@@ -178,6 +181,7 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         self.data_dir = Path(data_dir)
         self.distributed = distributed
         self.max_len = max_len
+        self.num_workers = num_workers
 
         if task in ["GO:BP", "GO:CC", "GO:MF", "EC"]:
             task = task.replace("GO:", "")
@@ -231,9 +235,12 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         )
 
         this_data_dir = self.data_dir / self.task / split
+        # Allocate half the workers to model-specific transforms, since
+        # this is typically where most of the work is.
         node = self.transform_cls(
             node,
             this_data_dir,
+            num_workers=self.num_workers // 2,
             **self.data_config.model_specific_params,
         )
         collate_fn = node.get_collate_fn(

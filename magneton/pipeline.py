@@ -10,12 +10,8 @@ from magneton.config import PipelineConfig
 from magneton.data import MagnetonDataModule
 from magneton.data.core import get_substructure_parser
 from magneton.evals.substructure_classification import classify_substructs
-<<<<<<< HEAD
 from magneton.evals.supervised_classification import run_supervised_classification
 from magneton.evals.zero_shot_evaluation import run_zero_shot_evaluation
-=======
-from magneton.evals.supervised_classification import run_supervised_classification, run_test_set_eval_dry_run
->>>>>>> c472e53... Updates for DDP training
 from magneton.training.trainer import ModelTrainer
 from magneton.training.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
 
@@ -29,7 +25,7 @@ class EmbeddingPipeline:
         print(f"Model Type: {cfg.model.model_type}")
         print(f"Model Checkpoint: {cfg.model.checkpoint}")
         print(f"Interpro Type: {cfg.data.substruct_types}")
-        print(f"Full Config:")
+        print("Full Config:")
         pprint(cfg, compact=False)
         print("============================\n")
 

@@ -126,22 +126,29 @@ class ESMCEmbedder(BaseEmbedder):
         zero_non_residue_embeds: bool = False,
     ) -> torch.Tensor:
         """Embed a batch of pre-tokenized protein sequences"""
-        # Remove CLS token
-        residue_embeddings = self._get_embedding(batch.tokenized_seq)[:, 1:, :]
+        residue_embeddings = self._get_embedding(batch.tokenized_seq)
 
-        # Make mask that's 1 at every position that corresponds to an actual
-        # residue position, 0 otherwise.
-        residue_mask = torch.ones_like(batch.tokenized_seq)
-        residue_mask.masked_fill_(
-            mask=(batch.tokenized_seq == self.model.tokenizer.pad_token_id) | (batch.tokenized_seq == self.model.tokenizer.eos_token_id),
-            value=0,
-        )
         if protein_level:
-            return pool_residue_embeddings(residue_embeddings, residue_mask=residue_mask[:, 1:])
+            # Return CLS token for protein embedding to be consistent with how ESM-2 protein level
+            # embeddings are made in `transformers` implementation of `EsmForSequenceClassification`
+            #  https://github.com/huggingface/transformers/blob/main/src/transformers/models/esm/modeling_esm.py#L1028
+            return residue_embeddings[:, 0, :]
         else:
             if zero_non_residue_embeds:
-                residue_embeddings.masked_fill_(~(residue_mask[:, 1:].unsqueeze(-1).bool()), 0)
-            return residue_embeddings
+                # Make mask that's 1 at every position that corresponds to an actual
+                # residue position, 0 otherwise.
+                residue_mask = torch.ones_like(batch.tokenized_seq)
+                mask = (batch.tokenized_seq == self.model.tokenizer.pad_token_id) \
+                       | (batch.tokenized_seq == self.model.tokenizer.eos_token_id) \
+                       | (batch.tokenized_seq == self.model.tokenizer.cls_token_id)
+                residue_mask.masked_fill_(
+                    mask=mask,
+                    value=0,
+                )
+                non_residue_mask = ~(residue_mask.unsqueeze(-1).bool())
+                residue_embeddings.masked_fill_(non_residue_mask, 0)
+            # Remove CLS token so substructure indices line up
+            return residue_embeddings[:, 1:, :]
 
     # the following two functions are deprecated for the current data module setup
     @torch.inference_mode()

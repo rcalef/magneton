@@ -10,6 +10,13 @@ Install using [`uv`](https://docs.astral.sh/uv/). Given `uv` installed using ins
 git submodule update --init
 
 uv sync --managed-python
+
+# Below is optional, but required for flash attention support
+# for SaProt and ESM2. transformers 4.56.1 updates their ESM
+# implementation to support flash attention, but EvoScale esm
+# is currently marked as transformers < 4.48.2. See:
+#  https://github.com/evolutionaryscale/esm/issues/265
+uv pip install --upgrade-package transformers transformers 
 source .venv/bin/activate
 ```
 

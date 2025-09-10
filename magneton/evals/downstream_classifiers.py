@@ -31,6 +31,7 @@ def _get_optimizer(
         "params": model.mlp.parameters(),
         "lr": config.learning_rate,
         "weight_decay": config.weight_decay,
+        "betas": (0.9, 0.98),
     })
 
     # Embedder params
@@ -39,11 +40,28 @@ def _get_optimizer(
             "params": model.embedder.parameters(),
             "lr": config.embedding_learning_rate,
             "weight_decay": config.embedding_weight_decay,
+            "betas": (0.9, 0.98),
         })
     optimizer = torch.optim.AdamW(
         optim_params,
     )
     return optimizer
+
+def parse_hidden_dims(
+    raw_dims: list[int | str],
+    embed_dim: int,
+) -> list[int]:
+    parsed_dims = []
+    for dim in raw_dims:
+        try:
+            dim = int(dim)
+        except:
+            if dim != "embed":
+                raise ValueError(f"unknown hidden dim: {dim}")
+            else:
+                dim = embed_dim
+        parsed_dims.append(dim)
+    return parsed_dims
 
 class MultiLabelMLP(L.LightningModule):
     def __init__(
@@ -75,19 +93,26 @@ class MultiLabelMLP(L.LightningModule):
 
         # Build MLP layers
         layers = []
-        prev_dim = self.embedder.get_embed_dim()
-        for hidden_dim in self.config.model.model_params["hidden_dims"]:
+        embed_dim = self.embedder.get_embed_dim()
+        hidden_dims = parse_hidden_dims(
+            raw_dims=self.config.model.model_params["hidden_dims"],
+            embed_dim=embed_dim
+        )
+
+        prev_dim = embed_dim
+        for hidden_dim in hidden_dims:
             layers.extend(
                 [
-                    nn.Linear(prev_dim, hidden_dim),
-                    nn.ReLU(),
                     nn.Dropout(self.config.model.model_params["dropout_rate"]),
+                    nn.Linear(prev_dim, hidden_dim),
+                    nn.Tanh(),
                 ]
             )
             prev_dim = hidden_dim
-
+        layers.append(nn.Dropout(self.config.model.model_params["dropout_rate"]))
         layers.append(nn.Linear(prev_dim, num_classes))
         self.mlp = nn.Sequential(*layers)
+        print(f"head model: {self.mlp}")
 
         # Choose loss function based on task type
         if task_type == "multilabel":
@@ -254,21 +279,21 @@ class ResidueClassifierHead(nn.Module):
         layers = []
         prev_dim = embed_dim
 
-        # Chop off one dim bc of linear layer at end
-        for hidden_dim in hidden_dims[:-1]:
+        for hidden_dim in hidden_dims:
             layers.extend(
                 [
+                    nn.Dropout(dropout_rate),
                     nn.Conv1d(
                         in_channels=prev_dim,
                         out_channels=hidden_dim,
                         kernel_size=5,
                         padding="same",
                     ),
-                    nn.ReLU(),
-                    nn.Dropout(dropout_rate),
+                    nn.Tanh(),
                 ]
             )
             prev_dim = hidden_dim
+        layers.append(nn.Dropout(dropout_rate))
         self.cnn = nn.Sequential(*layers)
         self.classifier = nn.Linear(prev_dim, num_classes)
 
@@ -310,12 +335,19 @@ class ResidueClassifier(L.LightningModule):
         else:
             self.embedder._unfreeze(unfreeze_all=False)
 
+        embed_dim = self.embedder.get_embed_dim()
+        hidden_dims = parse_hidden_dims(
+            raw_dims= self.config.model.model_params["hidden_dims"],
+            embed_dim=embed_dim,
+        )
         self.mlp = ResidueClassifierHead(
-            embed_dim=self.embedder.get_embed_dim(),
-            hidden_dims=self.config.model.model_params["hidden_dims"],
+            embed_dim=embed_dim,
+            hidden_dims=hidden_dims,
             num_classes=num_classes,
             dropout_rate=self.config.model.model_params["dropout_rate"],
         )
+        print("mlp head")
+        print(self.mlp)
         self.loss = nn.BCEWithLogitsLoss()
 
         # Metrics

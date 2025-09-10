@@ -7,6 +7,7 @@ from .esm_embedder import ESMEmbedder
 #from .gearnet_embedder import GearNetEmbedder, GearNetConfig
 from .esmc_embedder import ESMCEmbedder, ESMCConfig
 from .prosst_embedder import ProSSTEmbedder, ProSSTConfig
+from .saprot_embedder import SaProtEmbedder, SaProtConfig
 
 
 class EmbedderFactory:
@@ -15,6 +16,7 @@ class EmbedderFactory:
         #"gearnet": (GearNetEmbedder, GearNetConfig),
         "esmc": (ESMCEmbedder, ESMCConfig),
         "prosst": (ProSSTEmbedder, ProSSTConfig),
+        "saprot": (SaProtEmbedder, SaProtConfig)
     }
 
     @classmethod

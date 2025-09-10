@@ -1,0 +1,6 @@
+model: "saprot"
+model_params:
+  model_size: "650m"
+  weights_path: "/weka/scratch/weka/kellislab/rcalef/model_weights/SaProt_650M_AF2"
+  rep_layer: 33
+  use_flash_attn: true

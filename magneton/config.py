@@ -53,6 +53,7 @@ class TrainingConfig:
     accelerator: str = "gpu"
     strategy: str = "ddp"
     precision: str = "bf16-mixed"
+    accumulate_grad_batches: int = 1
     devices: Optional[Any] = "auto"
     additional_training_kwargs: Optional[Dict[str, Any]] = field(default_factory=dict)
     dev_run: int | None = None

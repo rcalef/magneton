@@ -3,7 +3,6 @@ import json
 
 import torch
 import lightning as L
-import torch.distributed as dist
 
 from lightning.pytorch.callbacks import (
     ModelCheckpoint,
@@ -85,24 +84,6 @@ def run_supervised_classification(
         distributed=False,
     )
 
-    # Get appropriate classifier based on whether this is a protein-level
-    # or a residue-level task.
-    if module.task_type == TASK_TYPE.PROTEIN_CLASSIFICATION:
-        classifier = MultiLabelMLP(
-            config=config,
-            task=task,
-            num_classes=module.num_classes(),
-            task_type=task_type,
-        )
-    elif module.task_type == TASK_TYPE.RESIDUE_CLASSIFICATION:
-        classifier = ResidueClassifier(
-            config=config,
-            task=task,
-            num_classes=module.num_classes(),
-        )
-    else:
-        raise ValueError(f"unknown task type: {module.task_type}")
-
 
     # Determine task type based on the task name
     task_type = "multilabel"  # Default for non-PEER tasks
@@ -134,6 +115,28 @@ def run_supervised_classification(
         mode = "max"
         filename = "{epoch}-{valid_auprc:.2f}"
 
+
+    # Get appropriate classifier based on whether this is a protein-level
+    # or a residue-level task.
+    if module.task_type == TASK_TYPE.PROTEIN_CLASSIFICATION:
+        classifier = MultiLabelMLP(
+            config=config,
+            task=task,
+            num_classes=module.num_classes(),
+            task_type=task_type,
+        )
+    elif module.task_type == TASK_TYPE.RESIDUE_CLASSIFICATION:
+        classifier = ResidueClassifier(
+            config=config,
+            task=task,
+            num_classes=module.num_classes(),
+        )
+    else:
+        raise ValueError(f"unknown task type: {module.task_type}")
+
+
+    output_dir = Path(output_dir)
+    # Set up callbacks
     callbacks = [
         ModelCheckpoint(
             dirpath=output_dir,
@@ -169,6 +172,7 @@ def run_supervised_classification(
         default_root_dir=output_dir,
         max_epochs=config.training.max_epochs,
         precision=config.training.precision,
+        accumulate_grad_batches=config.training.accumulate_grad_batches,
         val_check_interval=1.0,
         use_distributed_sampler=False,
     )
@@ -200,8 +204,10 @@ def run_supervised_classification(
         classifier,
         datamodule=module,
     )
+    # Always save a final checkpoint
+    trainer.save_checkpoint(output_dir / "final_model.ckpt")
 
-    output_dir = Path(output_dir)
+
     # Disable distributed sampler for final validations for reproducibility
     module.distributed = False
     run_final_predictions(
@@ -303,17 +309,3 @@ def run_supervised_classification(
         output_dir=output_dir,
         prefix="test",
     )
-
-def run_test_set_eval_dry_run(
-    config: PipelineConfig,
-    task: str,
-    output_dir: str,
-):
-    module = SupervisedDownstreamTaskDataModule(
-        data_config=config.data,
-        task=task,
-        data_dir=config.evaluate.data_dir,
-        model_type=config.embedding.model,
-        distributed=False,
-    )
-    _ = module.test_dataloader()

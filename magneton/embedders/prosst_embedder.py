@@ -90,21 +90,17 @@ class ProSSTEmbedder(BaseEmbedder):
             output_hidden_states=True,
         )
 
-        # Normalize along the embedding dimension, remove BOS token embedding
-        residue_embeddings = F.normalize(out.hidden_states[self.rep_layer][:, 1:], dim=-1)
+        # Normalize along the embedding dimension, don't remove BOS token embedding
+        residue_embeddings = F.normalize(out.hidden_states[self.rep_layer], dim=-1)
         if protein_level:
-            # Already masked pad tokens, now additionally mask the EOS tokens
-            attention_mask.masked_fill_(
-                mask=batch.tokenized_seq == self.tokenizer.eos_token_id,
-                value=0,
-            )
-            return pool_residue_embeddings(residue_embeddings, attention_mask[:, 1:])
+            # Mean pool everything except pad tokens, i.e. including BOS and EOS
+            return pool_residue_embeddings(residue_embeddings, attention_mask)
         else:
             if zero_non_residue_embeds:
-                non_residue_mask = ~(attention_mask[:, 1:].unsqueeze(-1).bool())
+                non_residue_mask = ~(attention_mask.unsqueeze(-1).bool())
                 residue_embeddings.masked_fill_(non_residue_mask, 0)
-            return residue_embeddings
-
+            # Remove CLS token so substructure indices line up
+            return residue_embeddings[:, 1:, :]
 
     # the following two functions are deprecated for the current data module setup
     @torch.no_grad()
