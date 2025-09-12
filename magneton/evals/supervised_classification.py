@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import torch
 import torch.nn as nn
@@ -346,10 +347,10 @@ def run_supervised_classification(
     if task in ["fold"]:
         task_type = "multiclass"
     # PEER binary classification tasks  
-    elif task in ["solubility", "binary_localization", "subcellular_localization"]:
+    elif task in ["solubility", "binary_localization"]:
         task_type = "binary" 
     # PEER regression tasks (single sequence)
-    elif task in ["fluorescence", "stability", "beta_lactamase", "aav", "gb1", "thermostability"]:
+    elif task in ["fluorescence", "stability", "beta_lactamase", "aav", "gb1", "thermostability", "subcellular_localization"]:
         task_type = "regression"
     
     classifier = MultiLabelMLP(
@@ -433,7 +434,13 @@ def run_supervised_classification(
     torch.save(all_logits, output_dir / "val_logits.pt")
     torch.save(all_labels, output_dir / "val_labels.pt")
 
-    # Calculate task-specific metrics
+    # Calculate task-specific metrics and prepare for JSON export
+    metrics_dict = {
+        "task": task,
+        "task_type": task_type,
+        "run_id": run_id,
+    }
+    
     if task_type == "multilabel":
         final_fmax = _calc_fmax(all_logits, all_labels)
         final_auprc = multilabel_average_precision(
@@ -443,11 +450,18 @@ def run_supervised_classification(
         )
         print(f"Final Fmax: {final_fmax.item():0.3f}")
         print(f"Final AUPRC: {final_auprc.item():0.3f}")
+        metrics_dict.update({
+            "fmax": float(final_fmax.item()),
+            "auprc": float(final_auprc.item()),
+        })
     elif task_type == "multiclass":
         # For multiclass, calculate accuracy
         predicted_classes = all_logits.argmax(dim=1)
         accuracy = (predicted_classes == all_labels).float().mean()
         print(f"Final Accuracy: {accuracy.item():0.3f}")
+        metrics_dict.update({
+            "accuracy": float(accuracy.item()),
+        })
     elif task_type == "binary":
         # For binary classification
         predicted_probs = all_logits.sigmoid()
@@ -456,6 +470,10 @@ def run_supervised_classification(
         auprc = AveragePrecision(task="binary")(all_logits, all_labels.long())
         print(f"Final Accuracy: {accuracy.item():0.3f}")
         print(f"Final AUPRC: {auprc.item():0.3f}")
+        metrics_dict.update({
+            "accuracy": float(accuracy.item()),
+            "auprc": float(auprc.item()),
+        })
     elif task_type == "regression":
         # For regression tasks - ensure shape compatibility
         if all_labels.dim() == 1:
@@ -467,8 +485,20 @@ def run_supervised_classification(
         print(f"Final MAE: {mae.item():0.3f}")
         print(f"Final RMSE: {rmse.item():0.3f}")
         print(f"Final Spearman: {spearman.item():0.3f}")
+        metrics_dict.update({
+            "mae": float(mae.item()),
+            "rmse": float(rmse.item()),
+            "spearman": float(spearman.item()),
+        })
     else:
         print(f"No final metrics defined for task_type: {task_type}")
+        metrics_dict["error"] = f"No metrics defined for task_type: {task_type}"
+    
+    # Save metrics to JSON file
+    metrics_json_path = Path(output_dir) / f"{task}_metrics.json"
+    with open(metrics_json_path, "w") as f:
+        json.dump(metrics_dict, f, indent=2)
+    print(f"Metrics saved to: {metrics_json_path}")
 
     if logger is not None:
         logger.experiment.finish()

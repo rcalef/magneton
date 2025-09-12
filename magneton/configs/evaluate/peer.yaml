@@ -1,2 +1,2 @@
-tasks: ["aav", "beta_lactamase", "fluorescence", "fold", "gb1", "solubility", "stability", "subcellular_localization", "thermostability", "binary_localization"]
+tasks: ["gb1", "beta_lactamase", "fluorescence", "fold", "solubility", "stability", "subcellular_localization", "thermostability", "binary_localization", "aav"]
 data_dir: "/weka/scratch/weka/kellislab/rcalef/data/magneton-data/evaluations"

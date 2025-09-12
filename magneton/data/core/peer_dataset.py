@@ -274,18 +274,26 @@ class PeerDataset(Dataset):
             split_column = "set"
             
         if split_column is not None:
-            # Map our split names to FLIP split values
-            split_mapping = {
-                "train": "train",
-                "val": "val",
-                "valid": "val",
-                "test": "test"
-            }
-            flip_split = split_mapping.get(self.split, self.split)
-            df = df[df[split_column] == flip_split]
+            # Check if there's a validation column for train/val split
+            if "validation" in df.columns and self.split in ["val", "valid"]:
+                # Filter for validation data within train set
+                df = df[(df[split_column] == "train") & (df["validation"] == True)]
+            elif "validation" in df.columns and self.split == "train":
+                # Filter for training data (excluding validation)
+                df = df[(df[split_column] == "train") & (df["validation"] != True)]
+            else:
+                # Map our split names to FLIP split values
+                split_mapping = {
+                    "train": "train",
+                    "val": "val",
+                    "valid": "val",
+                    "test": "test"
+                }
+                flip_split = split_mapping.get(self.split, self.split)
+                df = df[df[split_column] == flip_split]
             
             if len(df) == 0:
-                raise ValueError(f"No data found for split '{flip_split}' in {csv_file}")
+                raise ValueError(f"No data found for split '{self.split}' in {csv_file}")
         
         data = []
         seq_col = self.info["sequence_col"]
@@ -327,6 +335,12 @@ class PeerDataset(Dataset):
         
         # Convert labels to tensor
         if labels is not None:
+            # Handle numpy arrays (convert to Python scalar/list)
+            if hasattr(labels, 'item'):  # numpy scalar
+                labels = labels.item()
+            elif hasattr(labels, 'tolist'):  # numpy array
+                labels = labels.tolist()
+            
             if task_type == "multiclass":
                 labels = torch.tensor(labels)
             elif task_type in ["binary", "regression"]:
