@@ -257,6 +257,8 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         )
 
         this_data_dir = self.data_dir / self.task / split
+        if not this_data_dir.exists():
+            this_data_dir.mkdir(parents=True, exist_ok=True)
         # Allocate half the workers to model-specific transforms, since
         # this is typically where most of the work is.
         node = self.transform_cls(

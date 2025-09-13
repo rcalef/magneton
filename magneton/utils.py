@@ -6,7 +6,7 @@ import torch.distributed as dist
 
 def should_run_single_process() -> bool:
     no_distributed = not dist.is_initialized()
-    return no_distributed or dist.get_global_rank == 0
+    return no_distributed or dist.get_rank() == 0
 
 def get_chunk_idxs(seq_len: int, max_len: int) -> list[tuple[int, int]]:
     """Get indices for chunking long sequences"""

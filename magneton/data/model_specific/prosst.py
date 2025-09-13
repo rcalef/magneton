@@ -34,7 +34,6 @@ def precompute_struct_tokens(
     data_source: BaseNode,
     output_path: Path,
     batch_size: int = 128,
-    max_len: int = 2048,
     num_workers: int = 32,
 ):
     init_shared_pool(num_workers)
