@@ -39,6 +39,7 @@ dependencies = [
     "umap>=0.1.1",
     "umap-learn>=0.5.7",
     "wandb>=0.19.6",
+    "pytest>=8.4.2",
 ]
 classifiers = [
     "Private :: Do Not Upload",
@@ -71,7 +72,7 @@ url = "https://download.pytorch.org/whl/nightly/cpu"
 explicit = true
 
 [tool.uv.extra-build-dependencies]
-flash-attn = [{ requirement = "torch", match-runtime = true }]
+#flash-attn = [{ requirement = "torch", match-runtime = true }]
 
 [tool.uv.extra-build-variables]
 flash-attn = { FLASH_ATTENTION_SKIP_CUDA_BUILD = "TRUE" }

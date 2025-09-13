@@ -22,6 +22,23 @@ def compatibility_fixes(
         cfg.embedding.model = "esmc"
 
 
+def parse_hidden_dims(
+    raw_dims: list[int | str],
+    embed_dim: int,
+) -> list[int]:
+    parsed_dims = []
+    for dim in raw_dims:
+        try:
+            dim = int(dim)
+        except ValueError:
+            if dim != "embed":
+                raise ValueError(f"unknown hidden dim: {dim}")
+            else:
+                dim = embed_dim
+        parsed_dims.append(dim)
+    return parsed_dims
+
+
 class EmbeddingMLP(L.LightningModule):
     def __init__(
         self,
@@ -46,8 +63,13 @@ class EmbeddingMLP(L.LightningModule):
 
         # Build MLP layers
         layers = []
-        prev_dim = self.embedder.get_embed_dim()
-        for hidden_dim in self.model_config.model_params["hidden_dims"]:
+        embed_dim = self.embedder.get_embed_dim()
+        hidden_dims = parse_hidden_dims(
+            raw_dims=self.model_config.model_params["hidden_dims"],
+            embed_dim=embed_dim
+        )
+        prev_dim = embed_dim
+        for hidden_dim in hidden_dims:
             layers.extend(
                 [
                     nn.Linear(prev_dim, hidden_dim),

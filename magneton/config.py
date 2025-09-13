@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
@@ -56,7 +56,9 @@ class TrainingConfig:
     accumulate_grad_batches: int = 1
     devices: Optional[Any] = "auto"
     additional_training_kwargs: Optional[Dict[str, Any]] = field(default_factory=dict)
-    dev_run: int | None = None
+    # This is supposed to be Union[int, bool], but that causes unsolved assertion errors. See:
+    #   https://github.com/facebookresearch/hydra/issues/2738
+    dev_run: Any = False
     profile: bool = False
     loss_strategy: str = "standard"
     ewc_weight: float = 400

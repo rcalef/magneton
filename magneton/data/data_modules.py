@@ -1,4 +1,4 @@
-from enum import StrEnum
+from functools import partial
 from pathlib import Path
 
 import lightning as L
@@ -24,12 +24,18 @@ from magneton.types import DataType
 
 from .core import (
     get_core_dataset,
+    Batch,
+    #WorkshopDataModule,
+    #TASK_TO_CONFIGS,
+)
+from .evals import (
     DeepFriModule,
     FlipModule,
     PeerDataModule,
+    EVAL_TASK,
     PEER_TASK_TO_CONFIGS,
-    #WorkshopDataModule,
-    #TASK_TO_CONFIGS,
+    TASK_GRANULARITY,
+    TASK_TO_TYPE,
 )
 from .model_specific import (
     ESMCTransformNode,
@@ -42,11 +48,6 @@ model_data = {
     "prosst": (ProSSTTransformNode, [DataType.SEQ, DataType.STRUCT]),
     "saprot": (SaProtTransformNode, [DataType.SEQ, DataType.STRUCT]),
 }
-
-class TASK_TYPE(StrEnum):
-    PROTEIN_CLASSIFICATION = "protein_classification"
-    RESIDUE_CLASSIFICATION = "residue_classification"
-
 
 def filter_and_sample(
     dataset: Dataset,
@@ -177,6 +178,7 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         transform_cls, _ = model_data[model_type]
         self.transform_cls = transform_cls
         self.task = task
+        self.task_type = TASK_TO_TYPE[task]
         self.data_config = data_config
         self.data_dir = Path(data_dir)
         self.distributed = distributed
@@ -191,13 +193,13 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
                 struct_template=self.data_config.struct_template,
                 num_workers=num_workers,
             )
-            self.task_type = TASK_TYPE.PROTEIN_CLASSIFICATION
+            self.task_granularity = TASK_GRANULARITY.PROTEIN_CLASSIFICATION
         elif task in PEER_TASK_TO_CONFIGS:
             self.module = PeerDataModule(
                 task,
                 self.data_dir,
             )
-            self.task_type = TASK_TYPE.PROTEIN_CLASSIFICATION
+            self.task_granularity = TASK_GRANULARITY.PROTEIN_CLASSIFICATION
         # elif task in TASK_TO_CONFIGS:
         #     self.module = WorkshopDataModule(
         #         task,
@@ -209,7 +211,7 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
                 struct_template=self.data_config.struct_template,
                 num_workers=num_workers,
             )
-            self.task_type = TASK_TYPE.RESIDUE_CLASSIFICATION
+            self.task_granularity = TASK_GRANULARITY.RESIDUE_CLASSIFICATION
 
         else:
             raise ValueError(f"unknown eval task: {task}")
@@ -244,11 +246,14 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
             **self.data_config.model_specific_params,
         )
         collate_fn = node.get_collate_fn(
-            stack_labels=self.task_type == TASK_TYPE.PROTEIN_CLASSIFICATION,
+            stack_labels=self.task_granularity == TASK_GRANULARITY.PROTEIN_CLASSIFICATION,
         )
 
         node = Batcher(node, batch_size=self.data_config.batch_size)
         node = Mapper(node, collate_fn)
+
+        label_func = partial(set_label_type, task_type=self.task_type)
+        node = Mapper(node, label_func)
 
         return Loader(node)
 
@@ -275,3 +280,18 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
             "all",
             shuffle=False,
         )
+
+def set_label_type(
+    batch: Batch,
+    task_type: EVAL_TASK,
+) -> Batch:
+    if task_type in [EVAL_TASK.MULTICLASS]:
+        batch.labels = batch.labels.long()
+    return batch
+    # elif self.task_type == "multiclass":
+    #     labels = batch.labels.long()  # CrossEntropy expects long integers
+    # elif self.task_type == "binary":
+    #     labels = batch.labels.to(dtype=logits.dtype)
+    #     # Ensure labels match logits shape [batch_size, 1] for BCEWithLogitsLoss
+    #     if labels.dim() == 1:
+    #         labels = labels.unsqueeze(-1)

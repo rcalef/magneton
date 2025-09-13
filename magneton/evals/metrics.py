@@ -1,13 +1,21 @@
 import torch
 import torch.distributed as dist
 from torchmetrics import (
+    Accuracy,
+    AveragePrecision,
+    MeanAbsoluteError,
+    MeanSquaredError,
     Metric,
+    MetricCollection,
+    SpearmanCorrCoef,
 )
+
+from magneton.data.evals import EVAL_TASK
 
 def _calc_fmax(
     logits: torch.Tensor,
     labels: torch.Tensor,
-    num_thresh_steps: int=101,
+    num_thresh_steps: int = 101,
 ) -> torch.Tensor:
     assert ((labels == 0) | (labels == 1)).all()
 
@@ -18,10 +26,9 @@ def _calc_fmax(
 
         tp = ((preds == labels) & labels).sum()
         fp = ((preds != labels) & labels).sum()
-        tn = ((preds == labels) & ~labels).sum()
         fn = ((preds != labels) & ~labels).sum()
 
-        f1 = (2*tp) / (2*tp + fp + fn)
+        f1 = (2 * tp) / (2 * tp + fp + fn)
         f1s.append(f1)
 
     f1s = torch.stack(f1s)
@@ -58,3 +65,44 @@ class FMaxScore(Metric):
             all_labels = self.labels
 
         return _calc_fmax(all_preds, all_labels)
+
+def get_task_torchmetrics(
+    task_type: EVAL_TASK,
+    num_classes: int,
+    prefix: str,
+) -> MetricCollection:
+    print(task_type)
+    if task_type == EVAL_TASK.MULTILABEL:
+        metrics = {
+            "accuracy": Accuracy(task="multilabel", num_labels=num_classes),
+            "auprc": AveragePrecision(task="multilabel", num_labels=num_classes),
+        }
+    elif task_type == EVAL_TASK.MULTICLASS:
+        metrics = {
+            "accuracy": Accuracy(task="multiclass", num_classes=num_classes),
+        }
+    elif task_type == EVAL_TASK.BINARY:
+        metrics = {
+            "accuracy": Accuracy(task="binary"),
+            "auprc": AveragePrecision(task="binary"),
+        }
+    elif task_type == EVAL_TASK.REGRESSION:
+        metrics = {
+            "mae": MeanAbsoluteError(),
+            "rmse": MeanSquaredError(squared=False),  # RMSE instead of MSE
+            "spearman": SpearmanCorrCoef(),
+        }
+    else:
+        raise ValueError(f"unknown task type: {task_type}")
+    return MetricCollection(metrics, prefix=prefix)
+
+def format_logits_and_labels_for_metrics(
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    task_type: EVAL_TASK,
+) -> torch.Tensor:
+    if task_type == EVAL_TASK.BINARY:
+        # For binary metrics, convert labels to int (AveragePrecision expects int targets)
+        return logits.squeeze(), labels.squeeze().long()
+    else:
+        return logits, labels

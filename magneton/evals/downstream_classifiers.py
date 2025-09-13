@@ -2,23 +2,17 @@
 import torch
 import torch.nn as nn
 import lightning as L
-from torchmetrics import (
-    Accuracy,
-    AveragePrecision,
-    MeanAbsoluteError,
-    MeanSquaredError,
-    Metric,
-    MetricCollection,
-    SpearmanCorrCoef,
-)
-from torchmetrics.functional.classification import multilabel_average_precision
 
 from magneton.config import PipelineConfig, TrainingConfig
 from magneton.data.core import Batch
+from magneton.data.evals import EVAL_TASK
 from magneton.training.embedding_mlp import EmbeddingMLP
 
-from .metrics import FMaxScore
-
+from .metrics import (
+    FMaxScore,
+    format_logits_and_labels_for_metrics,
+    get_task_torchmetrics,
+)
 
 def _get_optimizer(
     model: nn.Module,
@@ -55,7 +49,7 @@ def parse_hidden_dims(
     for dim in raw_dims:
         try:
             dim = int(dim)
-        except:
+        except ValueError:
             if dim != "embed":
                 raise ValueError(f"unknown hidden dim: {dim}")
             else:
@@ -63,19 +57,44 @@ def parse_hidden_dims(
         parsed_dims.append(dim)
     return parsed_dims
 
+def _get_labels_for_loss(
+    labels: torch.Tensor,
+    task_type: EVAL_TASK,
+    logits_dtype: torch.dtype,
+) -> torch.Tensor:
+    if task_type == EVAL_TASK.MULTILABEL:
+        labels = labels.to(dtype=logits_dtype)
+    elif task_type == EVAL_TASK.MULTICLASS:
+        labels = labels.long()  # CrossEntropy expects long integers
+    elif task_type == EVAL_TASK.BINARY:
+        labels = labels.to(dtype=logits_dtype)
+        # Ensure labels match logits shape [batch_size, 1] for BCEWithLogitsLoss
+        if labels.dim() == 1:
+            labels = labels.unsqueeze(-1)
+    elif task_type == EVAL_TASK.REGRESSION:
+        labels = labels.to(dtype=logits_dtype)
+        # Ensure labels match logits shape [batch_size, 1] for regression
+        if labels.dim() == 1:
+            labels = labels.unsqueeze(-1)
+    else:
+        raise ValueError(f"Unknown task_type: {task_type}")
+    return labels
+
 class MultiLabelMLP(L.LightningModule):
     def __init__(
         self,
         config: PipelineConfig,
         task: str,
         num_classes: int,
-        task_type: str = "multilabel",
+        task_type: EVAL_TASK = EVAL_TASK.MULTILABEL,
     ):
         super().__init__()
         self.save_hyperparameters()
+        print(f"MultiLabelMLP - got task type: {task_type}")
 
         self.config = config
         self.task = task
+        self.task_type = task_type
         self.num_classes = num_classes
 
         # Load embedder
@@ -115,55 +134,29 @@ class MultiLabelMLP(L.LightningModule):
         print(f"head model: {self.mlp}")
 
         # Choose loss function based on task type
-        if task_type == "multilabel":
+        if task_type == EVAL_TASK.MULTILABEL:
             self.loss = nn.BCEWithLogitsLoss()
-        elif task_type == "multiclass":
+        elif task_type == EVAL_TASK.MULTICLASS:
             self.loss = nn.CrossEntropyLoss()
-        elif task_type == "binary":
+        elif task_type == EVAL_TASK.BINARY:
             self.loss = nn.BCEWithLogitsLoss()
-        elif task_type == "regression":
+        elif task_type == EVAL_TASK.REGRESSION:
             self.loss = nn.MSELoss()
         else:
             raise ValueError(f"Unknown task_type: {task_type}")
 
         # Metrics based on task type
-        if task_type == "multilabel":
-            self.train_metrics = MetricCollection(
-                {
-                    "accuracy": Accuracy(task="multilabel", num_labels=num_classes),
-                    "auprc": AveragePrecision(task="multilabel", num_labels=num_classes),
-                },
-                prefix="train_",
-            )
-            self.val_metrics = self.train_metrics.clone(prefix="valid_")
+        self.train_metrics = get_task_torchmetrics(
+            task_type,
+            num_classes,
+            prefix="train_"
+        )
+        self.val_metrics = self.train_metrics.clone(prefix="valid_")
+
+        if task_type == EVAL_TASK.MULTILABEL:
+            # Fmax is slightly expensive to compute, so just run on val set
             self.val_metrics.add_metrics({"fmax": FMaxScore(num_thresh_steps=101)})
-        elif task_type == "multiclass":
-            self.train_metrics = MetricCollection(
-                {
-                    "accuracy": Accuracy(task="multiclass", num_classes=num_classes),
-                },
-                prefix="train_",
-            )
-            self.val_metrics = self.train_metrics.clone(prefix="valid_")
-        elif task_type == "binary":
-            self.train_metrics = MetricCollection(
-                {
-                    "accuracy": Accuracy(task="binary"),
-                    "auprc": AveragePrecision(task="binary"),
-                },
-                prefix="train_",
-            )
-            self.val_metrics = self.train_metrics.clone(prefix="valid_")
-        elif task_type == "regression":
-            self.train_metrics = MetricCollection(
-                {
-                    "mae": MeanAbsoluteError(),
-                    "rmse": MeanSquaredError(squared=False),  # RMSE instead of MSE
-                    "spearman": SpearmanCorrCoef(),
-                },
-                prefix="train_",
-            )
-            self.val_metrics = self.train_metrics.clone(prefix="valid_")
+
 
     def forward(
         self,
@@ -177,73 +170,31 @@ class MultiLabelMLP(L.LightningModule):
 
     def training_step(self, batch: Batch, batch_idx: int) -> torch.Tensor:
         logits = self(batch)
-
-        if self.task_type == "multilabel":
-            labels = batch.labels.to(dtype=logits.dtype)
-        elif self.task_type == "multiclass":
-            labels = batch.labels.long()  # CrossEntropy expects long integers
-        elif self.task_type == "binary":
-            labels = batch.labels.to(dtype=logits.dtype)
-            # Ensure labels match logits shape [batch_size, 1] for BCEWithLogitsLoss
-            if labels.dim() == 1:
-                labels = labels.unsqueeze(-1)
-        elif self.task_type == "regression":
-            labels = batch.labels.to(dtype=logits.dtype)
-            # Ensure labels match logits shape [batch_size, 1] for regression
-            if labels.dim() == 1:
-                labels = labels.unsqueeze(-1)
-        else:
-            raise ValueError(f"Unknown task_type: {self.task_type}")
+        labels = _get_labels_for_loss(batch.labels, self.task_type, logits.dtype)
 
         loss = self.loss(logits, labels)
 
         self.log("train_loss", loss, sync_dist=True)
         if batch_idx % 50 == 0:
-            if self.task_type == "multilabel":
-                self.train_metrics(logits, batch.labels)
-            elif self.task_type == "binary":
-                # For binary metrics, convert labels to int
-                int_labels = labels.squeeze().long()
-                self.train_metrics(logits.squeeze(), int_labels)
-            else:
-                self.train_metrics(logits, labels)
+            logits, labels = format_logits_and_labels_for_metrics(
+                logits, batch.labels, self.task_type,
+            )
+            self.train_metrics(logits, labels)
             self.log_dict(self.train_metrics, sync_dist=True)
 
         return loss
 
     def validation_step(self, batch: Batch, batch_idx):
         logits = self(batch)
-
-        if self.task_type == "multilabel":
-            labels = batch.labels.to(dtype=logits.dtype)
-        elif self.task_type == "multiclass":
-            labels = batch.labels.long()
-        elif self.task_type == "binary":
-            labels = batch.labels.to(dtype=logits.dtype)
-            # Ensure labels match logits shape [batch_size, 1] for BCEWithLogitsLoss
-            if labels.dim() == 1:
-                labels = labels.unsqueeze(-1)
-        elif self.task_type == "regression":
-            labels = batch.labels.to(dtype=logits.dtype)
-            # Ensure labels match logits shape [batch_size, 1] for regression
-            if labels.dim() == 1:
-                labels = labels.unsqueeze(-1)
-        else:
-            raise ValueError(f"Unknown task_type: {self.task_type}")
+        labels = _get_labels_for_loss(batch.labels, self.task_type, logits.dtype)
 
         loss = self.loss(logits, labels)
 
         self.log("val_loss", loss, sync_dist=True)
-        if self.task_type == "multilabel":
-            self.val_metrics.update(logits, batch.labels)
-        elif self.task_type == "multiclass":
-            self.val_metrics.update(logits, labels)
-        elif self.task_type == "binary":
-            # For binary metrics, convert labels to int (AveragePrecision expects int targets)
-            int_labels = labels.squeeze().long()
-            self.val_metrics.update(logits.squeeze(), int_labels)
-        elif self.task_type == "regression":
-            self.val_metrics.update(logits, labels)
+        logits, labels = format_logits_and_labels_for_metrics(
+            logits, batch.labels, self.task_type,
+        )
+        self.val_metrics.update(logits, labels)
 
 
     def on_validation_epoch_end(self):
@@ -313,6 +264,7 @@ class ResidueClassifier(L.LightningModule):
         config: PipelineConfig,
         task: str,
         num_classes: int,
+        task_type: EVAL_TASK = EVAL_TASK.MULTILABEL,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -350,16 +302,17 @@ class ResidueClassifier(L.LightningModule):
         print(self.mlp)
         self.loss = nn.BCEWithLogitsLoss()
 
-        # Metrics
-        self.train_metrics = MetricCollection(
-            {
-                "accuracy": Accuracy(task="multilabel", num_labels=num_classes),
-                "auprc": AveragePrecision(task="multilabel", num_labels=num_classes),
-            },
-            prefix="train_",
+        # Metrics based on task type
+        self.train_metrics = get_task_torchmetrics(
+            task_type,
+            num_classes,
+            prefix="train_"
         )
         self.val_metrics = self.train_metrics.clone(prefix="valid_")
-        self.val_metrics.add_metrics({"fmax": FMaxScore(num_thresh_steps=101)})
+
+        if task_type == EVAL_TASK.MULTILABEL:
+            # Fmax is slightly expensive to compute, so just run on val set
+            self.val_metrics.add_metrics({"fmax": FMaxScore(num_thresh_steps=101)})
 
     def forward(
         self,

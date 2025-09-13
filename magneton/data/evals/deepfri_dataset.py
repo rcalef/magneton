@@ -14,7 +14,7 @@ from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
 
 from magneton.utils import should_run_single_process
-from .core_dataset import DataElement
+from magneton.data.core import DataElement
 from .utils import (
     download_afdb_files,
     parse_seqs_from_pdbs,

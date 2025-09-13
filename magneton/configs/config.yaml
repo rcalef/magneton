@@ -12,7 +12,7 @@ test_dir: "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/magneton/t
 model:
   model_type: "mlp"
   model_params:
-    hidden_dims: [256, 256, 256]
+    hidden_dims: ["embed"]
     dropout_rate: 0.1
   # checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc/checkpoints_esmc_embed_domain/epoch=3-val_f1=0.97.ckpt"
   # checkpoint: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc/checkpoints_esmc_embed_superfam/epoch=2-val_f1=0.92.ckpt"

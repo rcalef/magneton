@@ -20,7 +20,7 @@ from torch_geometric.data.data import DataEdgeAttr, DataTensorAttr
 from torch_geometric.data.storage import GlobalStorage
 from tqdm import tqdm
 
-from .core_dataset import DataElement
+from ..core.core_dataset import DataElement
 
 ssl._create_default_https_context = ssl._create_unverified_context
 torch.serialization.add_safe_globals([Data, DataEdgeAttr, DataTensorAttr, GlobalStorage])

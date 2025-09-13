@@ -29,14 +29,22 @@ from .substructure import (
 
 @dataclass(kw_only=True)
 class Batch:
+    """Collated batch of dataset entries.
+
+    - protein_ids (List[str]): UniProt IDs for all proteins in the batch.
+    - lengths (List[int]): Length in AAs for each protein.
+    - seqs (List[str] | None): AA sequences for each protein.
+    - substructures (List[List[LabeledSubstructure]] | None): For each protein,
+      a list of annotated substructures.
+    - structure_list (List[str] | None): Paths to structure (.pdb) files for each protein.
+    - labels (torch.Tensor | None): Labels for supervised tasks.
+    """
     protein_ids: List[str]
     lengths: List[int]
     seqs: List[str] | None = None
     # First element is ranges, second element is labels
     substructures: List[List[LabeledSubstructure]] | None = None
     structure_list: List[str] | None = None
-    # Mask indicating which positions actually correspond to amino acids
-    prot_mask: torch.Tensor | None = None
     labels: torch.Tensor | None = None
 
     def to(self, device: str):
@@ -68,7 +76,6 @@ class DataElement:
     # First element is ranges, second element is labels
     substructures: List[LabeledSubstructure] | None = None
     structure_path: str | None = None
-    attn_mask: torch.Tensor | None = None
     # For any downstream supervised tasks
     labels: torch.Tensor | None = None
 

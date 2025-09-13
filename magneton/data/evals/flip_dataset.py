@@ -2,17 +2,15 @@
 import logging
 import re
 from dataclasses import dataclass
-from multiprocessing import Pool
 from pathlib import Path
 from typing import Dict, Iterator, Literal, Sequence
 
 import pandas as pd
 import torch
-from pysam import FastaFile
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from .core_dataset import DataElement
+from magneton.data.core import DataElement
 from .utils import (
     download_afdb_files,
     parse_seqs_from_pdbs,
