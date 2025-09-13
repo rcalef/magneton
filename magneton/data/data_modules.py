@@ -30,8 +30,10 @@ from .core import (
 )
 from .evals import (
     DeepFriModule,
+    DeepLocModule,
     FlipModule,
     PeerDataModule,
+    ThermostabilityModule,
     EVAL_TASK,
     PEER_TASK_TO_CONFIGS,
     TASK_GRANULARITY,
@@ -205,6 +207,24 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         #         task,
         #         self.data_dir,
         #     )
+        elif task.startswith("saprot"):
+            if task == "saprot_thermostability":
+                self.module = ThermostabilityModule(
+                    self.data_dir / "saprot_processed" / "Thermostability",
+                    struct_template=self.data_config.struct_template,
+                    num_workers=num_workers,
+                )
+                self.task_granularity = TASK_GRANULARITY.PROTEIN_CLASSIFICATION
+            elif task in ["saprot_binloc", "saprot_subloc"]:
+                num_labels = 2 if task == "saprot_binloc" else 10
+                self.module = DeepLocModule(
+                    self.data_dir / "saprot_processed" / "DeepLoc",
+                    struct_template=self.data_config.struct_template,
+                    num_labels=num_labels,
+                    num_workers=num_workers,
+                )
+                self.task_granularity = TASK_GRANULARITY.PROTEIN_CLASSIFICATION
+
         elif task == "FLIP_bind":
             self.module = FlipModule(
                 data_dir=self.data_dir / "FLIP_bind",
@@ -252,9 +272,6 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         node = Batcher(node, batch_size=self.data_config.batch_size)
         node = Mapper(node, collate_fn)
 
-        label_func = partial(set_label_type, task_type=self.task_type)
-        node = Mapper(node, label_func)
-
         return Loader(node)
 
     def train_dataloader(self):
@@ -280,18 +297,3 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
             "all",
             shuffle=False,
         )
-
-def set_label_type(
-    batch: Batch,
-    task_type: EVAL_TASK,
-) -> Batch:
-    if task_type in [EVAL_TASK.MULTICLASS]:
-        batch.labels = batch.labels.long()
-    return batch
-    # elif self.task_type == "multiclass":
-    #     labels = batch.labels.long()  # CrossEntropy expects long integers
-    # elif self.task_type == "binary":
-    #     labels = batch.labels.to(dtype=logits.dtype)
-    #     # Ensure labels match logits shape [batch_size, 1] for BCEWithLogitsLoss
-    #     if labels.dim() == 1:
-    #         labels = labels.unsqueeze(-1)

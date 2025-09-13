@@ -19,10 +19,12 @@ TASK_TYPES = {
     ],
     EVAL_TASK.MULTICLASS: [
         "fold",
+        "saprot_subloc",
     ],
     EVAL_TASK.BINARY: [
         "solubility",
         "binary_localization",
+        "saprot_binloc",
     ],
     EVAL_TASK.REGRESSION: [
         "fluorescence",
@@ -32,6 +34,7 @@ TASK_TYPES = {
         "gb1",
         "thermostability",
         "subcellular_localization",
+        "saprot_thermostability",
     ]
 }
 TASK_TO_TYPE = {task: task_type for task_type, tasks in TASK_TYPES.items() for task in tasks}
