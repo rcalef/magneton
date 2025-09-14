@@ -1,19 +1,22 @@
 import bz2
 import logging
-
+import subprocess
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
+from multiprocessing import Pool
 from pathlib import Path
 
+import numpy as np
 import torch
-
+import torch.distributed as dist
+from Bio.PDB import PDBParser
+from esm.utils.misc import stack_variable_length_tensors
 from pysam import FastaFile
 from torchdata.nodes import BaseNode, ParallelMapper
-from transformers import AutoTokenizer
 from tqdm import tqdm
-
-from esm.utils.misc import stack_variable_length_tensors
+from transformers import AutoTokenizer
 
 from magneton.data.core import Batch, DataElement
 from magneton.utils import should_run_single_process
@@ -21,9 +24,11 @@ from magneton.utils import should_run_single_process
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 @dataclass(kw_only=True)
 class SaProtDataElement(DataElement):
     tokenized_sa_seq: torch.Tensor
+
 
 @dataclass(kw_only=True)
 class SaProtBatch(Batch):
@@ -34,34 +39,166 @@ class SaProtBatch(Batch):
         self.tokenized_sa_seq = self.tokenized_sa_seq.to(device)
         return self
 
+
+def extract_plddt(pdb_path: str) -> np.ndarray:
+    """
+    Extract plddt scores from pdb file.
+    Args:
+        pdb_path: Path to pdb file.
+
+    Returns:
+        plddts: plddt scores.
+    """
+
+    # Initialize parser
+    parser = PDBParser()
+
+    structure = parser.get_structure("protein", pdb_path)
+    model = structure[0]
+    chain = model["A"]
+
+    # Extract plddt scores
+    plddts = []
+    for residue in chain:
+        residue_plddts = []
+        for atom in residue:
+            plddt = atom.get_bfactor()
+            residue_plddts.append(plddt)
+
+        plddts.append(np.mean(residue_plddts))
+
+    plddts = np.array(plddts)
+    return plddts
+
+
+def mask_foldseek(
+    pdb_path: str,
+    foldseek_seq: str,
+    plddt_threshold: float = 70,
+) -> str:
+    plddts = extract_plddt(pdb_path)
+    assert len(plddts) == len(foldseek_seq), (
+        f"Length mismatch: {len(plddts)} != {len(foldseek_seq)}"
+    )
+
+    # Mask regions with plddt < threshold
+    indices = np.where(plddts < plddt_threshold)[0]
+    np_seq = np.array(list(foldseek_seq))
+    np_seq[indices] = "#"
+    return "".join(np_seq)
+
+
+def run_one_job(
+    line: str,
+    pdb_dir: str,
+) -> tuple[str, str]:
+    protein_id, aa_seq, foldseek_seq = line.strip().split("\t")[:3]
+    protein_id = protein_id.split()[0]
+    uniprot_id = protein_id.strip().split("-")[1]
+
+    fn = protein_id.replace("_A", "")
+    full_path = f"{pdb_dir}/{fn}"
+    masked_seq = mask_foldseek(full_path, foldseek_seq)
+
+    return (uniprot_id, masked_seq)
+
+
+def run_conversion(
+    foldseek_path: str,
+    output_path: str,
+    pdb_dir: str,
+    total: int | None = None,
+    nprocs: int = 32,
+):
+    process_func = partial(run_one_job, pdb_dir=pdb_dir)
+    with open(foldseek_path, "rt") as fh, Pool(nprocs) as p:
+        results = list(tqdm(p.imap_unordered(process_func, fh), total=total))
+
+    with bz2.open(output_path, "wt") as out_fh:
+        for uniprot_id, masked_seq in results:
+            out_fh.write(f">{uniprot_id}\n{masked_seq.lower()}\n")
+
+
+def precompute_foldseek_tokens(
+    data_source: BaseNode,
+    output_path: Path,
+    num_workers: int = 32,
+):
+    all_pdb_paths = []
+    for data_elem in data_source:
+        all_pdb_paths.append((data_elem.protein_id, Path(data_elem.structure_path)))
+    num_pdbs = len(all_pdb_paths)
+    logger.info(f"got {num_pdbs} pdb paths for FoldSeek tokens")
+
+    foldseek_output_path = output_path.parent / f"{output_path.stem}.tsv"
+    # Temporary directory will be deleted automatically on exit
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+
+        # Create symlinks: protein_id.pdb -> actual structure file
+        for protein_id, pdb_path in all_pdb_paths:
+            fn = pdb_path.stem
+            link_path = tmpdir_path / fn
+            link_path.symlink_to(pdb_path)
+
+        # Run foldseek
+        cmd = [
+            "foldseek",
+            "structureto3didescriptor",
+            "--gpu",
+            "1",
+            "--threads",
+            str(num_workers),
+            "--chain-name-mode",
+            "1",
+            str(tmpdir_path),
+            str(foldseek_output_path),
+        ]
+        logger.info("Running FoldSeek: %s", " ".join(cmd))
+        subprocess.run(cmd, check=True)
+        logger.info("FoldSeek completed. Processing for plddt masking.")
+        run_conversion(
+            foldseek_output_path,
+            output_path,
+            tmpdir_path,
+            total=len(all_pdb_paths),
+            nprocs=num_workers,
+        )
+
+    foldseek_output_path.unlink()
+    logger.info("FoldSeek completed and temporary directory cleaned up.")
+
+
+
 class SaProtTransformNode(ParallelMapper):
     def __init__(
         self,
         source_node: BaseNode,
         data_dir: str | Path,
-        tokenizer_path: str | Path = "/home/rcalef/storage/om_storage/model_weights/SaProt_35M_AF2",
+        tokenizer_path: str
+        | Path = "/home/rcalef/storage/om_storage/model_weights/SaProt_35M_AF2",
         num_workers: int = 2,
     ):
         if isinstance(data_dir, str):
             data_dir = Path(data_dir)
         foldseek_tokens_path = data_dir / "foldseek_tokens.fa.bz2"
-        if not foldseek_tokens_path.exists():
-            raise ValueError(f"foldseek tokens not found: {foldseek_tokens_path}")
+        # if not foldseek_tokens_path.exists():
+        #     raise ValueError(f"foldseek tokens not found: {foldseek_tokens_path}")
 
-        # TODO (rcalef): add on-the-fly computation of foldseek tokens
-        # if should_run_single_process() and not struct_tokens_path.exists():
-        #     logger.info(
-        #         f"ProSST structure tokens not found: {struct_tokens_path}\n"
-        #         "Pre-computing. If data is large (>50k), using the standalone "
-        #         "`compute_prosst_struct_toks.py` script may be better."
-        #     )
-        #     data_dir.mkdir(parents=True, exist_ok=True)
-        #     precompute_struct_tokens(source_node, struct_tokens_path)
-        # if dist.is_initialized():
-        #     dist.barrier()
+        if should_run_single_process() and not foldseek_tokens_path.exists():
+            logger.info(
+                f"FoldSeek structure tokens not found: {foldseek_tokens_path}\n"
+                "Pre-computing."
+            )
+            data_dir.mkdir(parents=True, exist_ok=True)
+            precompute_foldseek_tokens(source_node, foldseek_tokens_path)
+        if dist.is_initialized():
+            dist.barrier()
 
         logger.info(f"foldseek tokens file found at: {foldseek_tokens_path}")
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer_path, trust_remote_code=True
+        )
 
         self.foldseek_tokens = {}
         with bz2.open(foldseek_tokens_path, "rt") as fh:
@@ -71,8 +208,12 @@ class SaProtTransformNode(ParallelMapper):
                 else:
                     self.foldseek_tokens[uniprot_id] = line.strip()
 
-        logger.info(f"read foldseek structure tokens for {len(self.foldseek_tokens)} proteins")
-        super().__init__(source=source_node, map_fn=self.process_example, num_workers=num_workers)
+        logger.info(
+            f"read foldseek structure tokens for {len(self.foldseek_tokens)} proteins"
+        )
+        super().__init__(
+            source=source_node, map_fn=self.process_example, num_workers=num_workers
+        )
 
     def process_example(
         self,

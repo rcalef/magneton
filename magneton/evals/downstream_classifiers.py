@@ -90,7 +90,6 @@ class MultiLabelMLP(L.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters()
-        print(f"MultiLabelMLP - got task type: {task_type}")
 
         self.config = config
         self.task = task
@@ -195,7 +194,6 @@ class MultiLabelMLP(L.LightningModule):
             logits, batch.labels, self.task_type,
         )
         self.val_metrics.update(logits, labels)
-
 
     def on_validation_epoch_end(self):
         self.log_dict(self.val_metrics, sync_dist=True)

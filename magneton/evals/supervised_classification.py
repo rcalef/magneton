@@ -116,7 +116,7 @@ def run_supervised_classification(
             filename=filename
         ),
     ]
-    is_dev_run = config.training.dev_run or isinstance(config.training.dev_run, int)
+    is_dev_run = (type(config.training.dev_run) is int) or bool(config.training.dev_run)
     if is_dev_run:
         logger = None
     else:

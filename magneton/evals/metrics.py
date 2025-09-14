@@ -71,7 +71,6 @@ def get_task_torchmetrics(
     num_classes: int,
     prefix: str,
 ) -> MetricCollection:
-    print(task_type)
     if task_type == EVAL_TASK.MULTILABEL:
         metrics = {
             "accuracy": Accuracy(task="multilabel", num_labels=num_classes),

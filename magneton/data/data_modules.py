@@ -68,7 +68,6 @@ def filter_and_sample(
         print(f"remaining samples after length filter: {len(valid_indices)}")
 
     if distributed:
-        print("using distributed sampler")
         sampler = DistributedSampler(
             dataset=dataset,
             shuffle=shuffle,
@@ -76,7 +75,6 @@ def filter_and_sample(
             drop_last=drop_last,
         )
     else:
-        print("not using distributed sampler")
         if shuffle:
             generator = torch.Generator()
             generator.manual_seed(seed)
