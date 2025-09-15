@@ -148,8 +148,7 @@ class DeepFriModule:
         )
         dataset = df[["pdb_id", self.task, "labels"]]
 
-
-        # Add in PDB IDs
+        # Add in UniProt IDs
         pdb_id_map_path = data_dir / f"{self.task}.pdb_to_uniprot.tsv"
         pdb_id_map = self.map_pdb_ids(dataset.pdb_id, pdb_id_map_path)
         dataset = dataset.merge(pdb_id_map, on="pdb_id")

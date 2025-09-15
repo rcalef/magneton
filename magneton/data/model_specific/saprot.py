@@ -92,15 +92,13 @@ def run_one_job(
     line: str,
     pdb_dir: str,
 ) -> tuple[str, str]:
-    protein_id, aa_seq, foldseek_seq = line.strip().split("\t")[:3]
-    protein_id = protein_id.split()[0]
-    uniprot_id = protein_id.strip().split("-")[1]
+    name, _, foldseek_seq = line.strip().split("\t")[:3]
+    protein_id = name.split()[0].replace(".pdb_A", "")
 
-    fn = protein_id.replace("_A", "")
-    full_path = f"{pdb_dir}/{fn}"
+    full_path = f"{pdb_dir}/{protein_id}.pdb"
     masked_seq = mask_foldseek(full_path, foldseek_seq)
 
-    return (uniprot_id, masked_seq)
+    return (protein_id, masked_seq)
 
 
 def run_conversion(
@@ -115,8 +113,8 @@ def run_conversion(
         results = list(tqdm(p.imap_unordered(process_func, fh), total=total))
 
     with bz2.open(output_path, "wt") as out_fh:
-        for uniprot_id, masked_seq in results:
-            out_fh.write(f">{uniprot_id}\n{masked_seq.lower()}\n")
+        for protein_id, masked_seq in results:
+            out_fh.write(f">{protein_id}\n{masked_seq.lower()}\n")
 
 
 def precompute_foldseek_tokens(
@@ -131,15 +129,18 @@ def precompute_foldseek_tokens(
     logger.info(f"got {num_pdbs} pdb paths for FoldSeek tokens")
 
     foldseek_output_path = output_path.parent / f"{output_path.stem}.tsv"
+    foldseek_output_dbtype_path = output_path.parent / f"{output_path.stem}.tsv.dbtype"
+
     # Temporary directory will be deleted automatically on exit
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
 
         # Create symlinks: protein_id.pdb -> actual structure file
         for protein_id, pdb_path in all_pdb_paths:
-            fn = pdb_path.stem
-            link_path = tmpdir_path / fn
-            link_path.symlink_to(pdb_path)
+            link_path = tmpdir_path / f"{protein_id}.pdb"
+            # There are occasionally duplicates in these datasets
+            if not link_path.exists():
+                link_path.symlink_to(pdb_path)
 
         # Run foldseek
         cmd = [
@@ -166,6 +167,9 @@ def precompute_foldseek_tokens(
         )
 
     foldseek_output_path.unlink()
+    # Also cleanup foldseek's bonus output
+    foldseek_output_dbtype_path.unlink()
+
     logger.info("FoldSeek completed and temporary directory cleaned up.")
 
 
