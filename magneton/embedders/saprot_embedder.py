@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 from typing import Literal, Set
+from importlib.metadata import version
+from packaging.version import parse
 
 import torch
 import torch.nn.functional as F
-
 from torch.nn import CrossEntropyLoss
-from transformers import EsmTokenizer, EsmForMaskedLM
+from transformers import EsmForMaskedLM, EsmTokenizer
 
 from magneton.data.model_specific.saprot import SaProtBatch
 from magneton.types import DataType
@@ -15,6 +16,7 @@ from .utils import pool_residue_embeddings
 
 SAPROT_35M = "35m"
 SAPROT_650M = "650m"
+
 
 @dataclass(kw_only=True)
 class SaProtConfig(BaseConfig):
@@ -42,6 +44,13 @@ class SaProtEmbedder(BaseEmbedder):
         self.model = EsmForMaskedLM.from_pretrained(config.weights_path)
         if config.use_flash_attn:
             self.model.config._attn_implementation = "flash_attention_2"
+            # Flash attention support was only added in 4.56.1
+            installed_version_str = version("transformers")
+            installed_version = parse(installed_version_str)
+            required_version = parse("4.56.1")
+            if installed_version < required_version:
+                raise RuntimeError(f"flash attention with SaProt requires transformers >= 4.56.1, found: {installed_version_str}")
+
 
         if frozen:
             self.model = self.model.eval()
@@ -74,8 +83,8 @@ class SaProtEmbedder(BaseEmbedder):
             # Returned hidden states are actually one more than the
             # number of blocks since there's a final layer norm after
             # the transformer stack that adds one more set of hidden states.
-            if self.rep_layer < num_blocks-1:
-                for block in self.model.esm.encoder.layer[self.rep_layer-1:]:
+            if self.rep_layer < num_blocks - 1:
+                for block in self.model.esm.encoder.layer[self.rep_layer - 1 :]:
                     for param in block.parameters():
                         param.requires_grad = False
             if self.rep_layer < num_blocks:
@@ -112,20 +121,24 @@ class SaProtEmbedder(BaseEmbedder):
             attention_mask=attention_mask,
             output_hidden_states=True,
         )
-        residue_embeddings =  F.normalize(out.hidden_states[self.rep_layer], dim=-1)
+        residue_embeddings = F.normalize(out.hidden_states[self.rep_layer], dim=-1)
 
         # Match SaProt code by excluding CLS
         residue_mask = torch.ones_like(batch.tokenized_sa_seq)
-        mask = (batch.tokenized_sa_seq == self.tokenizer.pad_token_id) \
-               | (batch.tokenized_sa_seq == self.tokenizer.eos_token_id) \
-               | (batch.tokenized_sa_seq == self.tokenizer.cls_token_id)
+        mask = (
+            (batch.tokenized_sa_seq == self.tokenizer.pad_token_id)
+            | (batch.tokenized_sa_seq == self.tokenizer.eos_token_id)
+            | (batch.tokenized_sa_seq == self.tokenizer.cls_token_id)
+        )
         residue_mask.masked_fill_(
             mask=mask,
             value=0,
         )
 
         if protein_level:
-            return pool_residue_embeddings(residue_embeddings, residue_mask=residue_mask)
+            return pool_residue_embeddings(
+                residue_embeddings, residue_mask=residue_mask
+            )
         else:
             if zero_non_residue_embeds:
                 # Make mask that's 1 at every position that corresponds to an actual
@@ -147,14 +160,13 @@ class SaProtEmbedder(BaseEmbedder):
         """Embed multiple protein sequences"""
         pass
 
-
     def calc_original_loss(
         self,
         batch: SaProtBatch,
         reduction: str = "mean",
     ) -> torch.Tensor:
         """NOTE: this modifies the original tokenized seq tensor, call last."""
-        #TODO(rcalef): implement this
+        # TODO(rcalef): implement this
         return 0
         # seqs = batch.tokenized_seq
 
@@ -199,7 +211,8 @@ def get_seq_mask(
     mask_prob: float = 0.15,
 ) -> torch.Tensor:
     probs = torch.rand(
-        tokenized_seqs.shape, generator=rng,
+        tokenized_seqs.shape,
+        generator=rng,
     ).to(tokenized_seqs.device)
     mask = (
         (probs < mask_prob)

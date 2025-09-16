@@ -1,7 +1,6 @@
-
+import lightning as L
 import torch
 import torch.nn as nn
-import lightning as L
 
 from magneton.config import PipelineConfig, TrainingConfig
 from magneton.data.core import Batch
@@ -14,6 +13,7 @@ from .metrics import (
     get_task_torchmetrics,
 )
 
+
 def _get_optimizer(
     model: nn.Module,
     config: TrainingConfig,
@@ -21,25 +21,30 @@ def _get_optimizer(
 ) -> torch.optim.Optimizer:
     optim_params = []
     # MLP params
-    optim_params.append({
-        "params": model.mlp.parameters(),
-        "lr": config.learning_rate,
-        "weight_decay": config.weight_decay,
-        "betas": (0.9, 0.98),
-    })
+    optim_params.append(
+        {
+            "params": model.mlp.parameters(),
+            "lr": config.learning_rate,
+            "weight_decay": config.weight_decay,
+            "betas": (0.9, 0.98),
+        }
+    )
 
     # Embedder params
     if not frozen_embedder:
-        optim_params.append({
-            "params": model.embedder.parameters(),
-            "lr": config.embedding_learning_rate,
-            "weight_decay": config.embedding_weight_decay,
-            "betas": (0.9, 0.98),
-        })
+        optim_params.append(
+            {
+                "params": model.embedder.parameters(),
+                "lr": config.embedding_learning_rate,
+                "weight_decay": config.embedding_weight_decay,
+                "betas": (0.9, 0.98),
+            }
+        )
     optimizer = torch.optim.AdamW(
         optim_params,
     )
     return optimizer
+
 
 def parse_hidden_dims(
     raw_dims: list[int | str],
@@ -56,6 +61,7 @@ def parse_hidden_dims(
                 dim = embed_dim
         parsed_dims.append(dim)
     return parsed_dims
+
 
 def _get_labels_for_loss(
     labels: torch.Tensor,
@@ -79,6 +85,7 @@ def _get_labels_for_loss(
     else:
         raise ValueError(f"Unknown task_type: {task_type}")
     return labels
+
 
 class MultiLabelMLP(L.LightningModule):
     def __init__(
@@ -113,8 +120,7 @@ class MultiLabelMLP(L.LightningModule):
         layers = []
         embed_dim = self.embedder.get_embed_dim()
         hidden_dims = parse_hidden_dims(
-            raw_dims=self.config.model.model_params["hidden_dims"],
-            embed_dim=embed_dim
+            raw_dims=self.config.model.model_params["hidden_dims"], embed_dim=embed_dim
         )
 
         prev_dim = embed_dim
@@ -146,16 +152,13 @@ class MultiLabelMLP(L.LightningModule):
 
         # Metrics based on task type
         self.train_metrics = get_task_torchmetrics(
-            task_type,
-            num_classes,
-            prefix="train_"
+            task_type, num_classes, prefix="train_"
         )
         self.val_metrics = self.train_metrics.clone(prefix="valid_")
 
         if task_type == EVAL_TASK.MULTILABEL:
             # Fmax is slightly expensive to compute, so just run on val set
             self.val_metrics.add_metrics({"fmax": FMaxScore(num_thresh_steps=101)})
-
 
     def forward(
         self,
@@ -176,7 +179,9 @@ class MultiLabelMLP(L.LightningModule):
         self.log("train_loss", loss, sync_dist=True)
         if batch_idx % 50 == 0:
             logits, labels = format_logits_and_labels_for_metrics(
-                logits, batch.labels, self.task_type,
+                logits,
+                batch.labels,
+                self.task_type,
             )
             self.train_metrics(logits, labels)
             self.log_dict(self.train_metrics, sync_dist=True)
@@ -191,7 +196,9 @@ class MultiLabelMLP(L.LightningModule):
 
         self.log("val_loss", loss, sync_dist=True)
         logits, labels = format_logits_and_labels_for_metrics(
-            logits, batch.labels, self.task_type,
+            logits,
+            batch.labels,
+            self.task_type,
         )
         self.val_metrics.update(logits, labels)
 
@@ -199,7 +206,7 @@ class MultiLabelMLP(L.LightningModule):
         self.log_dict(self.val_metrics, sync_dist=True)
         return super().on_validation_epoch_end()
 
-    def predict_step(self, batch: Batch, batch_idx: int, dataloader_idx: int=0):
+    def predict_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0):
         logits = self(batch)
         labels = batch.labels
 
@@ -214,6 +221,7 @@ class MultiLabelMLP(L.LightningModule):
 
     def name(self) -> str:
         return f"{self.task}-mlp"
+
 
 class ResidueClassifierHead(nn.Module):
     def __init__(
@@ -256,6 +264,7 @@ class ResidueClassifierHead(nn.Module):
         x = x.transpose(1, 2)
         return self.classifier(x)
 
+
 class ResidueClassifier(L.LightningModule):
     def __init__(
         self,
@@ -275,7 +284,6 @@ class ResidueClassifier(L.LightningModule):
         model = EmbeddingMLP.load_from_checkpoint(
             self.config.evaluate.model_checkpoint,
             load_pretrained_fisher=self.config.evaluate.has_fisher_info,
-
         )
         self.embedder = model.embedder
 
@@ -287,7 +295,7 @@ class ResidueClassifier(L.LightningModule):
 
         embed_dim = self.embedder.get_embed_dim()
         hidden_dims = parse_hidden_dims(
-            raw_dims= self.config.model.model_params["hidden_dims"],
+            raw_dims=self.config.model.model_params["hidden_dims"],
             embed_dim=embed_dim,
         )
         self.mlp = ResidueClassifierHead(
@@ -302,9 +310,7 @@ class ResidueClassifier(L.LightningModule):
 
         # Metrics based on task type
         self.train_metrics = get_task_torchmetrics(
-            task_type,
-            num_classes,
-            prefix="train_"
+            task_type, num_classes, prefix="train_"
         )
         self.val_metrics = self.train_metrics.clone(prefix="valid_")
 
@@ -360,7 +366,7 @@ class ResidueClassifier(L.LightningModule):
         self.log_dict(self.val_metrics)
         return super().on_validation_epoch_end()
 
-    def predict_step(self, batch: Batch, batch_idx: int, dataloader_idx: int=0):
+    def predict_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0):
         logits = self(batch)
         labels = batch.labels
 

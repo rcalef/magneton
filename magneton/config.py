@@ -4,11 +4,13 @@ from typing import Any, Dict, List, Optional, Union
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
+
 @dataclass
 class EmbeddingConfig:
     _target_: str = "magneton.config.EmbeddingConfig"
     model: str = MISSING
     model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
+
 
 @dataclass
 class EvalConfig:
@@ -18,6 +20,7 @@ class EvalConfig:
     model_checkpoint: str = MISSING
     # Whether or not the saved model used EWC loss
     has_fisher_info: bool = False
+
 
 @dataclass
 class DataConfig:
@@ -34,6 +37,7 @@ class DataConfig:
     num_loader_workers: int = 4
     model_specific_params: dict[str, Any] = field(default_factory=dict)
 
+
 @dataclass
 class ModelConfig:
     _target_: str = "magneton.config.ModelConfig"
@@ -41,6 +45,7 @@ class ModelConfig:
     model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
     checkpoint: str = MISSING
     frozen_embedder: bool = True
+
 
 @dataclass
 class TrainingConfig:
@@ -63,6 +68,7 @@ class TrainingConfig:
     loss_strategy: str = "standard"
     ewc_weight: float = 400
 
+
 @dataclass
 class PipelineConfig:
     _target_: str = "magneton.config.PipelineConfig"
@@ -76,6 +82,7 @@ class PipelineConfig:
     model: ModelConfig = MISSING
     training: Optional[TrainingConfig] = None
     evaluate: Optional[EvalConfig] = None
+
 
 cs = ConfigStore.instance()
 cs.store(name="base_pipeline", node=PipelineConfig)
