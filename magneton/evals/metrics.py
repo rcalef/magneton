@@ -12,6 +12,7 @@ from torchmetrics import (
 
 from magneton.data.evals import EVAL_TASK
 
+
 def _calc_fmax(
     logits: torch.Tensor,
     labels: torch.Tensor,
@@ -57,7 +58,7 @@ class FMaxScore(Metric):
         # Probably a better way to handle this, but the list of
         # tensors is already torch.cat'd if running in distributed
         # setting.
-        if not dist.is_initialized:
+        if isinstance(self.preds, list):
             all_preds = torch.cat(self.preds)
             all_labels = torch.cat(self.labels)
         else:
@@ -65,6 +66,7 @@ class FMaxScore(Metric):
             all_labels = self.labels
 
         return _calc_fmax(all_preds, all_labels)
+
 
 def get_task_torchmetrics(
     task_type: EVAL_TASK,
@@ -94,6 +96,7 @@ def get_task_torchmetrics(
     else:
         raise ValueError(f"unknown task type: {task_type}")
     return MetricCollection(metrics, prefix=prefix)
+
 
 def format_logits_and_labels_for_metrics(
     logits: torch.Tensor,

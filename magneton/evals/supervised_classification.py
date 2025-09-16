@@ -1,10 +1,8 @@
 import json
-
 from pathlib import Path
 
-import torch
 import lightning as L
-
+import torch
 from lightning.pytorch.callbacks import (
     ModelCheckpoint,
 )
@@ -23,8 +21,13 @@ from magneton.data.evals import (
     TASK_TO_TYPE,
 )
 
-from .metrics import format_logits_and_labels_for_metrics, get_task_torchmetrics
 from .downstream_classifiers import MultiLabelMLP, ResidueClassifier
+from .metrics import (
+    FMaxScore,
+    format_logits_and_labels_for_metrics,
+    get_task_torchmetrics,
+)
+
 
 def run_final_predictions(
     model: MultiLabelMLP,
@@ -36,15 +39,12 @@ def run_final_predictions(
     prefix: str,
 ):
     final_predictions = trainer.predict(
-        model=model,
-        dataloaders=loader,
-        return_predictions=True
+        model=model, dataloaders=loader, return_predictions=True
     )
 
     all_logits, all_labels = zip(*final_predictions)
     all_logits = torch.cat(all_logits)
     all_labels = torch.cat(all_labels)
-
 
     # Make another pass through dataset to collect IDs
     protein_ids = []
@@ -62,6 +62,11 @@ def run_final_predictions(
     # Calculate task-specific metrics and prepare for JSON export
     task_type = TASK_TO_TYPE[task]
     metrics = get_task_torchmetrics(task_type, num_classes, prefix=f"{prefix}_")
+    if task_type == EVAL_TASK.MULTILABEL:
+        # Fmax isn't included by default since it's too expensive to compute
+        # as a metric on every iteration
+        metrics.add_metrics({"fmax": FMaxScore(num_thresh_steps=101)})
+
     metrics_dict = {
         "task": task,
         "task_type": task_type,
@@ -72,7 +77,9 @@ def run_final_predictions(
         all_labels,
         task_type,
     )
-    metrics_dict.update({k: v.item() for k,v in metrics(all_logits, all_labels).items()})
+    metrics_dict.update(
+        {k: v.item() for k, v in metrics(all_logits, all_labels).items()}
+    )
 
     print(f"{prefix} final metrics: {metrics_dict}")
 
@@ -81,6 +88,7 @@ def run_final_predictions(
     with open(metrics_json_path, "w") as f:
         json.dump(metrics_dict, f, indent=2)
     print(f"Metrics saved to: {metrics_json_path}")
+
 
 def run_supervised_classification(
     config: PipelineConfig,
@@ -113,7 +121,7 @@ def run_supervised_classification(
             monitor=monitor_metric,
             mode="max",
             save_top_k=3,
-            filename=filename
+            filename=filename,
         ),
     ]
     is_dev_run = (type(config.training.dev_run) is int) or bool(config.training.dev_run)
@@ -152,27 +160,36 @@ def run_supervised_classification(
     )
 
     if module.task_granularity == TASK_GRANULARITY.PROTEIN_CLASSIFICATION:
-        classifier = MultiLabelMLP(
+        classifier_cls = MultiLabelMLP
+    elif module.task_granularity == TASK_GRANULARITY.RESIDUE_CLASSIFICATION:
+        classifier_cls = ResidueClassifier
+    else:
+        raise ValueError(f"unknown task type: {module.task_type}")
+
+    # Either train a new downstream classifier head, or load an existing checkpoint
+    final_ckpt_path = output_dir / "final_model.ckpt"
+    if not config.evaluate.final_prediction_only:
+        classifier = classifier_cls(
             config=config,
             task=task,
             num_classes=module.num_classes(),
             task_type=task_type,
         )
-    elif module.task_granularity == TASK_GRANULARITY.RESIDUE_CLASSIFICATION:
-        classifier = ResidueClassifier(
-            config=config,
-            task=task,
-            num_classes=module.num_classes(),
-        )
-    else:
-        raise ValueError(f"unknown task type: {module.task_type}")
 
-    trainer.fit(
-        classifier,
-        datamodule=module,
-    )
-    # Always save a final checkpoint
-    trainer.save_checkpoint(output_dir / "final_model.ckpt")
+        trainer.fit(
+            classifier,
+            datamodule=module,
+        )
+        # Always save a final checkpoint
+        trainer.save_checkpoint(final_ckpt_path)
+    else:
+        if not final_ckpt_path.exists():
+            raise FileNotFoundError(f"No final checkpoint fount at: {final_ckpt_path}")
+
+        classifier = classifier_cls.load_from_checkpoint(
+            final_ckpt_path,
+        )
+
 
     # Disable distributed sampler for final validations for reproducibility
     module.distributed = False

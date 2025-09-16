@@ -18,6 +18,7 @@ class EvalConfig:
     tasks: List[str] = MISSING
     data_dir: str = MISSING
     model_checkpoint: str = MISSING
+    final_prediction_only: bool = False
     # Whether or not the saved model used EWC loss
     has_fisher_info: bool = False
 
