@@ -136,7 +136,7 @@ class EmbeddingMLP(L.LightningModule):
                     if params.requires_grad:
                         fisher_params += params.grad.detach().pow_(2)
 
-                self.fisher_samples += len(batch.tokenized_seq)
+                self.fisher_samples += len(batch.protein_ids)
                 self.zero_grad()
             return orig_loss
         else:

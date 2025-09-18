@@ -13,7 +13,6 @@ import torch
 import torch.distributed as dist
 from Bio.PDB import PDBParser
 from esm.utils.misc import stack_variable_length_tensors
-from pysam import FastaFile
 from torchdata.nodes import BaseNode, ParallelMapper
 from tqdm import tqdm
 from transformers import AutoTokenizer
@@ -28,11 +27,13 @@ logger = logging.getLogger(__name__)
 @dataclass(kw_only=True)
 class SaProtDataElement(DataElement):
     tokenized_sa_seq: torch.Tensor
+    struct_seq: str
 
 
 @dataclass(kw_only=True)
 class SaProtBatch(Batch):
     tokenized_sa_seq: torch.Tensor
+    struct_seqs: list[str]
 
     def to(self, device: str):
         super().to(device)
@@ -173,7 +174,6 @@ def precompute_foldseek_tokens(
     logger.info("FoldSeek completed and temporary directory cleaned up.")
 
 
-
 class SaProtTransformNode(ParallelMapper):
     def __init__(
         self,
@@ -234,9 +234,11 @@ class SaProtTransformNode(ParallelMapper):
         return SaProtDataElement(
             protein_id=x.protein_id,
             length=x.length,
-            tokenized_sa_seq=torch.tensor(self.tokenizer.encode(sa_seq)),
+            seq=x.seq,
             substructures=x.substructures,
             labels=x.labels,
+            tokenized_sa_seq=torch.tensor(self.tokenizer.encode(sa_seq)),
+            struct_seq=foldseek_toks,
         )
 
     def get_collate_fn(
@@ -260,6 +262,8 @@ def saprot_collate(
     """
     protein_ids = [x.protein_id for x in entries]
     lengths = [x.length for x in entries]
+    seqs = [x.seq for x in entries]
+    struct_seqs = [x.struct_seq for x in entries]
 
     padded_sa_seq_tensor = stack_variable_length_tensors(
         [x.tokenized_sa_seq for x in entries],
@@ -281,7 +285,9 @@ def saprot_collate(
     return SaProtBatch(
         protein_ids=protein_ids,
         lengths=lengths,
-        tokenized_sa_seq=padded_sa_seq_tensor,
         substructures=substructs,
         labels=labels,
+        seqs=seqs,
+        tokenized_sa_seq=padded_sa_seq_tensor,
+        struct_seqs=struct_seqs,
     )

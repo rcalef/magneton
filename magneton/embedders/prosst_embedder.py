@@ -1,16 +1,15 @@
-
 from dataclasses import dataclass, field
 
 import torch
 import torch.nn.functional as F
-
+from torch.nn import CrossEntropyLoss
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 from magneton.data.model_specific.prosst import ProSSTBatch
 from magneton.types import DataType
 
-from .base_embedder import BaseConfig,  BaseEmbedder
-from .utils import pool_residue_embeddings
+from .base_embedder import BaseConfig, BaseEmbedder
+from .utils import get_seq_mask, pool_residue_embeddings
 
 
 @dataclass
@@ -19,6 +18,7 @@ class ProSSTConfig(BaseConfig):
     structure_vocab_size: int = field(kw_only=True, default=2048)
     # Default to final layer hidden states
     rep_layer: int = field(kw_only=True, default=12)
+    mask_prob: float = 0.15
 
 
 class ProSSTEmbedder(BaseEmbedder):
@@ -31,9 +31,14 @@ class ProSSTEmbedder(BaseEmbedder):
 
         self.vocab_size = config.structure_vocab_size
         self.rep_layer = config.rep_layer
+        self.mask_prob = config.mask_prob
 
-        self.model = AutoModelForMaskedLM.from_pretrained(config.weights_path, trust_remote_code=True)
-        self.tokenizer = AutoTokenizer.from_pretrained(config.weights_path, trust_remote_code=True)
+        self.model = AutoModelForMaskedLM.from_pretrained(
+            config.weights_path, trust_remote_code=True
+        )
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            config.weights_path, trust_remote_code=True
+        )
         self.embed_dim = self.model.get_output_embeddings().in_features
 
         if frozen:
@@ -60,8 +65,8 @@ class ProSSTEmbedder(BaseEmbedder):
             # Freeze layers that do not contribute to the embeddings
             # that we're extracting to prevent DDP exceptions.
             num_blocks = len(self.model.prosst.encoder.layer)
-            if self.rep_layer != num_blocks-1:
-                for block in self.model.prosst.encoder.layer[self.rep_layer+1:]:
+            if self.rep_layer != num_blocks - 1:
+                for block in self.model.prosst.encoder.layer[self.rep_layer + 1 :]:
                     for param in block.parameters():
                         param.requires_grad = False
             for param in self.model.cls.parameters():
@@ -118,8 +123,56 @@ class ProSSTEmbedder(BaseEmbedder):
         batch: ProSSTBatch,
         reduction: str = "mean",
     ) -> torch.Tensor:
-        """NOTE: this modifies the original tokenized seq tensor, call last."""
-        return 0
+        """Calculate ProSST's original MLM training loss.
+
+        ProSST's MLM loss is a structure-conditioned sequence MLM objective, i.e. we
+        mask amino acids but leave the structure tokens unnoised.
+        """
+        seqs = batch.tokenized_seq
+
+        ignore_tokens = torch.tensor(
+            [
+                self.tokenizer.pad_token_id,
+                self.tokenizer.cls_token_id,
+                self.tokenizer.eos_token_id,
+            ],
+            device=seqs.device,
+        )
+
+        mask = get_seq_mask(
+            seqs,
+            ignore_tokens=ignore_tokens,
+            rng=self.rng,
+            mask_prob=self.mask_prob,
+        )
+        masked_idxs = torch.where(mask.reshape(-1))[0]
+
+        # Store original mask values for loss calculation
+        orig_values_flat = seqs.reshape(-1)[masked_idxs]
+
+        masked_seqs = seqs.masked_fill(mask, self.tokenizer.mask_token_id)
+
+        attention_mask = torch.ones_like(batch.tokenized_seq)
+        attention_mask[batch.tokenized_seq == self.tokenizer.pad_token_id] = 0
+
+
+
+        # Not fully sure why, but the structure tokens come through as inference mode
+        # tensors. Maybe lightning is working some magic on the train side to make
+        # sure this doesn't happen normally
+        struct_toks = batch.tokenized_struct.clone().detach()
+
+        logits = self.model(
+            input_ids=masked_seqs,
+            ss_input_ids=struct_toks,
+            attention_mask=attention_mask,
+        ).logits
+
+        # Flatten logits along batch dim and get logits for just masked positions
+        masked_pos_logits = logits.reshape(-1, logits.shape[-1])[masked_idxs]
+        return CrossEntropyLoss(reduction=reduction)(
+            masked_pos_logits, orig_values_flat
+        )
 
     def get_embed_dim(self):
         return self.embed_dim

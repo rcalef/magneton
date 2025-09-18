@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from typing import Literal, Set
 
+import numpy as np
 import torch
+from torch.nn import CrossEntropyLoss
 
 from magneton.data.model_specific.saprot import SaProtBatch
 from magneton.types import DataType
@@ -55,31 +57,54 @@ class SaProtEmbedder(ESMBaseEmbedder):
         batch: SaProtBatch,
         reduction: str = "mean",
     ) -> torch.Tensor:
-        """NOTE: this modifies the original tokenized seq tensor, call last."""
-        # TODO(rcalef): implement this
-        return 0
-        # seqs = batch.tokenized_seq
+        """Calculate SaProt's MLM loss for a batch.
 
-        # mask = get_seq_mask(
-        #     seqs,
-        #     pad_token_id=self.model.tokenizer.pad_token_id,
-        #     bos_token_id=self.model.tokenizer.bos_token_id,
-        #     eos_token_id=self.model.tokenizer.eos_token_id,
-        #     rng=self.rng,
-        #     mask_prob=self.mask_prob,
-        # )
-        # masked_idxs = torch.where(mask.reshape(-1))[0]
+        SaProt's MLM loss is slightly different from normal, instead of doing MLM on the
+        final token space (i.e. the structure-aware tokens), they only mask the amino
+        acid and leave the structure token information present. Since their tokens are
+        the cross product of amino acid tokens and structure tokens, it's easiest to do
+        this by just recreating the tokens from the original sequence strings.
 
-        # # Store original mask values for loss calculation
-        # orig_values_flat = seqs.reshape(-1)[masked_idxs]
+        Note: if this seems to be a bottleneck when training EWC models, we can push this
+        into the dataloader instead.
+        """
 
-        # seqs = seqs.masked_fill(mask, self.model.tokenizer.mask_token_id)
+        # Perform the amino acid-level masking, keeping track of which indices we've masked
+        masked_seqs = []
+        masked_row_idxs = []
+        masked_col_idxs = []
+        for row_idx, (aa_seq, struct_seq) in enumerate(zip(batch.seqs, batch.struct_seqs)):
+            probs = torch.rand(len(aa_seq), generator=self.rng)
+            this_masked_seq = []
+            for col_idx, (aa, struct_tok, prob) in enumerate(zip(aa_seq, struct_seq, probs)):
+                if prob < self.mask_prob:
+                    aa = "#"
+                    # +1 to col idx for the CLS token that will be added
+                    masked_row_idxs.append(row_idx)
+                    masked_col_idxs.append(col_idx+1)
+                this_masked_seq.append(f"{aa}{struct_tok}")
+            masked_seqs.append("".join(this_masked_seq))
 
-        # logits = self.model.forward(seqs).sequence_logits
+        # Tokenize the masked sequences.
+        masked_tokenized_sa_seq = self.tokenizer(masked_seqs, return_tensors="pt", padding=True)["input_ids"]
+        masked_tokenized_sa_seq = masked_tokenized_sa_seq.to(
+            device=batch.tokenized_sa_seq.device,
+            dtype=batch.tokenized_sa_seq.dtype,
+        )
 
-        # # Flatten logits along batch dim and get logits for just masked positions
-        # masked_pos_logits = logits.reshape(-1, logits.shape[-1])[masked_idxs]
-        # return CrossEntropyLoss(reduction=reduction)(masked_pos_logits, orig_values_flat)
+        # Map our masked indices which are (row, col) to flattened indices in the tokenized tensor
+        flat_masked_idxs = torch.from_numpy(
+            np.ravel_multi_index([masked_row_idxs, masked_col_idxs], masked_tokenized_sa_seq.shape)
+        ).to(device=masked_tokenized_sa_seq.device)
+
+        # Store original mask values for loss calculation
+        orig_values_flat = batch.tokenized_sa_seq.reshape(-1)[flat_masked_idxs]
+
+        logits = self.model.forward(masked_tokenized_sa_seq).logits
+
+        # Flatten logits along batch dim and get logits for just masked positions
+        masked_pos_logits = logits.reshape(-1, logits.shape[-1])[flat_masked_idxs]
+        return CrossEntropyLoss(reduction=reduction)(masked_pos_logits, orig_values_flat)
 
     def model_name(self) -> str:
         return f"SaProt-{self.model_size}"
