@@ -55,19 +55,19 @@ class ModelTrainer:
         ]
 
         # Set up logger
-        if self.config.dev_run is not None:
+        is_dev_run = (type(self.config.dev_run) is int) or bool(self.config.dev_run)
+        if is_dev_run:
             logger = CSVLogger(
                 save_dir=self.save_dir,
                 name="csv_logger",
             )
-            dev_run = self.config.dev_run
         else:
             logger = WandbLogger(
                 entity="magneton",
                 project="magneton",
                 name=self.run_id,
             )
-            dev_run = False
+
         if self.config.profile:
             profiler = AdvancedProfiler(
                 dirpath=self.save_dir,
@@ -86,7 +86,7 @@ class ModelTrainer:
             default_root_dir=self.save_dir,
             max_epochs=self.config.max_epochs,
             profiler=profiler,
-            fast_dev_run=dev_run,
+            fast_dev_run=self.config.dev_run,
             precision=self.config.precision,
             **self.config.additional_training_kwargs,
         )

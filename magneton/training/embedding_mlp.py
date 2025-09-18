@@ -128,13 +128,13 @@ class EmbeddingMLP(L.LightningModule):
             with torch.inference_mode(False), torch.set_grad_enabled(True):
                 orig_loss = self.embedder.calc_original_loss(batch, reduction="sum")
                 orig_loss.backward()
-                #self.manual_backward(orig_loss)
 
                 for (fisher_params, params) in zip(
                     self.fisher_state,
                     self.embedder.model.parameters()
                 ):
-                    fisher_params += params.grad.detach().pow_(2)
+                    if params.requires_grad:
+                        fisher_params += params.grad.detach().pow_(2)
 
                 self.fisher_samples += len(batch.tokenized_seq)
                 self.zero_grad()
@@ -284,6 +284,7 @@ class EmbeddingMLP(L.LightningModule):
                 self.embedder.parameters(),
             )
 
+            self.log("substruct_loss", loss, sync_dist=True)
             ewc_loss = ((curr_params_vec - self.original_params).pow_(2) * self.fisher_info).sum()
             loss += self.ewc_weight * ewc_loss
             self.log("ewc_loss", ewc_loss, sync_dist=True)

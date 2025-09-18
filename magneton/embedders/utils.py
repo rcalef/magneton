@@ -28,3 +28,19 @@ def pool_residue_embeddings(
 
     # Divide the summed embeddings by the sequence lengths
     return summed_embeddings / seq_lengths
+
+def get_seq_mask(
+    tokenized_seqs: torch.Tensor,
+    ignore_tokens: torch.Tensor,
+    rng: torch.Generator,
+    mask_prob: float = 0.15,
+) -> torch.Tensor:
+    probs = torch.rand(
+        tokenized_seqs.shape, generator=rng,
+    ).to(tokenized_seqs.device)
+
+    mask = (
+        (probs < mask_prob)
+        & ~torch.isin(tokenized_seqs, ignore_tokens)
+    )
+    return mask

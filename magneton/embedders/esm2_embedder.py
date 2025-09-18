@@ -2,13 +2,13 @@ from dataclasses import dataclass
 from typing import Literal, Set
 
 import torch
-import torch.nn.functional as F
+from torch.nn import CrossEntropyLoss
 
 from magneton.data.model_specific.esm2 import ESM2Batch
 from magneton.types import DataType
 
 from .esm_transformers_base import ESMBaseEmbedder, ESMBaseConfig
-from .utils import pool_residue_embeddings
+from .utils import get_seq_mask
 
 ESM2_150M = "150m"
 ESM2_600M = "600m"
@@ -40,6 +40,7 @@ class ESM2Embedder(ESMBaseEmbedder):
         return self._embed_batch(
             token_tensor=batch.tokenized_seq,
             protein_level=protein_level,
+            pooling_method="cls",
             zero_non_residue_embeds=zero_non_residue_embeds,
         )
 
@@ -60,30 +61,32 @@ class ESM2Embedder(ESMBaseEmbedder):
         reduction: str = "mean",
     ) -> torch.Tensor:
         """NOTE: this modifies the original tokenized seq tensor, call last."""
-        # TODO(rcalef): implement this
-        return 0
-        # seqs = batch.tokenized_seq
+        seqs = batch.tokenized_seq
 
-        # mask = get_seq_mask(
-        #     seqs,
-        #     pad_token_id=self.model.tokenizer.pad_token_id,
-        #     bos_token_id=self.model.tokenizer.bos_token_id,
-        #     eos_token_id=self.model.tokenizer.eos_token_id,
-        #     rng=self.rng,
-        #     mask_prob=self.mask_prob,
-        # )
-        # masked_idxs = torch.where(mask.reshape(-1))[0]
+        ignore_tokens = torch.tensor([
+            self.tokenizer.pad_token_id,
+            self.tokenizer.cls_token_id,
+            self.tokenizer.eos_token_id,
+        ], device=seqs.device)
 
-        # # Store original mask values for loss calculation
-        # orig_values_flat = seqs.reshape(-1)[masked_idxs]
+        mask = get_seq_mask(
+            seqs,
+            ignore_tokens=ignore_tokens,
+            rng=self.rng,
+            mask_prob=self.mask_prob,
+        )
+        masked_idxs = torch.where(mask.reshape(-1))[0]
 
-        # seqs = seqs.masked_fill(mask, self.model.tokenizer.mask_token_id)
+        # Store original mask values for loss calculation
+        orig_values_flat = seqs.reshape(-1)[masked_idxs]
 
-        # logits = self.model.forward(seqs).sequence_logits
+        seqs = seqs.masked_fill(mask, self.tokenizer.mask_token_id)
 
-        # # Flatten logits along batch dim and get logits for just masked positions
-        # masked_pos_logits = logits.reshape(-1, logits.shape[-1])[masked_idxs]
-        # return CrossEntropyLoss(reduction=reduction)(masked_pos_logits, orig_values_flat)
+        logits = self.model.forward(seqs).logits
+
+        # Flatten logits along batch dim and get logits for just masked positions
+        masked_pos_logits = logits.reshape(-1, logits.shape[-1])[masked_idxs]
+        return CrossEntropyLoss(reduction=reduction)(masked_pos_logits, orig_values_flat)
 
     def model_name(self) -> str:
         return f"SaProt-{self.model_size}"

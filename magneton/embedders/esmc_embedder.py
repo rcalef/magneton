@@ -1,7 +1,7 @@
 import os
 
 from dataclasses import dataclass
-from typing import List, Literal, Set, Tuple
+from typing import Literal, Set
 
 import torch
 
@@ -18,7 +18,7 @@ from magneton.types import DataType
 from magneton.utils import get_chunk_idxs
 
 from .base_embedder import BaseConfig, BaseEmbedder
-from .utils import pool_residue_embeddings
+from .utils import get_seq_mask
 
 ESMC_300M = "300m"
 ESMC_600M = "600m"
@@ -172,7 +172,7 @@ class ESMCEmbedder(BaseEmbedder):
         return ret.squeeze()[1 : len(seq) + 1]
 
     @torch.inference_mode()
-    def embed_sequences(self, sequences: List[str]) -> List[torch.Tensor]:
+    def embed_sequences(self, sequences: list[str]) -> list[torch.Tensor]:
         """Embed multiple protein sequences"""
         all_embeddings = []
 
@@ -182,8 +182,6 @@ class ESMCEmbedder(BaseEmbedder):
                 all_embeddings.append(embedding)
             except Exception as e:
                 raise e
-                print(f"Error processing sequence: {str(e)}")
-                continue
 
         return all_embeddings
 
@@ -192,14 +190,19 @@ class ESMCEmbedder(BaseEmbedder):
         batch: ESMCBatch,
         reduction: str = "mean",
     ) -> torch.Tensor:
-        """NOTE: this modifies the original tokenized seq tensor, call last."""
+        """Calculate original MLM loss for a batch of tokenized sequences."""
         seqs = batch.tokenized_seq
+
+        ignore_tokens = torch.tensor([
+            self.model.tokenizer.pad_token_id,
+            self.model.tokenizer.bos_token_id,
+            self.model.tokenizer.cls_token_id,
+            self.model.tokenizer.eos_token_id,
+        ], device=seqs.device)
 
         mask = get_seq_mask(
             seqs,
-            pad_token_id=self.model.tokenizer.pad_token_id,
-            bos_token_id=self.model.tokenizer.bos_token_id,
-            eos_token_id=self.model.tokenizer.eos_token_id,
+            ignore_tokens=ignore_tokens,
             rng=self.rng,
             mask_prob=self.mask_prob,
         )
@@ -225,23 +228,3 @@ class ESMCEmbedder(BaseEmbedder):
     @classmethod
     def get_required_input_type(cls) -> Set[DataType]:
         return {DataType.SEQ}
-
-
-def get_seq_mask(
-    tokenized_seqs: torch.Tensor,
-    pad_token_id: int,
-    bos_token_id: int,
-    eos_token_id: int,
-    rng: torch.Generator,
-    mask_prob: float = 0.15,
-) -> torch.Tensor:
-    probs = torch.rand(
-        tokenized_seqs.shape, generator=rng,
-    ).to(tokenized_seqs.device)
-    mask = (
-        (probs < mask_prob)
-        & (tokenized_seqs != pad_token_id)
-        & (tokenized_seqs != bos_token_id)
-        & (tokenized_seqs != eos_token_id)
-    )
-    return mask

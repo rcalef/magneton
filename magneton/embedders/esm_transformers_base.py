@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from importlib.metadata import version
-from typing import Set
+from typing import Literal, Set
 
 import torch
 import torch.nn.functional as F
@@ -69,7 +69,12 @@ class ESMBaseEmbedder(BaseEmbedder):
         self,
         unfreeze_all: bool = False,
     ):
-        for param in self.model.parameters():
+        for name, param in self.model.named_parameters():
+            # At the risk of causing unintended behavior, we don't want to unfreeze
+            # the contact head, since we're not actually tuning this in the general
+            # case.
+            if "contact_head" in name:
+                continue
             param.requires_grad = True
         if not unfreeze_all:
             # Freeze layers that do not contribute to the embeddings
@@ -106,6 +111,7 @@ class ESMBaseEmbedder(BaseEmbedder):
         self,
         token_tensor: torch.Tensor,
         protein_level: bool = False,
+        pooling_method: Literal["mean", "cls"] = "mean",
         zero_non_residue_embeds: bool = False,
     ) -> torch.Tensor:
         """Embed a batch of pre-tokenized protein sequences"""
@@ -133,9 +139,12 @@ class ESMBaseEmbedder(BaseEmbedder):
         )
 
         if protein_level:
-            return pool_residue_embeddings(
-                residue_embeddings, residue_mask=residue_mask
-            )
+            if pooling_method == "mean":
+                return pool_residue_embeddings(
+                    residue_embeddings, residue_mask=residue_mask
+                )
+            else:
+                return residue_embeddings[:, 0, :]
         else:
             if zero_non_residue_embeds:
                 # Make mask that's 1 at every position that corresponds to an actual
