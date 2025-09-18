@@ -1,3 +1,6 @@
+from pathlib import Path
+from typing import Any
+
 import lightning as L
 import torch
 import torch.nn as nn
@@ -221,6 +224,37 @@ class MultiLabelMLP(L.LightningModule):
 
     def name(self) -> str:
         return f"{self.task}-mlp"
+
+    def on_save_checkpoint(
+        self,
+        checkpoint: dict[str, Any],
+    ) -> None:
+        """Modify checkpointing logic to not dump the underlying embedder weights if frozen."""
+        # If embedder is not frozen, then just use the default state dict with all weights
+        if not self.config.model.frozen_embedder:
+            return
+        # Otherwise overwrite state dict with just the MLP head weights
+        checkpoint["state_dict"] = self.mlp.state_dict()
+
+    @classmethod
+    def load_from_checkpoint(
+        cls,
+        checkpoint_path: Path,
+        **kwargs,
+    ) -> None:
+        """Modify checkpointing logic to not dump the underlying embedder weights if frozen."""
+        checkpoint = torch.load(checkpoint_path, weights_only=False)
+        hparams = checkpoint["hyper_parameters"]
+        hparams.update(kwargs)
+
+        model = cls(**hparams)
+
+        if hparams["config"].model.frozen_embedder:
+            model.mlp.load_state_dict(checkpoint["state_dict"])
+        else:
+            model.load_state_dict(checkpoint["state_dict"])
+
+        return model
 
 
 class ResidueClassifierHead(nn.Module):
