@@ -24,7 +24,6 @@ from magneton.types import DataType
 
 from .core import (
     get_core_dataset,
-    Batch,
     #WorkshopDataModule,
     #TASK_TO_CONFIGS,
 )
@@ -34,18 +33,19 @@ from .evals import (
     FlipModule,
     PeerDataModule,
     ThermostabilityModule,
-    EVAL_TASK,
     PEER_TASK_TO_CONFIGS,
     TASK_GRANULARITY,
     TASK_TO_TYPE,
 )
 from .model_specific import (
+    ESM2TransformNode,
     ESMCTransformNode,
     ProSSTTransformNode,
     SaProtTransformNode
 )
 
 model_data = {
+    "esm2": (ESM2TransformNode, [DataType.SEQ]),
     "esmc": (ESMCTransformNode, [DataType.SEQ]),
     "prosst": (ProSSTTransformNode, [DataType.SEQ, DataType.STRUCT]),
     "saprot": (SaProtTransformNode, [DataType.SEQ, DataType.STRUCT]),

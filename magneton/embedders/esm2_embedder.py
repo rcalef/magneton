@@ -2,25 +2,29 @@ from dataclasses import dataclass
 from typing import Literal, Set
 
 import torch
+import torch.nn.functional as F
 
-from magneton.data.model_specific.saprot import SaProtBatch
+from magneton.data.model_specific.esm2 import ESM2Batch
 from magneton.types import DataType
 
-from .esm_transformers_base import ESMBaseConfig, ESMBaseEmbedder
+from .esm_transformers_base import ESMBaseEmbedder, ESMBaseConfig
+from .utils import pool_residue_embeddings
 
-SAPROT_35M = "35m"
-SAPROT_650M = "650m"
-
+ESM2_150M = "150m"
+ESM2_600M = "600m"
+ESM2_3B = "3b"
 
 @dataclass(kw_only=True)
-class SaProtConfig(ESMBaseConfig):
-    model_size: Literal[SAPROT_35M, SAPROT_650M] = SAPROT_35M
+class ESM2Config(ESMBaseConfig):
+    model_size: Literal[ESM2_150M, ESM2_600M, ESM2_3B] = ESM2_150M
 
 
-class SaProtEmbedder(ESMBaseEmbedder):
+class ESM2Embedder(ESMBaseEmbedder):
+    """ESM protein embedding model"""
+
     def __init__(
         self,
-        config: SaProtConfig,
+        config: ESM2Config,
         frozen: bool = True,
     ):
         super().__init__(config, frozen=frozen)
@@ -28,13 +32,13 @@ class SaProtEmbedder(ESMBaseEmbedder):
 
     def embed_batch(
         self,
-        batch: SaProtBatch,
+        batch: ESM2Batch,
         protein_level: bool = False,
         zero_non_residue_embeds: bool = False,
     ) -> torch.Tensor:
         """Embed a batch of pre-tokenized protein sequences"""
         return self._embed_batch(
-            token_tensor=batch.tokenized_sa_seq,
+            token_tensor=batch.tokenized_seq,
             protein_level=protein_level,
             zero_non_residue_embeds=zero_non_residue_embeds,
         )
@@ -52,7 +56,7 @@ class SaProtEmbedder(ESMBaseEmbedder):
 
     def calc_original_loss(
         self,
-        batch: SaProtBatch,
+        batch: ESM2Batch,
         reduction: str = "mean",
     ) -> torch.Tensor:
         """NOTE: this modifies the original tokenized seq tensor, call last."""

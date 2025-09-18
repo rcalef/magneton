@@ -1,3 +1,7 @@
+from .esm2 import (
+    ESM2TransformNode,
+    esm2_collate,
+)
 from .esmc import (
     ESMCTransformNode,
     esmc_collate,

@@ -6,14 +6,14 @@ from typing import Callable
 
 import torch
 
-from esm.tokenization import get_esmc_model_tokenizers
 from esm.utils.misc import stack_variable_length_tensors
 from torchdata.nodes import BaseNode, ParallelMapper
+from transformers import EsmTokenizer
 
 from ..core import Batch, DataElement
 
 @dataclass(kw_only=True)
-class ESMCDataElement(DataElement):
+class ESM2DataElement(DataElement):
     """Single data element for ESM-C.
 
     - tokenized_seq (torch.Tensor): Tokenized AA seq.
@@ -22,7 +22,7 @@ class ESMCDataElement(DataElement):
 
 
 @dataclass(kw_only=True)
-class ESMCBatch(Batch):
+class ESM2Batch(Batch):
     tokenized_seq: torch.Tensor
 
     def to(self, device: str):
@@ -31,21 +31,25 @@ class ESMCBatch(Batch):
         return self
 
 
-class ESMCTransformNode(ParallelMapper):
+class ESM2TransformNode(ParallelMapper):
     def __init__(
         self,
         source_node: BaseNode,
         data_dir: str | Path = None,
+        tokenizer_path: str
+        | Path = "/home/rcalef/storage/om_storage/model_weights/esm2_t33_650M_UR50D",
         num_workers: int = 2,
     ):
-        tokenizer = get_esmc_model_tokenizers()
+        self.tokenizer = EsmTokenizer.from_pretrained(
+            tokenizer_path, trust_remote_code=True
+        )
         def _process(
             x: DataElement,
-        ) -> ESMCDataElement:
-            return ESMCDataElement(
+        ) -> ESM2DataElement:
+            return ESM2DataElement(
                 protein_id=x.protein_id,
                 length=x.length,
-                tokenized_seq=torch.tensor(tokenizer.encode(x.seq)),
+                tokenized_seq=torch.tensor(self.tokenizer.encode(x.seq)),
                 substructures=x.substructures,
                 labels=x.labels,
             )
@@ -56,19 +60,17 @@ class ESMCTransformNode(ParallelMapper):
         self,
         stack_labels: bool = True,
     ) -> Callable:
-        tokenizer = get_esmc_model_tokenizers()
         return partial(
-            esmc_collate,
-            pad_id=tokenizer.pad_token_id,
+            esm2_collate,
+            pad_id=self.tokenizer.pad_token_id,
             stack_labels=stack_labels,
         )
 
-
-def esmc_collate(
-    entries: list[ESMCDataElement],
+def esm2_collate(
+    entries: list[ESM2DataElement],
     pad_id: int,
     stack_labels: bool = True,
-) -> ESMCBatch:
+) -> ESM2Batch:
     """
     Collate the entries into a batch.
     """
@@ -91,7 +93,7 @@ def esmc_collate(
             labels = torch.stack(labels)
         else:
             labels = torch.cat(labels)
-    return ESMCBatch(
+    return ESM2Batch(
         protein_ids=protein_ids,
         lengths=lengths,
         tokenized_seq=padded_tensor,
