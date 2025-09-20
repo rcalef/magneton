@@ -2,7 +2,7 @@ from pathlib import Path
 
 from dataclasses import dataclass
 from functools import partial
-from typing import Callable
+from typing import Callable, Literal
 
 import torch
 
@@ -58,18 +58,18 @@ class ESM2TransformNode(ParallelMapper):
 
     def get_collate_fn(
         self,
-        stack_labels: bool = True,
+        labels_mode: Literal["stack", "cat", "pad"],
     ) -> Callable:
         return partial(
             esm2_collate,
             pad_id=self.tokenizer.pad_token_id,
-            stack_labels=stack_labels,
+            labels_mode=labels_mode,
         )
 
 def esm2_collate(
     entries: list[ESM2DataElement],
     pad_id: int,
-    stack_labels: bool = True,
+    labels_mode: Literal["stack", "cat", "pad"],
 ) -> ESM2Batch:
     """
     Collate the entries into a batch.
@@ -89,10 +89,17 @@ def esm2_collate(
         labels = None
     else:
         labels = [x.labels for x in entries]
-        if stack_labels:
+        if labels_mode == "stack":
             labels = torch.stack(labels)
-        else:
+        elif labels_mode == "cat":
             labels = torch.cat(labels)
+        elif labels_mode == "pad":
+            labels = stack_variable_length_tensors(
+                labels,
+                constant_value=-1,
+            )
+        else:
+            raise ValueError(f"unknown label mode: {labels_mode}")
     return ESM2Batch(
         protein_ids=protein_ids,
         lengths=lengths,

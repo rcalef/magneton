@@ -44,6 +44,12 @@ class ESM2Embedder(ESMBaseEmbedder):
             zero_non_residue_embeds=zero_non_residue_embeds,
         )
 
+    def forward_for_attention(
+        self,
+        batch: ESM2Batch,
+    ) -> torch.Tensor:
+        return super().forward_for_attention(batch.tokenized_seq)
+
     # the following two functions are deprecated for the current data module setup
     @torch.no_grad()
     def embed_single_protein(self, seq: str) -> torch.Tensor:

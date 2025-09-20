@@ -3,6 +3,7 @@ from enum import StrEnum
 class TASK_GRANULARITY(StrEnum):
     PROTEIN_CLASSIFICATION = "protein_classification"
     RESIDUE_CLASSIFICATION = "residue_classification"
+    CONTACT_PREDICTION = "contact_prediction"
 
 class EVAL_TASK(StrEnum):
     MULTILABEL = "multilabel"
@@ -25,6 +26,7 @@ TASK_TYPES = {
         "solubility",
         "binary_localization",
         "saprot_binloc",
+        "contact_prediction",
     ],
     EVAL_TASK.REGRESSION: [
         "fluorescence",

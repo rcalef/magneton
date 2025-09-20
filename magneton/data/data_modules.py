@@ -28,6 +28,7 @@ from .core import (
     #TASK_TO_CONFIGS,
 )
 from .evals import (
+    ContactPredictionModule,
     DeepFriModule,
     DeepLocModule,
     FlipModule,
@@ -230,6 +231,12 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
                 num_workers=num_workers,
             )
             self.task_granularity = TASK_GRANULARITY.RESIDUE_CLASSIFICATION
+        elif task == "contact_prediction":
+            self.module = ContactPredictionModule(
+                data_dir=self.data_dir / "saprot_processed" / "Contact",
+                num_workers=num_workers,
+            )
+            self.task_granularity = TASK_GRANULARITY.CONTACT_PREDICTION
 
         else:
             raise ValueError(f"unknown eval task: {task}")
@@ -265,8 +272,16 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
             num_workers=self.num_workers // 2,
             **self.data_config.model_specific_params,
         )
+        labels_mode = None
+        if self.task_granularity == TASK_GRANULARITY.PROTEIN_CLASSIFICATION:
+            labels_mode = "stack"
+        elif self.task_granularity == TASK_GRANULARITY.PROTEIN_CLASSIFICATION:
+            labels_mode = "cat"
+        elif self.task_granularity == TASK_GRANULARITY.CONTACT_PREDICTION:
+            labels_mode = "pad"
+
         collate_fn = node.get_collate_fn(
-            stack_labels=self.task_granularity == TASK_GRANULARITY.PROTEIN_CLASSIFICATION,
+            labels_mode=labels_mode,
         )
 
         node = Batcher(node, batch_size=self.data_config.batch_size)

@@ -4,6 +4,7 @@ from typing import Any
 import lightning as L
 import torch
 import torch.nn as nn
+from transformers.models.esm.modeling_esm import average_product_correct, symmetrize
 
 from magneton.config import PipelineConfig, TrainingConfig
 from magneton.data.core import Batch
@@ -415,3 +416,192 @@ class ResidueClassifier(L.LightningModule):
 
     def name(self) -> str:
         return f"{self.task}-mlp"
+
+
+# Copied from transformers modeling_esm.py,
+# modified to remove sigmoid so we can use
+# BCEWithLogitsLoss, which is safe with autocast.
+class EsmContactPredictionHead(nn.Module):
+    """Performs symmetrization, apc, and computes a logistic regression on the output features"""
+
+    def __init__(
+        self,
+        in_features: int,
+        bias=True,
+        eos_idx: int = 2,
+    ):
+        super().__init__()
+        self.in_features = in_features
+        self.eos_idx = eos_idx
+        self.regression = nn.Linear(in_features, 1, bias)
+
+    def forward(self, tokens, attentions):
+        # remove eos token attentions
+        eos_mask = tokens.ne(self.eos_idx).to(attentions)
+        eos_mask = eos_mask.unsqueeze(1) * eos_mask.unsqueeze(2)
+        attentions = attentions * eos_mask[:, None, None, :, :]
+        attentions = attentions[..., :-1, :-1]
+        # remove cls token attentions
+        attentions = attentions[..., 1:, 1:]
+        batch_size, layers, heads, seqlen, _ = attentions.size()
+        attentions = attentions.view(batch_size, layers * heads, seqlen, seqlen)
+
+        # features: batch x channels x tokens x tokens (symmetric)
+        attentions = attentions.to(
+            self.regression.weight.device
+        )  # attentions always float32, may need to convert to float16
+        attentions = average_product_correct(symmetrize(attentions))
+        attentions = attentions.permute(0, 2, 3, 1)
+        return self.regression(attentions).squeeze(3)
+
+
+class ContactPredictor(L.LightningModule):
+    def __init__(
+        self,
+        config: PipelineConfig,
+        # Below arguments are for compatibility with above classifiers
+        # but aren't used.
+        task: str,
+        num_classes: int,
+        task_type: EVAL_TASK = EVAL_TASK.MULTILABEL,
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+
+        self.config = config
+
+        # Load embedder
+        model = EmbeddingMLP.load_from_checkpoint(
+            self.config.evaluate.model_checkpoint,
+            load_pretrained_fisher=self.config.evaluate.has_fisher_info,
+            for_contact_prediction=True,
+        )
+        self.embedder = model.embedder
+
+        if not self.config.model.frozen_embedder:
+            raise ValueError("contact prediction canonically uses frozen embedders")
+        self.embedder._freeze()
+
+        # Rather than reinvent the wheel, just use ESM2's contact prediction head
+
+        self.contact_head = EsmContactPredictionHead(
+            in_features=self.embedder.get_attention_dim(),
+            bias=True,
+            eos_idx=self.embedder.tokenizer.eos_token_id,
+        )
+        self.loss = nn.BCEWithLogitsLoss()
+
+        # Metrics based on task type
+        self.train_metrics = get_task_torchmetrics(EVAL_TASK.BINARY, 1, prefix="train_")
+        self.val_metrics = self.train_metrics.clone(prefix="valid_")
+
+    def forward(
+        self,
+        batch: Batch,
+    ) -> torch.Tensor:
+        with torch.inference_mode():
+            tokens, attentions = self.embedder.forward_for_attention(batch)
+            attentions = torch.stack(attentions, dim=1)
+
+        return self.contact_head(tokens, attentions)
+
+    def _calc_loss(
+        self,
+        batch: Batch,
+    ) -> tuple[torch.Tensor]:
+        contact_logits = self(batch)
+        labels = batch.labels
+
+        contact_logits_flat = contact_logits.view(-1)
+        labels_flat = labels.view(-1)
+        keep_idxs = labels_flat != -1
+
+        want_logits = contact_logits_flat[keep_idxs]
+        want_labels = labels_flat[keep_idxs]
+
+        loss = self.loss(want_logits, want_labels)
+        return loss, want_logits, want_labels
+
+    def training_step(self, batch: Batch, batch_idx: int) -> torch.Tensor:
+        loss, logits, labels = self._calc_loss(batch)
+
+        self.log("train_loss", loss, sync_dist=True)
+
+        logits, labels = format_logits_and_labels_for_metrics(
+            logits,
+            labels,
+            EVAL_TASK.BINARY,
+        )
+        self.train_metrics.update(logits, labels)
+        if batch_idx % 50 == 0:
+            self.log_dict(self.train_metrics, sync_dist=True)
+
+        return loss
+
+    def validation_step(self, batch: Batch, batch_idx):
+        loss, logits, labels = self._calc_loss(batch)
+
+        logits, labels = format_logits_and_labels_for_metrics(
+            logits,
+            labels,
+            EVAL_TASK.BINARY,
+        )
+        self.log("val_loss", loss, sync_dist=True)
+        self.val_metrics.update(logits, labels)
+
+    def on_validation_epoch_end(self):
+        self.log_dict(self.val_metrics, sync_dist=True)
+        return super().on_validation_epoch_end()
+
+    def predict_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0):
+        _, want_probs, want_labels = self._calc_loss(batch)
+
+        return want_probs, want_labels
+
+    def configure_optimizers(self):
+        # Embedder params
+        optimizer = torch.optim.AdamW(
+            [
+                {
+                    "params": self.contact_head.parameters(),
+                    "lr": self.config.training.learning_rate,
+                    "weight_decay": self.config.training.weight_decay,
+                    "betas": (0.9, 0.98),
+                }
+            ]
+        )
+        return optimizer
+
+    def name(self) -> str:
+        return f"{self.task}-contact-pred"
+
+    def on_save_checkpoint(
+        self,
+        checkpoint: dict[str, Any],
+    ) -> None:
+        """Modify checkpointing logic to not dump the underlying embedder weights if frozen."""
+        # If embedder is not frozen, then just use the default state dict with all weights
+        if not self.config.model.frozen_embedder:
+            return
+        # Otherwise overwrite state dict with just the MLP head weights
+        checkpoint["state_dict"] = self.contact_head.state_dict()
+
+    @classmethod
+    def load_from_checkpoint(
+        cls,
+        checkpoint_path: Path,
+        **kwargs,
+    ) -> None:
+        """Modify checkpointing logic to not dump the underlying embedder weights if frozen."""
+        checkpoint = torch.load(checkpoint_path, weights_only=False)
+        hparams = checkpoint["hyper_parameters"]
+        hparams.update(kwargs)
+
+        model = cls(**hparams)
+
+        if hparams["config"].model.frozen_embedder:
+            model.contact_head.load_state_dict(checkpoint["state_dict"])
+        else:
+            model.load_state_dict(checkpoint["state_dict"])
+
+        return model

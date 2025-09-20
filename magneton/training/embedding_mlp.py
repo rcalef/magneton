@@ -45,6 +45,7 @@ class EmbeddingMLP(L.LightningModule):
         config: PipelineConfig,
         num_classes: int,
         load_pretrained_fisher: bool = False,
+        for_contact_prediction: bool = False,
     ):
         super().__init__()
         compatibility_fixes(config)
@@ -54,6 +55,7 @@ class EmbeddingMLP(L.LightningModule):
         self.embed_config = config.embedding
         self.num_classes = num_classes
 
+        self.embed_config.model_params["for_contact_prediction"] = for_contact_prediction
         self.embedder = EmbedderFactory.create_embedder(
             self.embed_config,
             frozen=self.model_config.frozen_embedder,

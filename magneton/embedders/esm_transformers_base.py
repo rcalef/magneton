@@ -21,6 +21,7 @@ class ESMBaseConfig(BaseConfig):
     rep_layer: int = 12
     max_seq_length: int = 2048
     mask_prob: float = 0.15
+    for_contact_prediction: bool = False
 
 
 class ESMBaseEmbedder(BaseEmbedder):
@@ -47,6 +48,8 @@ class ESMBaseEmbedder(BaseEmbedder):
                 raise RuntimeError(
                     f"flash attention with SaProt requires transformers >= 4.56.1, found: {installed_version_str}"
                 )
+        if config.for_contact_prediction:
+            self.model.config._attn_implementation = "eager"
 
         if frozen:
             self.model = self.model.eval()
@@ -96,6 +99,20 @@ class ESMBaseEmbedder(BaseEmbedder):
             for param in self.model.lm_head.parameters():
                 param.requires_grad = False
 
+    def forward_for_attention(
+        self,
+        protein_tensor: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        attention_mask = torch.ones_like(protein_tensor)
+        attention_mask[protein_tensor == self.tokenizer.pad_token_id] = 0
+        out = self.model(
+            input_ids=protein_tensor,
+            attention_mask=attention_mask,
+            output_attentions=True,
+        )
+
+        return protein_tensor, out.attentions
+
     def _get_embedding(
         self,
         protein_tensor: torch.Tensor,
@@ -114,7 +131,6 @@ class ESMBaseEmbedder(BaseEmbedder):
         pooling_method: Literal["mean", "cls"] = "mean",
         zero_non_residue_embeds: bool = False,
     ) -> torch.Tensor:
-        """Embed a batch of pre-tokenized protein sequences"""
         """Embed a batch of pre-tokenized protein sequences"""
         attention_mask = torch.ones_like(token_tensor)
         attention_mask[token_tensor == self.tokenizer.pad_token_id] = 0
@@ -176,6 +192,10 @@ class ESMBaseEmbedder(BaseEmbedder):
 
     def get_embed_dim(self):
         return self.model.config.hidden_size
+
+    def get_attention_dim(self):
+        """Get expected dim of stacked attention, used for contact prediction"""
+        return self.model.config.num_hidden_layers * self.model.config.num_attention_heads
 
     def model_name(self) -> str:
         raise NotImplementedError("EsmBaseEmbedder is expected to be subclassed")

@@ -21,7 +21,7 @@ from magneton.data.evals import (
     TASK_TO_TYPE,
 )
 
-from .downstream_classifiers import MultiLabelMLP, ResidueClassifier
+from .downstream_classifiers import ContactPredictor, MultiLabelMLP, ResidueClassifier
 from .metrics import (
     FMaxScore,
     format_logits_and_labels_for_metrics,
@@ -163,6 +163,8 @@ def run_supervised_classification(
         classifier_cls = MultiLabelMLP
     elif module.task_granularity == TASK_GRANULARITY.RESIDUE_CLASSIFICATION:
         classifier_cls = ResidueClassifier
+    elif module.task_granularity == TASK_GRANULARITY.CONTACT_PREDICTION:
+        classifier_cls = ContactPredictor
     else:
         raise ValueError(f"unknown task type: {module.task_type}")
 
@@ -189,7 +191,6 @@ def run_supervised_classification(
         classifier = classifier_cls.load_from_checkpoint(
             final_ckpt_path,
         )
-
 
     # Disable distributed sampler for final validations for reproducibility
     module.distributed = False

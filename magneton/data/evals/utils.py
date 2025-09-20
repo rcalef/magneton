@@ -5,6 +5,7 @@ import requests
 from multiprocessing import Pool
 from pathlib import Path
 
+from Bio import SeqIO
 from Bio.PDB import PDBParser, PPBuilder
 from pysam import FastaFile
 from six.moves.urllib.request import urlopen
@@ -63,9 +64,16 @@ def download_afdb_files(
     success = sum(download_results)
     logger.info(f"succesfully downloaded {success}  / {len(file_paths)} files")
 
-def parse_one_seq_from_pdb(
+def parse_single_seq_pdb(
     path: Path,
 ) -> str:
+    """Get a sequence from a PDB file.
+
+    AFDB structures all consist of one chain, so set those as the defaults.
+    This seems to be what folks must do for using these classic splits based
+    on PDB IDs (both ProSST and SaProt use AFDB structures instead of the
+    available PDB structures).
+    """
     parser = PDBParser(QUIET=True)
     ppb = PPBuilder()
     structure = parser.get_structure("protein", path)
@@ -79,29 +87,54 @@ def parse_one_seq_from_pdb(
         raise ValueError(f"expected single chain, got {len(chains)}: {path}")
     return "".join([str(pp.get_sequence()) for pp in ppb.build_peptides(chains[0])])
 
+def parse_chain_seq_from_pdb(
+    path: Path,
+    chain: str = "A",
+) -> str:
+    """Get a sequence from a PDB file.
+
+    AFDB structures all consist of one chain, so set those as the defaults.
+    This seems to be what folks must do for using these classic splits based
+    on PDB IDs (both ProSST and SaProt use AFDB structures instead of the
+    available PDB structures).
+    """
+    chains = {record.id: record.seq for record in SeqIO.parse(path, 'pdb-seqres')}
+    name = path.name.split(".")[0]
+    return str(chains.get(f"{name}:{chain}", ""))
+
 def parse_seqs_from_pdbs(
     fasta_path: Path,
-    file_paths: list[Path],
-    uniprot_ids: list[str],
+    jobs: list[Path] | tuple[Path, str],
+    protein_ids: list[str],
     num_workers: int,
 ) -> dict[str, str]:
     """
     Extract sequences from PDBs; cache to FASTA for fast re-loads.
-    Returns dict: UniProt -> sequence
+    Returns dict: protein ID -> sequence
     """
     if fasta_path.exists():
         logger.info(f"FASTA cache found at {fasta_path}")
-        fa = FastaFile(str(fasta_path))
-        return {uid: fa.fetch(uid) for uid in uniprot_ids}
-
+        seqs = {}
+        with open(str(fasta_path)) as fh:
+            for i, line in enumerate(fh):
+                if i % 2 == 0:
+                    prot_id = line.strip()[1:]
+                else:
+                    seqs[prot_id] = line.strip()
+        return seqs
     logger.info("No FASTA cache found, parsing sequences from PDB files")
     with Pool(num_workers) as p:
-        sequences = list(tqdm(p.imap(parse_one_seq_from_pdb, file_paths), total=len(file_paths), desc="Parsing PDBs"))
+        if isinstance(jobs[0], Path):
+            sequences = list(tqdm(p.imap(parse_single_seq_pdb, jobs), total=len(jobs), desc="Parsing PDBs"))
+        elif isinstance(jobs[0], tuple):
+            sequences = list(tqdm(p.starmap(parse_chain_seq_from_pdb, jobs), total=len(jobs), desc="Parsing PDBs"))
+        else:
+            raise ValueError(f"unexpected file path type: {jobs[0]}")
 
     ret: dict[str, str] = {}
     fasta_path.parent.mkdir(parents=True, exist_ok=True)
     with open(fasta_path, "w") as fh:
-        for uid, seq in zip(uniprot_ids, sequences):
-            fh.write(f">{uid}\n{seq}\n")
-            ret[uid] = seq
+        for pid, seq in zip(protein_ids, sequences):
+            fh.write(f">{pid}\n{seq}\n")
+            ret[pid] = seq
     return ret

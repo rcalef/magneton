@@ -186,8 +186,6 @@ class SaProtTransformNode(ParallelMapper):
         if isinstance(data_dir, str):
             data_dir = Path(data_dir)
         foldseek_tokens_path = data_dir / "foldseek_tokens.fa.bz2"
-        # if not foldseek_tokens_path.exists():
-        #     raise ValueError(f"foldseek tokens not found: {foldseek_tokens_path}")
 
         if should_run_single_process() and not foldseek_tokens_path.exists():
             logger.info(

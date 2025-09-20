@@ -38,6 +38,7 @@ class SaProtEmbedder(ESMBaseEmbedder):
         return self._embed_batch(
             token_tensor=batch.tokenized_sa_seq,
             protein_level=protein_level,
+            pooling_method="mean",
             zero_non_residue_embeds=zero_non_residue_embeds,
         )
 
