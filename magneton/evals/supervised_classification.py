@@ -24,6 +24,7 @@ from magneton.data.evals import (
 from .downstream_classifiers import ContactPredictor, MultiLabelMLP, ResidueClassifier
 from .metrics import (
     FMaxScore,
+    PrecisionAtL,
     format_logits_and_labels_for_metrics,
     get_task_torchmetrics,
 )
@@ -85,6 +86,53 @@ def run_final_predictions(
 
     # Save metrics to JSON file
     metrics_json_path = Path(output_dir) / f"{prefix}_{task}_metrics.json"
+    with open(metrics_json_path, "w") as f:
+        json.dump(metrics_dict, f, indent=2)
+    print(f"Metrics saved to: {metrics_json_path}")
+
+def run_final_contact_predictions(
+    model: ContactPredictor,
+    trainer: L.Trainer,
+    loader: Loader,
+    output_dir: Path,
+    prefix: str,
+):
+    final_predictions = trainer.predict(
+        model=model, dataloaders=loader, return_predictions=True
+    )
+
+    # Make another pass through dataset to collect labels, IDs, and lengths
+    all_labels = []
+    protein_ids = []
+    protein_lengths = []
+    for batch in loader:
+        all_labels.append(batch.labels)
+        protein_ids.append(batch.protein_ids)
+        protein_lengths.append(batch.lengths)
+
+    results_dict = {
+        "protein_ids": protein_ids,
+        "lengths": protein_lengths,
+        "logits": final_predictions,
+        "labels": all_labels,
+    }
+
+    torch.save(results_dict, output_dir / f"{prefix}_results.pt")
+
+    # Calculate task-specific metrics and prepare for JSON export
+    metrics_dict = {
+        "task": "contact_prediction",
+    }
+    p_at_l = PrecisionAtL(sync_on_compute=False)
+    for logits, labels, lengths in zip(final_predictions, all_labels, protein_lengths):
+        p_at_l.update(logits, labels, lengths)
+
+    metrics_dict.update({k: v.item() for k,v in p_at_l.compute().items()})
+
+    print(f"{prefix} final metrics: {metrics_dict}")
+
+    # Save metrics to JSON file
+    metrics_json_path = Path(output_dir) / f"{prefix}_contact_prediction_metrics.json"
     with open(metrics_json_path, "w") as f:
         json.dump(metrics_dict, f, indent=2)
     print(f"Metrics saved to: {metrics_json_path}")
@@ -194,24 +242,41 @@ def run_supervised_classification(
 
     # Disable distributed sampler for final validations for reproducibility
     module.distributed = False
-    run_final_predictions(
-        model=classifier,
-        trainer=trainer,
-        loader=module.val_dataloader(),
-        task=task,
-        num_classes=module.num_classes(),
-        output_dir=output_dir,
-        prefix="validation",
-    )
+    if task == "contact_prediction":
+        run_final_contact_predictions(
+            model=classifier,
+            trainer=trainer,
+            loader=module.val_dataloader(),
+            output_dir=output_dir,
+            prefix="validation",
+        )
 
-    run_final_predictions(
-        model=classifier,
-        trainer=trainer,
-        loader=module.test_dataloader(),
-        task=task,
-        num_classes=module.num_classes(),
-        output_dir=output_dir,
-        prefix="test",
+        run_final_contact_predictions(
+            model=classifier,
+            trainer=trainer,
+            loader=module.test_dataloader(),
+            output_dir=output_dir,
+            prefix="test",
+        )
+    else:
+        run_final_predictions(
+            model=classifier,
+            trainer=trainer,
+            loader=module.val_dataloader(),
+            task=task,
+            num_classes=module.num_classes(),
+            output_dir=output_dir,
+            prefix="validation",
+        )
+
+        run_final_predictions(
+            model=classifier,
+            trainer=trainer,
+            loader=module.test_dataloader(),
+            task=task,
+            num_classes=module.num_classes(),
+            output_dir=output_dir,
+            prefix="test",
     )
 
     if logger is not None:

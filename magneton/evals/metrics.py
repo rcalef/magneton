@@ -1,5 +1,7 @@
+import math
+
+import numpy as np
 import torch
-import torch.distributed as dist
 from torchmetrics import (
     Accuracy,
     AveragePrecision,
@@ -108,3 +110,72 @@ def format_logits_and_labels_for_metrics(
         return logits.squeeze(), labels.squeeze().long()
     else:
         return logits, labels
+
+
+class PrecisionAtL(Metric):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.lengths = {"P@L": 1, "P@L/2": 2, "P@L/5": 5}
+        self.ranges = ["short_range", "medium_range", "long_range"]
+
+        accuracies = {}
+        for length in self.lengths.keys():
+            for range in self.ranges:
+                accuracies[f"{range}_{length}"] = Accuracy(task="binary", ignore_index=-1, **kwargs)
+        self.accuracies = MetricCollection(accuracies)
+
+    def update(
+        self,
+        preds: torch.Tensor,
+        targets: torch.Tensor,
+        protein_lengths: list[int],
+    ) -> None:
+        if preds.shape != targets.shape:
+            raise ValueError(f"preds and target must have the same shape: {preds.shape} != {targets.shape}")
+
+        for pred_map, label_map, L in zip(preds, targets, protein_lengths):
+            x_inds, y_inds = np.indices(label_map.shape)
+            for r in self.ranges:
+                if r == "short_range":
+                    mask = (np.abs(y_inds - x_inds) < 6) | (
+                        np.abs(y_inds - x_inds) > 11
+                    )
+
+                elif r == "medium_range":
+                    mask = (np.abs(y_inds - x_inds) < 12) | (
+                        np.abs(y_inds - x_inds) > 23
+                    )
+
+                else:
+                    mask = np.abs(y_inds - x_inds) < 24
+
+                mask = torch.from_numpy(mask)
+                copy_label_map = label_map.clone()
+                copy_label_map[mask] = -1
+
+                # Mask the lower triangle
+                mask = torch.triu(torch.ones_like(copy_label_map), diagonal=1)
+                copy_label_map[mask == 0] = -1
+
+                selector = copy_label_map != -1
+                probs = pred_map[selector].float()
+                labels = copy_label_map[selector]
+
+                #probs = preds.softmax(dim=-1)[:, 1]
+                for k, v in self.lengths.items():
+                    l = min(math.ceil(L / v), (labels == 1).sum().item())
+
+                    top_inds = torch.argsort(probs, descending=True)[:l]
+                    top_labels = labels[top_inds]
+
+                    if top_labels.numel() == 0:
+                        continue
+
+                    metric = f"{r}_{k}"
+                    self.accuracies[metric].update(
+                        top_labels, torch.ones_like(top_labels)
+                    )
+
+    def compute(self) -> dict[str, torch.Tensor]:
+        return self.accuracies.compute()

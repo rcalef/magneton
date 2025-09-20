@@ -12,6 +12,7 @@ from magneton.training.embedding_mlp import EmbeddingMLP
 
 from .metrics import (
     FMaxScore,
+    PrecisionAtL,
     format_logits_and_labels_for_metrics,
     get_task_torchmetrics,
 )
@@ -467,6 +468,7 @@ class ContactPredictor(L.LightningModule):
         # Metrics based on task type
         self.train_metrics = get_task_torchmetrics(EVAL_TASK.BINARY, 1, prefix="train_")
         self.val_metrics = self.train_metrics.clone(prefix="valid_")
+        self.p_at_l = PrecisionAtL()
 
     def forward(
         self,
@@ -475,7 +477,9 @@ class ContactPredictor(L.LightningModule):
         with torch.inference_mode():
             contact_inputs = self.embedder.forward_for_contact(batch)
 
-        return self.contact_head(contact_inputs)
+        # These come out of the contact head as (batch, seq_len, seq_len, 1),
+        # so squeeze off the last dim.
+        return self.contact_head(contact_inputs).squeeze()
 
     def _calc_loss(
         self,
@@ -492,16 +496,16 @@ class ContactPredictor(L.LightningModule):
         want_labels = labels_flat[keep_idxs]
 
         loss = self.loss(want_logits, want_labels)
-        return loss, want_logits, want_labels
+        return loss, contact_logits, want_logits, want_labels
 
     def training_step(self, batch: Batch, batch_idx: int) -> torch.Tensor:
-        loss, logits, labels = self._calc_loss(batch)
+        loss, logits, flat_logits, flat_labels = self._calc_loss(batch)
 
         self.log("train_loss", loss, sync_dist=True)
 
         logits, labels = format_logits_and_labels_for_metrics(
-            logits,
-            labels,
+            flat_logits,
+            flat_labels,
             EVAL_TASK.BINARY,
         )
         self.train_metrics.update(logits, labels)
@@ -511,24 +515,26 @@ class ContactPredictor(L.LightningModule):
         return loss
 
     def validation_step(self, batch: Batch, batch_idx):
-        loss, logits, labels = self._calc_loss(batch)
+        loss, logits, flat_logits, flat_labels = self._calc_loss(batch)
 
-        logits, labels = format_logits_and_labels_for_metrics(
-            logits,
-            labels,
+        flat_logits, flat_labels = format_logits_and_labels_for_metrics(
+            flat_logits,
+            flat_labels,
             EVAL_TASK.BINARY,
         )
         self.log("val_loss", loss, sync_dist=True)
-        self.val_metrics.update(logits, labels)
+        self.val_metrics.update(flat_logits, flat_labels)
+        self.p_at_l.update(logits, batch.labels, batch.lengths)
 
     def on_validation_epoch_end(self):
         self.log_dict(self.val_metrics, sync_dist=True)
+        self.log_dict(self.p_at_l.compute(), sync_dist=True)
         return super().on_validation_epoch_end()
 
-    def predict_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0):
-        _, want_probs, want_labels = self._calc_loss(batch)
+    def predict_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0) -> torch.Tensor:
+        logits = self(batch)
 
-        return want_probs, want_labels
+        return logits
 
     def configure_optimizers(self):
         # Embedder params

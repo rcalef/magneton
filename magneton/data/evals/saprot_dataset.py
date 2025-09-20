@@ -352,6 +352,7 @@ class ContactPredictionModule:
     def __init__(
         self,
         data_dir: str | Path,
+        max_len: int = 1024,
         num_workers: int = 16,
     ):
         self.data_dir = Path(data_dir)
@@ -359,6 +360,7 @@ class ContactPredictionModule:
         self.pdb_dir.mkdir(exist_ok=True)
 
         self.num_workers = num_workers
+        self.max_len = max_len
 
     def _split_folder(self, split: Literal["train", "val", "test"]) -> Path:
         if split == "val":
@@ -440,6 +442,9 @@ class ContactPredictionModule:
         df = df.assign(
             structure_path=lambda x: x.pdb_id.apply(lambda id: want_dir / f"{id}.pdb"),
         )
+
+        df = df.loc[lambda x: x.seq.str.len() <= self.max_len]
+        logger.info(f"Retaining {len(df)} records after filtering for length <= {self.max_len}")
 
         # Try to download any missing files
         missing_files = [path for path in df.structure_path if not path.exists()]
