@@ -42,6 +42,12 @@ class SaProtEmbedder(ESMBaseEmbedder):
             zero_non_residue_embeds=zero_non_residue_embeds,
         )
 
+    def forward_for_contact(
+        self,
+        batch: SaProtBatch,
+    ) -> torch.Tensor:
+        return super().forward_for_contact(batch.tokenized_sa_seq)
+
     # the following two functions are deprecated for the current data module setup
     @torch.no_grad()
     def embed_single_protein(self, seq: str) -> torch.Tensor:
@@ -74,20 +80,26 @@ class SaProtEmbedder(ESMBaseEmbedder):
         masked_seqs = []
         masked_row_idxs = []
         masked_col_idxs = []
-        for row_idx, (aa_seq, struct_seq) in enumerate(zip(batch.seqs, batch.struct_seqs)):
+        for row_idx, (aa_seq, struct_seq) in enumerate(
+            zip(batch.seqs, batch.struct_seqs)
+        ):
             probs = torch.rand(len(aa_seq), generator=self.rng)
             this_masked_seq = []
-            for col_idx, (aa, struct_tok, prob) in enumerate(zip(aa_seq, struct_seq, probs)):
+            for col_idx, (aa, struct_tok, prob) in enumerate(
+                zip(aa_seq, struct_seq, probs)
+            ):
                 if prob < self.mask_prob:
                     aa = "#"
                     # +1 to col idx for the CLS token that will be added
                     masked_row_idxs.append(row_idx)
-                    masked_col_idxs.append(col_idx+1)
+                    masked_col_idxs.append(col_idx + 1)
                 this_masked_seq.append(f"{aa}{struct_tok}")
             masked_seqs.append("".join(this_masked_seq))
 
         # Tokenize the masked sequences.
-        masked_tokenized_sa_seq = self.tokenizer(masked_seqs, return_tensors="pt", padding=True)["input_ids"]
+        masked_tokenized_sa_seq = self.tokenizer(
+            masked_seqs, return_tensors="pt", padding=True
+        )["input_ids"]
         masked_tokenized_sa_seq = masked_tokenized_sa_seq.to(
             device=batch.tokenized_sa_seq.device,
             dtype=batch.tokenized_sa_seq.dtype,
@@ -95,7 +107,9 @@ class SaProtEmbedder(ESMBaseEmbedder):
 
         # Map our masked indices which are (row, col) to flattened indices in the tokenized tensor
         flat_masked_idxs = torch.from_numpy(
-            np.ravel_multi_index([masked_row_idxs, masked_col_idxs], masked_tokenized_sa_seq.shape)
+            np.ravel_multi_index(
+                [masked_row_idxs, masked_col_idxs], masked_tokenized_sa_seq.shape
+            )
         ).to(device=masked_tokenized_sa_seq.device)
 
         # Store original mask values for loss calculation
@@ -105,7 +119,9 @@ class SaProtEmbedder(ESMBaseEmbedder):
 
         # Flatten logits along batch dim and get logits for just masked positions
         masked_pos_logits = logits.reshape(-1, logits.shape[-1])[flat_masked_idxs]
-        return CrossEntropyLoss(reduction=reduction)(masked_pos_logits, orig_values_flat)
+        return CrossEntropyLoss(reduction=reduction)(
+            masked_pos_logits, orig_values_flat
+        )
 
     def model_name(self) -> str:
         return f"SaProt-{self.model_size}"

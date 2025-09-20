@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, List, Set
 
 import torch
@@ -25,7 +25,7 @@ class BaseDataModule(L.LightningDataModule, ABC):
 
 @dataclass(kw_only=True)
 class BaseConfig:
-    pass
+    for_contact_prediction: bool = False
 
 class BaseEmbedder(nn.Module, ABC):
     """Base class for protein embedders"""

@@ -411,7 +411,8 @@ class ContactPredictionModule:
         else:
             seqs = [x["seq"] for x in all_usable_records]
 
-        labels = map(record_to_labels, all_usable_records)
+        logger.info(f"Making contact labels for {len(all_usable_records)} records")
+        labels = list(tqdm(map(record_to_labels, all_usable_records)))
 
         df = (
             pd.DataFrame({

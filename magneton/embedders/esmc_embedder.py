@@ -150,6 +150,40 @@ class ESMCEmbedder(BaseEmbedder):
             # Remove CLS token so substructure indices line up
             return residue_embeddings[:, 1:, :]
 
+    @torch.inference_mode()
+    def forward_for_contact(
+        self,
+        batch: ESMCBatch,
+    ) -> torch.Tensor:
+        """Get pairwise reps for contact prediction.
+
+        Given a batch of sequences, this returns a tensor
+        of dim (batch_size, seq_len, seq_len, embed*2), where
+        the x[batch_idx][i][j] element is the concatenation of
+        the residue i and j's embeddings.
+
+        Not the same as using attention weights for contact prediction
+        but seems like this is roughly what was done for ESM3 and
+        ESM-C doesn't currently support outputting attention weights:
+            https://github.com/evolutionaryscale/esm/issues/79
+            https://github.com/evolutionaryscale/esm/issues/119
+            https://github.com/evolutionaryscale/esm/issues/154
+        """
+        residue_embeds = self._get_embedding(batch.tokenized_seq)
+        # Drop CLS and EOS tokens
+        residue_embeds = residue_embeds[:, 1:-1, :]
+        seq_len = residue_embeds.size(dim=1)
+        # expand and broadcast
+        x_i = residue_embeds.unsqueeze(2) # (batch, seq_len, 1, embed)
+        x_j = residue_embeds.unsqueeze(1) # (batch, 1, seq_len, embed)
+
+        # both broadcast to (batch, seq_len, seq_len, embed)
+        x_i = x_i.expand(-1, -1, seq_len, -1)
+        x_j = x_j.expand(-1, seq_len, -1, -1)
+
+        # concatenate along the embedding dimension
+        return torch.cat([x_i, x_j], dim=-1)
+
     # the following two functions are deprecated for the current data module setup
     @torch.inference_mode()
     def embed_single_protein(self, seq: str) -> torch.Tensor:
@@ -221,6 +255,9 @@ class ESMCEmbedder(BaseEmbedder):
 
     def get_embed_dim(self):
         return self.embed_dim
+
+    def get_attention_dim(self):
+        return self.embed_dim * 2
 
     def model_name(self) -> str:
         return f"ESM-C_{self.model_size}"

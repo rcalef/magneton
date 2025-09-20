@@ -4,7 +4,6 @@ from typing import Any
 import lightning as L
 import torch
 import torch.nn as nn
-from transformers.models.esm.modeling_esm import average_product_correct, symmetrize
 
 from magneton.config import PipelineConfig, TrainingConfig
 from magneton.data.core import Batch
@@ -418,43 +417,6 @@ class ResidueClassifier(L.LightningModule):
         return f"{self.task}-mlp"
 
 
-# Copied from transformers modeling_esm.py,
-# modified to remove sigmoid so we can use
-# BCEWithLogitsLoss, which is safe with autocast.
-class EsmContactPredictionHead(nn.Module):
-    """Performs symmetrization, apc, and computes a logistic regression on the output features"""
-
-    def __init__(
-        self,
-        in_features: int,
-        bias=True,
-        eos_idx: int = 2,
-    ):
-        super().__init__()
-        self.in_features = in_features
-        self.eos_idx = eos_idx
-        self.regression = nn.Linear(in_features, 1, bias)
-
-    def forward(self, tokens, attentions):
-        # remove eos token attentions
-        eos_mask = tokens.ne(self.eos_idx).to(attentions)
-        eos_mask = eos_mask.unsqueeze(1) * eos_mask.unsqueeze(2)
-        attentions = attentions * eos_mask[:, None, None, :, :]
-        attentions = attentions[..., :-1, :-1]
-        # remove cls token attentions
-        attentions = attentions[..., 1:, 1:]
-        batch_size, layers, heads, seqlen, _ = attentions.size()
-        attentions = attentions.view(batch_size, layers * heads, seqlen, seqlen)
-
-        # features: batch x channels x tokens x tokens (symmetric)
-        attentions = attentions.to(
-            self.regression.weight.device
-        )  # attentions always float32, may need to convert to float16
-        attentions = average_product_correct(symmetrize(attentions))
-        attentions = attentions.permute(0, 2, 3, 1)
-        return self.regression(attentions).squeeze(3)
-
-
 class ContactPredictor(L.LightningModule):
     def __init__(
         self,
@@ -482,13 +444,24 @@ class ContactPredictor(L.LightningModule):
             raise ValueError("contact prediction canonically uses frozen embedders")
         self.embedder._freeze()
 
-        # Rather than reinvent the wheel, just use ESM2's contact prediction head
-
-        self.contact_head = EsmContactPredictionHead(
-            in_features=self.embedder.get_attention_dim(),
-            bias=True,
-            eos_idx=self.embedder.tokenizer.eos_token_id,
+        layers = []
+        input_dim = self.embedder.get_attention_dim()
+        hidden_dims = parse_hidden_dims(
+            raw_dims=self.config.model.model_params["hidden_dims"], embed_dim=input_dim
         )
+        prev_dim = input_dim
+        for hidden_dim in hidden_dims:
+            layers.extend(
+                [
+                    nn.Linear(prev_dim, hidden_dim),
+                    nn.Tanh(),
+                ]
+            )
+            prev_dim = hidden_dim
+        layers.append(nn.Linear(prev_dim, 1))
+        self.contact_head = nn.Sequential(*layers)
+        print(f"contact head model: {self.contact_head}")
+
         self.loss = nn.BCEWithLogitsLoss()
 
         # Metrics based on task type
@@ -500,10 +473,9 @@ class ContactPredictor(L.LightningModule):
         batch: Batch,
     ) -> torch.Tensor:
         with torch.inference_mode():
-            tokens, attentions = self.embedder.forward_for_attention(batch)
-            attentions = torch.stack(attentions, dim=1)
+            contact_inputs = self.embedder.forward_for_contact(batch)
 
-        return self.contact_head(tokens, attentions)
+        return self.contact_head(contact_inputs)
 
     def _calc_loss(
         self,

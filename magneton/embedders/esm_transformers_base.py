@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 from packaging.version import parse
 from transformers import EsmForMaskedLM, EsmTokenizer
+from transformers.models.esm.modeling_esm import average_product_correct, symmetrize
 
 from magneton.data.model_specific.saprot import SaProtBatch
 from magneton.types import DataType
@@ -21,7 +22,6 @@ class ESMBaseConfig(BaseConfig):
     rep_layer: int = 12
     max_seq_length: int = 2048
     mask_prob: float = 0.15
-    for_contact_prediction: bool = False
 
 
 class ESMBaseEmbedder(BaseEmbedder):
@@ -99,19 +99,37 @@ class ESMBaseEmbedder(BaseEmbedder):
             for param in self.model.lm_head.parameters():
                 param.requires_grad = False
 
-    def forward_for_attention(
+    @torch.inference_mode()
+    def forward_for_contact(
         self,
-        protein_tensor: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        attention_mask = torch.ones_like(protein_tensor)
-        attention_mask[protein_tensor == self.tokenizer.pad_token_id] = 0
+        tokens: torch.Tensor,
+    ) -> torch.Tensor:
+        attention_mask = torch.ones_like(tokens)
+        attention_mask[tokens == self.tokenizer.pad_token_id] = 0
         out = self.model(
-            input_ids=protein_tensor,
+            input_ids=tokens,
             attention_mask=attention_mask,
             output_attentions=True,
         )
+        attentions = torch.stack(out.attentions, dim=1)
 
-        return protein_tensor, out.attentions
+        # Copied from transformers modeling_esm.py,
+        # modified to remove sigmoid so we can use
+        # BCEWithLogitsLoss, which is safe with autocast.
+        eos_mask = tokens.ne(self.tokenizer.eos_token_id).to(attentions)
+        eos_mask = eos_mask.unsqueeze(1) * eos_mask.unsqueeze(2)
+        attentions = attentions * eos_mask[:, None, None, :, :]
+        attentions = attentions[..., :-1, :-1]
+        # remove cls token attentions
+        attentions = attentions[..., 1:, 1:]
+        batch_size, layers, heads, seqlen, _ = attentions.size()
+        attentions = attentions.view(batch_size, layers * heads, seqlen, seqlen)
+
+        # features: batch x channels x tokens x tokens (symmetric)
+        attentions = average_product_correct(symmetrize(attentions))
+        attentions = attentions.permute(0, 2, 3, 1)
+
+        return attentions
 
     def _get_embedding(
         self,
@@ -195,7 +213,9 @@ class ESMBaseEmbedder(BaseEmbedder):
 
     def get_attention_dim(self):
         """Get expected dim of stacked attention, used for contact prediction"""
-        return self.model.config.num_hidden_layers * self.model.config.num_attention_heads
+        return (
+            self.model.config.num_hidden_layers * self.model.config.num_attention_heads
+        )
 
     def model_name(self) -> str:
         raise NotImplementedError("EsmBaseEmbedder is expected to be subclassed")
