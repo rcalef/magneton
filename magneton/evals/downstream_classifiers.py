@@ -374,12 +374,11 @@ class ResidueClassifier(L.LightningModule):
             residue_logits.append(raw_logits[idx, :length])
 
         # total_len X num_classes
-        flat_logits =  torch.cat(residue_logits)
+        flat_logits = torch.cat(residue_logits)
         if self.task_type:
             # Remove the trailing dim if this is a binary classification problem
             flat_logits = flat_logits.squeeze()
         return flat_logits
-
 
     def training_step(self, batch: Batch, batch_idx: int) -> torch.Tensor:
         logits = self(batch)
@@ -537,7 +536,9 @@ class ContactPredictor(L.LightningModule):
         self.log_dict(self.p_at_l.compute(), sync_dist=True)
         return super().on_validation_epoch_end()
 
-    def predict_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0) -> torch.Tensor:
+    def predict_step(
+        self, batch: Batch, batch_idx: int, dataloader_idx: int = 0
+    ) -> torch.Tensor:
         logits = self(batch)
 
         return logits
@@ -585,6 +586,186 @@ class ContactPredictor(L.LightningModule):
 
         if hparams["config"].model.frozen_embedder:
             model.contact_head.load_state_dict(checkpoint["state_dict"])
+        else:
+            model.load_state_dict(checkpoint["state_dict"])
+
+        return model
+
+
+class PPIPredictor(L.LightningModule):
+    def __init__(
+        self,
+        config: PipelineConfig,
+        # Below arguments are for compatibility with above classifiers
+        # but aren't used.
+        task: str,
+        num_classes: int,
+        task_type: EVAL_TASK = EVAL_TASK.BINARY,
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+
+        self.config = config
+
+        # Load embedder
+        model = EmbeddingMLP.load_from_checkpoint(
+            self.config.evaluate.model_checkpoint,
+            load_pretrained_fisher=self.config.evaluate.has_fisher_info,
+        )
+        self.embedder = model.embedder
+
+        if self.config.model.frozen_embedder:
+            self.embedder._freeze()
+            self.embedder.eval()
+        else:
+            self.embedder._unfreeze(unfreeze_all=False)
+
+        # Build MLP layers
+        layers = []
+
+        # Embed dim is here is 2 x model_embed_dim, since we just concatenate
+        # the embeddings of the two proteins for input to the predictor head
+        embed_dim = self.embedder.get_embed_dim() * 2
+        hidden_dims = parse_hidden_dims(
+            raw_dims=self.config.model.model_params["hidden_dims"], embed_dim=embed_dim
+        )
+
+        prev_dim = embed_dim
+        for hidden_dim in hidden_dims:
+            layers.extend(
+                [
+                    nn.Dropout(self.config.model.model_params["dropout_rate"]),
+                    nn.Linear(prev_dim, hidden_dim),
+                    nn.Tanh(),
+                ]
+            )
+            prev_dim = hidden_dim
+        layers.append(nn.Dropout(self.config.model.model_params["dropout_rate"]))
+        layers.append(nn.Linear(prev_dim, 1))
+        self.mlp = nn.Sequential(*layers)
+        print(f"head model: {self.mlp}")
+
+        self.loss = nn.BCEWithLogitsLoss()
+
+        # Metrics based on task type
+        self.train_metrics = get_task_torchmetrics(
+            EVAL_TASK.BINARY, num_classes, prefix="train_"
+        )
+        self.val_metrics = self.train_metrics.clone(prefix="valid_")
+
+    def forward(
+        self,
+        batch: Batch,
+    ) -> torch.Tensor:
+        assert len(batch.protein_ids) % 2 == 0, f"got: {batch}"
+        # batch_size (num_proteins)  X embed_dim
+        protein_embeds = self.embedder.embed_batch(batch, protein_level=True)
+
+        # Each pair of adjacent elements is one PPI pair, so want to
+        # concatenate those
+        num_proteins, embed_dim = protein_embeds.shape
+        num_ppis = num_proteins // 2
+
+        # (num_ppis, 2*embed_dim)
+        ppi_embeds = protein_embeds.view(num_ppis, 2, embed_dim).flatten(1)
+
+        # (num_ppis), squeeze off trailing dim
+        return self.mlp(ppi_embeds).squeeze()
+
+    def _collapse_ppi_labels(
+        self,
+        batch: Batch,
+    ) -> torch.Tensor:
+        # batch has rows for each protein, each pair of adjacent rows
+        # is a PPI pair. Each pair of labels should be the same. Want
+        # to collapse to one label per PPI pair
+        assert len(batch.labels) % 2 == 0, f"got: {batch}"
+        labels = batch.labels[::2]
+        labels_check = batch.labels[1::2]
+        assert (labels == labels_check).all(), f"got: {batch}"
+        return labels
+
+    def training_step(self, batch: Batch, batch_idx: int) -> torch.Tensor:
+        labels = self._collapse_ppi_labels(batch)
+        logits = self(batch)
+
+        # labels = _get_labels_for_loss(batch.labels, self.task_type, logits.dtype)
+
+        loss = self.loss(logits, labels.float())
+
+        self.log("train_loss", loss, sync_dist=True)
+        if batch_idx % 50 == 0:
+            logits, labels = format_logits_and_labels_for_metrics(
+                logits,
+                labels,
+                EVAL_TASK.BINARY,
+            )
+            self.train_metrics(logits, labels)
+            self.log_dict(self.train_metrics, sync_dist=True)
+
+        return loss
+
+    def validation_step(self, batch: Batch, batch_idx):
+        labels = self._collapse_ppi_labels(batch)
+        logits = self(batch)
+        # labels = _get_labels_for_loss(batch.labels, self.task_type, logits.dtype)
+
+        loss = self.loss(logits, labels.float())
+
+        self.log("val_loss", loss, sync_dist=True)
+        logits, labels = format_logits_and_labels_for_metrics(
+            logits,
+            labels,
+            EVAL_TASK.BINARY,
+        )
+        self.val_metrics.update(logits, labels)
+
+    def on_validation_epoch_end(self):
+        self.log_dict(self.val_metrics, sync_dist=True)
+        return super().on_validation_epoch_end()
+
+    def predict_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0):
+        labels = self._collapse_ppi_labels(batch)
+        logits = self(batch)
+
+        return logits, labels
+
+    def configure_optimizers(self):
+        return _get_optimizer(
+            model=self,
+            config=self.config.training,
+            frozen_embedder=self.config.model.frozen_embedder,
+        )
+
+    def name(self) -> str:
+        return f"{self.task}-mlp"
+
+    def on_save_checkpoint(
+        self,
+        checkpoint: dict[str, Any],
+    ) -> None:
+        """Modify checkpointing logic to not dump the underlying embedder weights if frozen."""
+        # If embedder is not frozen, then just use the default state dict with all weights
+        if not self.config.model.frozen_embedder:
+            return
+        # Otherwise overwrite state dict with just the MLP head weights
+        checkpoint["state_dict"] = self.mlp.state_dict()
+
+    @classmethod
+    def load_from_checkpoint(
+        cls,
+        checkpoint_path: Path,
+        **kwargs,
+    ) -> None:
+        """Modify checkpointing logic to not dump the underlying embedder weights if frozen."""
+        checkpoint = torch.load(checkpoint_path, weights_only=False)
+        hparams = checkpoint["hyper_parameters"]
+        hparams.update(kwargs)
+
+        model = cls(**hparams)
+
+        if hparams["config"].model.frozen_embedder:
+            model.mlp.load_state_dict(checkpoint["state_dict"])
         else:
             model.load_state_dict(checkpoint["state_dict"])
 

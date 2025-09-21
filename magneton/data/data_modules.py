@@ -17,6 +17,7 @@ from torchdata.nodes import (
     Mapper,
     Prefetcher,
     SamplerWrapper,
+    Unbatcher,
 )
 
 from magneton.config import DataConfig
@@ -34,8 +35,10 @@ from .evals import (
     DeepFriModule,
     DeepLocModule,
     FlipModule,
+    HumanPPIModule,
     PeerDataModule,
     ThermostabilityModule,
+    flatten_ppi_data_elements,
 )
 from .model_specific import (
     ESM2TransformNode,
@@ -63,7 +66,15 @@ def filter_and_sample(
     if max_len is not None:
         valid_indices = []
         for i in range(len(dataset)):
-            if dataset[i].length < max_len:
+            item = dataset[i]
+            # For PPI datasets, length is a list of ints
+            if isinstance(item.length, list):
+                check_length = max(item.length)
+            elif isinstance(item.length, int):
+                check_length = item.length
+            else:
+                raise ValueError(f"unexpected length type ({i}): {item.length}")
+            if check_length < max_len:
                 valid_indices.append(i)
         dataset = Subset(dataset, valid_indices)
         print(f"remaining samples after length filter: {len(valid_indices)}")
@@ -241,7 +252,18 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
                 num_workers=num_workers,
             )
             self.task_granularity = TASK_GRANULARITY.RESIDUE_CLASSIFICATION
-
+        elif task == "human_ppi":
+            # Need batch size to be even so we don't break up pairs
+            if self.data_config.batch_size % 2 != 0:
+                raise ValueError(
+                    f"PPI batch size must be an even number: {self.data_config.batch_size}"
+                )
+            self.module = HumanPPIModule(
+                data_dir=self.data_dir / "saprot_processed" / "HumanPPI",
+                struct_template=self.data_config.struct_template,
+                num_workers=num_workers,
+            )
+            self.task_granularity = TASK_GRANULARITY.PPI_PREDICTION
         else:
             raise ValueError(f"unknown eval task: {task}")
 
@@ -264,6 +286,13 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
             drop_last=drop_last,
             seed=seed,
         )
+        if self.task_granularity == TASK_GRANULARITY.PPI_PREDICTION:
+            # PPI data elements are pairs so that sampling and filtering
+            # doesn't break up pairs, but easier to unroll here so each
+            # protein is it's own element, for compatibility with model-specific
+            # transformations
+            node = Mapper(node, flatten_ppi_data_elements)
+            node = Unbatcher(node)
 
         this_data_dir = self.data_dir / self.task / split
         if not this_data_dir.exists():
@@ -277,7 +306,10 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
             **self.data_config.model_specific_params,
         )
         labels_mode = None
-        if self.task_granularity == TASK_GRANULARITY.PROTEIN_CLASSIFICATION:
+        if self.task_granularity in [
+            TASK_GRANULARITY.PROTEIN_CLASSIFICATION,
+            TASK_GRANULARITY.PPI_PREDICTION,
+        ]:
             labels_mode = "stack"
         elif self.task_granularity == TASK_GRANULARITY.RESIDUE_CLASSIFICATION:
             labels_mode = "cat"

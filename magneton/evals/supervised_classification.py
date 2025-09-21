@@ -21,7 +21,12 @@ from magneton.data.evals import (
     TASK_TO_TYPE,
 )
 
-from .downstream_classifiers import ContactPredictor, MultiLabelMLP, ResidueClassifier
+from .downstream_classifiers import (
+    ContactPredictor,
+    MultiLabelMLP,
+    PPIPredictor,
+    ResidueClassifier,
+)
 from .metrics import (
     FMaxScore,
     PrecisionAtL,
@@ -90,6 +95,7 @@ def run_final_predictions(
         json.dump(metrics_dict, f, indent=2)
     print(f"Metrics saved to: {metrics_json_path}")
 
+
 def run_final_contact_predictions(
     model: ContactPredictor,
     trainer: L.Trainer,
@@ -127,7 +133,7 @@ def run_final_contact_predictions(
     for logits, labels, lengths in zip(final_predictions, all_labels, protein_lengths):
         p_at_l.update(logits, labels, lengths)
 
-    metrics_dict.update({k: v.item() for k,v in p_at_l.compute().items()})
+    metrics_dict.update({k: v.item() for k, v in p_at_l.compute().items()})
 
     print(f"{prefix} final metrics: {metrics_dict}")
 
@@ -213,6 +219,8 @@ def run_supervised_classification(
         classifier_cls = ResidueClassifier
     elif module.task_granularity == TASK_GRANULARITY.CONTACT_PREDICTION:
         classifier_cls = ContactPredictor
+    elif module.task_granularity == TASK_GRANULARITY.PPI_PREDICTION:
+        classifier_cls = PPIPredictor
     else:
         raise ValueError(f"unknown task type: {module.task_type}")
 
@@ -277,7 +285,7 @@ def run_supervised_classification(
             num_classes=module.num_classes(),
             output_dir=output_dir,
             prefix="test",
-    )
+        )
 
     if logger is not None:
         logger.experiment.finish()

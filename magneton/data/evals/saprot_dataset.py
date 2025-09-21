@@ -1,5 +1,6 @@
 import json
 import logging
+from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
 from typing import Any, Literal
@@ -9,7 +10,6 @@ import numpy as np
 import pandas as pd
 import requests
 import torch
-
 from Bio import SeqIO
 from scipy.spatial.distance import pdist, squareform
 from torch.utils.data import Dataset
@@ -100,8 +100,8 @@ def process_df(
     logger.info("Extracting sequences from PDBs to verify dataset sequences.")
     seq_from_pdb: dict[str, str] = parse_seqs_from_pdbs(
         fasta_path=fasta_cache_path,
-        file_paths=df.structure_path.tolist(),
-        uniprot_ids=df.uniprot_id.tolist(),
+        jobs=df.structure_path.tolist(),
+        protein_ids=df.uniprot_id.tolist(),
         num_workers=num_workers,
     )
 
@@ -151,14 +151,144 @@ class SaProtProcessedDataset(Dataset):
                 torch.tensor(row.label),
                 num_classes=self.num_classes,
             ).sum(dim=0)
+        if isinstance(row.seq, list):
+            length = list(map(len, row.seq))
+        else:
+            length = len(row.seq)
 
         return DataElement(
             protein_id=row.uniprot_id,
-            length=len(row.seq),
+            length=length,
             labels=label_tensor,
             seq=row.seq,
-            structure_path=str(row.structure_path),
+            structure_path=row.structure_path,
         )
+
+
+def flatten_ppi_data_elements(
+    x: DataElement,
+) -> list[DataElement]:
+    assert len(x.protein_id) == 2, f"got: {x}"
+    assert len(x.structure_path) == 2, f"got: {x}"
+    assert len(x.seq) == 2, f"got: {x}"
+    assert len(x.length) == 2, f"got: {x}"
+
+    return [
+        DataElement(
+            protein_id=x.protein_id[0],
+            seq=x.seq[0],
+            structure_path=x.structure_path[0],
+            length=x.length[0],
+            labels=x.labels,
+        ),
+        DataElement(
+            protein_id=x.protein_id[1],
+            seq=x.seq[1],
+            structure_path=x.structure_path[1],
+            length=x.length[1],
+            labels=x.labels,
+        ),
+    ]
+
+
+class HumanPPIModule:
+    """
+    Load PPI LMDB datasets (pairwise interactions).
+
+    Expected directory layout (default):
+      <data_dir>/ppi/<split>/
+    where each split folder contains LMDB files (data.mdb, lock.mdb).
+
+    Usage:
+      mod = PPIInteractionModule(data_dir="PPI", struct_template="/path/to/afdb/%s.pdb")
+      train_ds = mod.get_dataset("train")
+    """
+
+    def __init__(
+        self,
+        data_dir: str | Path,
+        struct_template: str,
+        num_workers: int = 16,
+    ):
+        self.data_dir = Path(data_dir)
+        self.struct_template = struct_template
+        self.num_workers = num_workers
+
+    def _split_folder(self, split: Literal["train", "val", "test"]) -> Path:
+        if split == "val":
+            split = "valid"
+        return self.data_dir / "normal" / split
+
+    def num_classes(self) -> int:
+        # Just use one class for binary classification
+        return 1
+
+    def get_dataset(self, split: Literal["train", "val", "test"]) -> Dataset:
+        df = self._prepare_split_df(split)
+        return SaProtProcessedDataset(
+            df=df, task_type=EVAL_TASK.BINARY, num_classes=self.num_classes()
+        )
+
+    def _prepare_split_df(self, split: Literal["train", "val", "test"]) -> pd.DataFrame:
+        folder = self._split_folder(split)
+        if not folder.exists():
+            raise FileNotFoundError(f"LMDB split folder not found: {folder}")
+
+        records = read_lmdb_folder(folder)
+        logger.info(f"Read {len(records)} records from LMDB at {folder}")
+        assert len(records) != 0
+
+        # Convert into DataFrame. Assumes records are dicts with keys:
+        # 'name_1', 'name_2', 'seq_1', 'seq_2', 'label'
+        df = pd.DataFrame(records)
+
+        # Basic validation of required fields
+        required = {"name_1", "name_2", "seq_1", "seq_2", "label"}
+        if not required.issubset(set(df.columns)):
+            missing = required - set(df.columns)
+            raise RuntimeError(f"Missing required LMDB fields: {missing}")
+
+        # Make flattened dataframe for processing (downloading missing AFDB files,
+        # filtering proteins with no structures or mismatched sequences)
+        flat_df = pd.DataFrame(
+            {
+                "uniprot_id": df.name_1.to_list() + df.name_2.to_list(),
+                "seq": df.seq_1.to_list() + df.seq_2.to_list(),
+            }
+        )
+        filtered_flat_df = process_df(
+            df=flat_df,
+            fasta_cache_path=self.data_dir / f"human_ppi.seq_from_pdb.{split}.fa",
+            struct_template=self.struct_template,
+            num_workers=self.num_workers,
+        )
+
+        keep = df.name_1.isin(filtered_flat_df.uniprot_id) & df.name_2.isin(
+            filtered_flat_df.uniprot_id
+        )
+        if not keep.all():
+            logger.warning(
+                f"Dropping {(~keep).sum()} PPI pairs where either protein has been filtered out"
+            )
+        id_to_struct = {
+            row.uniprot_id: row.structure_path for _, row in filtered_flat_df.iterrows()
+        }
+
+        def group_cols(row: pd.Series, prefix: str) -> list[str]:
+            return [row[f"{prefix}_1"], row[f"{prefix}_2"]]
+
+        df = df.loc[keep].assign(
+            structure_path_1=lambda x: x.name_1.map(id_to_struct),
+            structure_path_2=lambda x: x.name_2.map(id_to_struct),
+            uniprot_id=lambda x: x.apply(partial(group_cols, prefix="name"), axis=1),
+            structure_path=lambda x: x.apply(
+                partial(group_cols, prefix="structure_path"), axis=1
+            ),
+            seq=lambda x: x.apply(partial(group_cols, prefix="seq"), axis=1),
+        )[["uniprot_id", "seq", "structure_path", "label"]]
+
+        logger.info(f"Prepared {len(df)} PPI pair entries for split {split}")
+        return df
 
 
 class ThermostabilityModule:
@@ -338,6 +468,7 @@ class ContactPredictionDataset(Dataset):
             structure_path=str(row.structure_path),
         )
 
+
 class ContactPredictionModule:
     """
     Load Contact prediction LMDB datasets from SaProt, These are structured in the pattern:
@@ -397,7 +528,7 @@ class ContactPredictionModule:
             if "#" in name:
                 name = name.split("#")[1]
             parts = name.split("_")
-            if split in["train", "val"] and len(parts) != 3:
+            if split in ["train", "val"] and len(parts) != 3:
                 continue
             record["name"] = name
 
@@ -414,8 +545,8 @@ class ContactPredictionModule:
         logger.info(f"Making contact labels for {len(all_usable_records)} records")
         labels = list(tqdm(map(record_to_labels, all_usable_records)))
 
-        df = (
-            pd.DataFrame({
+        df = pd.DataFrame(
+            {
                 "protein_id": [x["name"] for x in all_usable_records],
                 "seq": [x["seq"] for x in all_usable_records],
                 # valid_seq is the masked sequence, which we use to do a sanity
@@ -423,10 +554,9 @@ class ContactPredictionModule:
                 # don't contain entries for masked positions.
                 "valid_seq": valid_seqs,
                 "labels": labels,
-            })
-            .assign(
-                pdb_id=lambda x: x.protein_id.str.split("_").str[0],
-            )
+            }
+        ).assign(
+            pdb_id=lambda x: x.protein_id.str.split("_").str[0],
         )
         if split == "test":
             want_dir = self.data_dir / "test_set"
@@ -442,7 +572,9 @@ class ContactPredictionModule:
         )
 
         df = df.loc[lambda x: x.seq.str.len() <= self.max_len]
-        logger.info(f"Retaining {len(df)} records after filtering for length <= {self.max_len}")
+        logger.info(
+            f"Retaining {len(df)} records after filtering for length <= {self.max_len}"
+        )
 
         # Try to download any missing files
         missing_files = [path for path in df.structure_path if not path.exists()]
@@ -464,7 +596,9 @@ class ContactPredictionModule:
         fasta_cache_path = self.data_dir / f"contact.seq_from_pdb.{split}.fa"
 
         if split in ["train", "val"]:
-            jobs = list(df[["structure_path", "chain"]].itertuples(index=False, name=None))
+            jobs = list(
+                df[["structure_path", "chain"]].itertuples(index=False, name=None)
+            )
             want_dir = self.data_dir / "test_set"
         else:
             jobs = df.structure_path.tolist()
@@ -484,19 +618,23 @@ class ContactPredictionModule:
             match = df.apply(lambda r: r.valid_seq == r.seq_pdb, axis=1)
         if not match.all():
             n_mismatch = (~match).sum()
-            logger.warning(f"Dropping {n_mismatch} entries with sequence mismatches vs PDB")
+            logger.warning(
+                f"Dropping {n_mismatch} entries with sequence mismatches vs PDB"
+            )
             df = df.loc[match].reset_index(drop=True)
 
         return df
+
 
 def parse_chain_seq_from_pdb(
     path: Path,
     chain: str = "A",
 ) -> str:
     """Get a sequence of a specific chain from a PDB file."""
-    chains = {record.id: record.seq for record in SeqIO.parse(path, 'pdb-seqres')}
+    chains = {record.id: record.seq for record in SeqIO.parse(path, "pdb-seqres")}
     name = path.name.split(".")[0]
     return str(chains.get(f"{name}:{chain}", ""))
+
 
 def record_to_labels(
     entry: dict[str, Any],
@@ -504,8 +642,8 @@ def record_to_labels(
 ) -> torch.Tensor:
     # Below is copied from SaProt:
     #  https://github.com/westlake-repl/SaProt/blob/main/dataset/saprot/saprot_contact_dataset.py#L56
-    valid_mask = np.array(entry['valid_mask'])[:max_len]
-    coords = np.array(entry['tertiary'])[:max_len]
+    valid_mask = np.array(entry["valid_mask"])[:max_len]
+    coords = np.array(entry["tertiary"])[:max_len]
     contact_map = np.less(squareform(pdist(coords)), 8.0).astype(np.int64)
 
     y_inds, x_inds = np.indices(contact_map.shape)
@@ -527,7 +665,9 @@ def download_one_pdb_file(
             with open(path, "wb") as f:
                 f.write(r.content)
         else:
-            logger.debug(f"failed to fetch PDB file ({path}): status code {r.status_code}")
+            logger.debug(
+                f"failed to fetch PDB file ({path}): status code {r.status_code}"
+            )
             return False
     except Exception as e:
         logger.debug(f"failed to fetch PDB file ({path}): {e}")
