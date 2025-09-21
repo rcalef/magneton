@@ -110,7 +110,6 @@ class MultiLabelMLP(L.LightningModule):
         # Load embedder
         model = EmbeddingMLP.load_from_checkpoint(
             self.config.evaluate.model_checkpoint,
-            config=config,
             load_pretrained_fisher=self.config.evaluate.has_fisher_info,
         )
         self.embedder = model.embedder
