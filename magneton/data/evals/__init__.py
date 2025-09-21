@@ -2,7 +2,6 @@ from.biolip_dataset import BioLIP2Module
 from .deepfri_dataset import DeepFriModule
 from .flip_dataset import FlipModule
 from .peer_dataset import PEER_TASK_TO_CONFIGS, PeerDataModule
-from .protein_workshop_dataset import TASK_TO_CONFIGS, WorkshopDataModule
 from .saprot_dataset import (
     ContactPredictionModule,
     DeepLocModule,
