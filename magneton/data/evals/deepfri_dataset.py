@@ -179,7 +179,7 @@ class DeepFriModule:
         fasta_path = data_dir / f"{self.task}.seqs_from_pdbs.fa"
         sequence_dict = parse_seqs_from_pdbs(
             fasta_path=fasta_path,
-            file_paths=dataset.structure_path.to_list(),
+            jobs=dataset.structure_path.to_list(),
             protein_ids=dataset.pdb_id.to_list(),
             num_workers=self.num_workers,
         )
