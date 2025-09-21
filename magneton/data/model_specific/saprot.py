@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import torch
@@ -241,19 +242,19 @@ class SaProtTransformNode(ParallelMapper):
 
     def get_collate_fn(
         self,
-        stack_labels: bool = True,
+        labels_mode: Literal["stack", "cat", "pad"],
     ) -> Callable:
         return partial(
             saprot_collate,
             pad_id=self.tokenizer.pad_token_id,
-            stack_labels=stack_labels,
+            labels_mode=labels_mode,
         )
 
 
 def saprot_collate(
     entries: list[SaProtDataElement],
     pad_id: int,
-    stack_labels: bool = True,
+    labels_mode: Literal["stack", "cat", "pad"],
 ) -> SaProtBatch:
     """
     Collate ProSST data elements into a batch.
@@ -276,10 +277,17 @@ def saprot_collate(
         labels = None
     else:
         labels = [x.labels for x in entries]
-        if stack_labels:
+        if labels_mode == "stack":
             labels = torch.stack(labels)
-        else:
+        elif labels_mode == "cat":
             labels = torch.cat(labels)
+        elif labels_mode == "pad":
+            labels = stack_variable_length_tensors(
+                labels,
+                constant_value=-1,
+            )
+        else:
+            raise ValueError(f"unknown label mode: {labels_mode}")
     return SaProtBatch(
         protein_ids=protein_ids,
         lengths=lengths,

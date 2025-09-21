@@ -402,16 +402,13 @@ class ContactPredictionModule:
 
             all_usable_records.append(record)
 
-        if split == "test":
-            seqs = []
-            for record in all_usable_records:
-                seq = []
-                for aa, valid in zip(record["seq"], record["valid_mask"]):
-                    if valid:
-                        seq.append(aa)
-                seqs.append("".join(seq))
-        else:
-            seqs = [x["seq"] for x in all_usable_records]
+        valid_seqs = []
+        for record in all_usable_records:
+            seq = []
+            for aa, valid in zip(record["seq"], record["valid_mask"]):
+                if valid:
+                    seq.append(aa)
+            valid_seqs.append("".join(seq))
 
         logger.info(f"Making contact labels for {len(all_usable_records)} records")
         labels = list(tqdm(map(record_to_labels, all_usable_records)))
@@ -420,10 +417,10 @@ class ContactPredictionModule:
             pd.DataFrame({
                 "protein_id": [x["name"] for x in all_usable_records],
                 "seq": [x["seq"] for x in all_usable_records],
-                # check_seq is the masked sequence, which we use to do a sanity
+                # valid_seq is the masked sequence, which we use to do a sanity
                 # check against the sequence in the PDB files. The test set PDB files
                 # don't contain entries for masked positions.
-                "check_seq": seqs,
+                "valid_seq": valid_seqs,
                 "labels": labels,
             })
             .assign(
@@ -479,7 +476,10 @@ class ContactPredictionModule:
         )
 
         df = df.assign(seq_pdb=lambda x: x.protein_id.map(seq_from_pdb))
-        match = df.apply(lambda r: r.check_seq == r.seq_pdb, axis=1)
+        if split in ["train", "val"]:
+            match = df.apply(lambda r: r.seq == r.seq_pdb, axis=1)
+        else:
+            match = df.apply(lambda r: r.valid_seq == r.seq_pdb, axis=1)
         if not match.all():
             n_mismatch = (~match).sum()
             logger.warning(f"Dropping {n_mismatch} entries with sequence mismatches vs PDB")
