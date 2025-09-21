@@ -215,7 +215,6 @@ class FlipModule:
         self.label_types = tuple(label_types)
         self.df = self._get_flip_df()
 
-    # ------------- Public API -------------
     def num_classes(self) -> int:
         return len(self.label_types)
 
@@ -231,7 +230,6 @@ class FlipModule:
             raise ValueError(f"Unknown split: {split}")
         return FlipDataset(want, self.label_types)
 
-    # ------------- Pipeline -------------
     def _get_flip_df(self) -> pd.DataFrame:
         # 1) Read FASTAs
         logger.info(f"Reading sequences from: {self.seq_fasta}")

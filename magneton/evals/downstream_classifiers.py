@@ -313,6 +313,7 @@ class ResidueClassifier(L.LightningModule):
 
         self.config = config
         self.task = task
+        self.task_type = task_type
         self.num_classes = num_classes
 
         # Load embedder
@@ -373,7 +374,12 @@ class ResidueClassifier(L.LightningModule):
             residue_logits.append(raw_logits[idx, :length])
 
         # total_len X num_classes
-        return torch.cat(residue_logits)
+        flat_logits =  torch.cat(residue_logits)
+        if self.task_type:
+            # Remove the trailing dim if this is a binary classification problem
+            flat_logits = flat_logits.squeeze()
+        return flat_logits
+
 
     def training_step(self, batch: Batch, batch_idx: int) -> torch.Tensor:
         logits = self(batch)

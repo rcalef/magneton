@@ -180,7 +180,7 @@ class DeepFriModule:
         sequence_dict = parse_seqs_from_pdbs(
             fasta_path=fasta_path,
             file_paths=dataset.structure_path.to_list(),
-            uniprot_ids=dataset.pdb_id.to_list(),
+            protein_ids=dataset.pdb_id.to_list(),
             num_workers=self.num_workers,
         )
         dataset = dataset.assign(seq=lambda x: x.pdb_id.map(sequence_dict))

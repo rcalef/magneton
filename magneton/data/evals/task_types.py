@@ -21,12 +21,15 @@ TASK_TYPES = {
     EVAL_TASK.MULTICLASS: [
         "fold",
         "saprot_subloc",
+        "FLIP_bind"
     ],
     EVAL_TASK.BINARY: [
-        "solubility",
+        "biolip_binding",
+        "biolip_catalytic",
         "binary_localization",
-        "saprot_binloc",
         "contact_prediction",
+        "saprot_binloc",
+        "solubility",
     ],
     EVAL_TASK.REGRESSION: [
         "fluorescence",

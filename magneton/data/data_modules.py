@@ -11,8 +11,8 @@ from torch.utils.data import (
     Subset,
 )
 from torchdata.nodes import (
-    Batcher,
     BaseNode,
+    Batcher,
     Loader,
     Mapper,
     Prefetcher,
@@ -24,25 +24,24 @@ from magneton.types import DataType
 
 from .core import (
     get_core_dataset,
-    #WorkshopDataModule,
-    #TASK_TO_CONFIGS,
 )
 from .evals import (
+    PEER_TASK_TO_CONFIGS,
+    TASK_GRANULARITY,
+    TASK_TO_TYPE,
+    BioLIP2Module,
     ContactPredictionModule,
     DeepFriModule,
     DeepLocModule,
     FlipModule,
     PeerDataModule,
     ThermostabilityModule,
-    PEER_TASK_TO_CONFIGS,
-    TASK_GRANULARITY,
-    TASK_TO_TYPE,
 )
 from .model_specific import (
     ESM2TransformNode,
     ESMCTransformNode,
     ProSSTTransformNode,
-    SaProtTransformNode
+    SaProtTransformNode,
 )
 
 model_data = {
@@ -51,6 +50,7 @@ model_data = {
     "prosst": (ProSSTTransformNode, [DataType.SEQ, DataType.STRUCT]),
     "saprot": (SaProtTransformNode, [DataType.SEQ, DataType.STRUCT]),
 }
+
 
 def filter_and_sample(
     dataset: Dataset,
@@ -96,12 +96,13 @@ def filter_and_sample(
 
 class MagnetonDataModule(L.LightningDataModule):
     """DataModule for substructure-aware fine-tuning."""
+
     def __init__(
         self,
         data_config: DataConfig,
         model_type: str,
         distributed: bool = False,
-        max_len: int | None = 2048
+        max_len: int | None = 2048,
     ):
         super().__init__()
         self.data_config = data_config
@@ -164,6 +165,7 @@ class MagnetonDataModule(L.LightningDataModule):
             shuffle=False,
         )
 
+
 class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
     def __init__(
         self,
@@ -173,7 +175,7 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         model_type: str,
         max_len: int | None = 2048,
         distributed: bool = False,
-        num_workers: int = 32
+        num_workers: int = 32,
     ):
         super().__init__()
         transform_cls, _ = model_data[model_type]
@@ -201,11 +203,6 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
                 self.data_dir,
             )
             self.task_granularity = TASK_GRANULARITY.PROTEIN_CLASSIFICATION
-        # elif task in TASK_TO_CONFIGS:
-        #     self.module = WorkshopDataModule(
-        #         task,
-        #         self.data_dir,
-        #     )
         elif task.startswith("saprot"):
             if task == "saprot_thermostability":
                 self.module = ThermostabilityModule(
@@ -237,6 +234,13 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
                 num_workers=num_workers,
             )
             self.task_granularity = TASK_GRANULARITY.CONTACT_PREDICTION
+        elif task in ["biolip_binding", "biolip_catalytic"]:
+            self.module = BioLIP2Module(
+                data_dir=self.data_dir / "struct_token_bench",
+                task=task.replace("biolip_", ""),
+                num_workers=num_workers,
+            )
+            self.task_granularity = TASK_GRANULARITY.RESIDUE_CLASSIFICATION
 
         else:
             raise ValueError(f"unknown eval task: {task}")
@@ -275,10 +279,12 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         labels_mode = None
         if self.task_granularity == TASK_GRANULARITY.PROTEIN_CLASSIFICATION:
             labels_mode = "stack"
-        elif self.task_granularity == TASK_GRANULARITY.PROTEIN_CLASSIFICATION:
+        elif self.task_granularity == TASK_GRANULARITY.RESIDUE_CLASSIFICATION:
             labels_mode = "cat"
         elif self.task_granularity == TASK_GRANULARITY.CONTACT_PREDICTION:
             labels_mode = "pad"
+        else:
+            raise ValueError(f"unexpected task granularity: {self.task_granularity}")
 
         collate_fn = node.get_collate_fn(
             labels_mode=labels_mode,

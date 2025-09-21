@@ -10,6 +10,7 @@ import pandas as pd
 import requests
 import torch
 
+from Bio import SeqIO
 from scipy.spatial.distance import pdist, squareform
 from torch.utils.data import Dataset
 from tqdm import tqdm
@@ -473,6 +474,7 @@ class ContactPredictionModule:
             jobs=jobs,
             protein_ids=df.protein_id.tolist(),
             num_workers=self.num_workers,
+            parse_func=parse_chain_seq_from_pdb,
         )
 
         df = df.assign(seq_pdb=lambda x: x.protein_id.map(seq_from_pdb))
@@ -486,6 +488,15 @@ class ContactPredictionModule:
             df = df.loc[match].reset_index(drop=True)
 
         return df
+
+def parse_chain_seq_from_pdb(
+    path: Path,
+    chain: str = "A",
+) -> str:
+    """Get a sequence of a specific chain from a PDB file."""
+    chains = {record.id: record.seq for record in SeqIO.parse(path, 'pdb-seqres')}
+    name = path.name.split(".")[0]
+    return str(chains.get(f"{name}:{chain}", ""))
 
 def record_to_labels(
     entry: dict[str, Any],
