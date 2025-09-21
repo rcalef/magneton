@@ -85,8 +85,8 @@ def classify_substructs(
     df = pd.DataFrame(results)
 
     # TODO Change based on type
-    csv_path = config.test_dir / f"evaluation_{config.run_id}_{list(config.data.substruct_types)[0]}.csv"
+    csv_path = config.output_dir / f"evaluation_{config.run_id}_{list(config.data.substruct_types)[0]}.csv"
     df.to_csv(csv_path, index=False)
 
     print(f"Accuracies for each batch: {accs}")
-    print(f"Saved detailed evaluation results to {config.test_dir}")
+    print(f"Saved detailed evaluation results to {config.output_dir}")

@@ -21,7 +21,6 @@ class EmbeddingPipeline:
     def __init__(self, cfg: PipelineConfig):
         print("\n=== Pipeline Configuration ===")
         print(f"Output Directory: {cfg.output_dir}")
-        print(f"Test Directory: {cfg.test_dir}")
         print(f"Model Type: {cfg.model.model_type}")
         print(f"Model Checkpoint: {cfg.model.checkpoint}")
         print(f"Interpro Type: {cfg.data.substruct_types}")
@@ -32,9 +31,6 @@ class EmbeddingPipeline:
         self.config = cfg
         self.output_dir = Path(self.config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-
-        self.test_dir = Path(self.config.test_dir)
-        self.test_dir.mkdir(parents=True, exist_ok=True)
 
         self.ckpt = self.config.model.checkpoint
 

@@ -8,7 +8,6 @@ defaults:
 
 run_id: esmc_embed_conserved_site
 output_dir: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc_test"
-test_dir: "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/magneton/tests/esmc"
 model:
   model_type: "mlp"
   model_params:

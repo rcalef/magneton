@@ -76,7 +76,6 @@ class PipelineConfig:
     seed: int = 42
     stages: List[str] = field(default_factory=lambda: ["train"])
     output_dir: str = MISSING
-    test_dir: str = MISSING
     run_id: str = MISSING
     data: DataConfig = MISSING
     embedding: EmbeddingConfig = MISSING
