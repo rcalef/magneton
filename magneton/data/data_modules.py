@@ -187,6 +187,7 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         data_dir: str,
         model_type: str,
         max_len: int | None = 2048,
+        unk_amino_acid_char: str = "X",
         distributed: bool = False,
         num_workers: int = 32,
     ):
@@ -251,6 +252,7 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
             self.module = BioLIP2Module(
                 data_dir=self.data_dir / "struct_token_bench",
                 task=task.replace("biolip_", ""),
+                unk_amino_acid_char=unk_amino_acid_char,
                 num_workers=num_workers,
             )
             self.task_granularity = TASK_GRANULARITY.RESIDUE_CLASSIFICATION

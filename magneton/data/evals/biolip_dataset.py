@@ -1,5 +1,6 @@
 import json
 import logging
+from functools import partial
 from pathlib import Path
 from typing import Literal
 
@@ -64,11 +65,14 @@ class BioLIP2Module:
         self,
         data_dir: str | Path,
         task: Literal["binding", "catalytic"],
+        unk_amino_acid_char: str = "X",
         num_workers: int = 16,
     ):
         self.data_dir = Path(data_dir)
         self.num_workers = num_workers
         self.task = task
+        self.unk_amino_acid_char = unk_amino_acid_char
+
         if task not in {"binding", "catalytic"}:
             raise ValueError(f"task must be 'binding' or 'catalytic', got: {task}")
 
@@ -76,7 +80,7 @@ class BioLIP2Module:
         # due to having residues missing alpha-carbon atoms
         self.exclude = ['5wdh_A', '3zqe_A', '1jni_A', '5ivn_A',
              '2bp3_A', '2a06_G', '4ku4_A', '1plj_A',
-             '1brd_A', '2vn2_A']
+             '1brd_A', '2vn2_A', '2zba_D']
 
     def _jsonl_name(self, split: str) -> Path:
         """
@@ -135,13 +139,13 @@ class BioLIP2Module:
             "labels": all_labels,
         })
 
-        fasta_path = self.data_dir / f"{self.task}.{split}.seqs_from_pdbs.fa"
+        fasta_path = self.data_dir / f"{self.task}.{split}.seqs_from_pdbs_unk{self.unk_amino_acid_char}.fa"
         sequence_dict = parse_seqs_from_pdbs(
             fasta_path=fasta_path,
             jobs=df.structure_path.to_list(),
             protein_ids=df.protein_id.to_list(),
             num_workers=self.num_workers,
-            parse_func=parse_seq_direct,
+            parse_func=partial(parse_seq_direct, unk_amino_acid_char=self.unk_amino_acid_char),
         )
         df = df.assign(seq=lambda x: x.protein_id.map(sequence_dict))
         num_labels = df.labels.map(lambda x: x.size(dim=0))
@@ -160,10 +164,10 @@ class BioLIP2Module:
         return BioLIP2Dataset(df)
 
 
-aa_map = {k.upper(): v for k,v in protein_letters_3to1.items()}
-aa_map["UNK"] = "X"
+
 def parse_seq_direct(
     path: Path,
+    unk_amino_acid_char: str,
 ) -> str:
     """Directly parse a sequence from a PDB file.
 
@@ -171,6 +175,8 @@ def parse_seq_direct(
     identities from the file. Some of the PDB files here seem to have missing
     atoms that result in omitted residues otherwise.
     """
+    aa_map = {k.upper(): v for k,v in protein_letters_3to1.items()}
+    aa_map["UNK"] = unk_amino_acid_char
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure("protein", path)
 

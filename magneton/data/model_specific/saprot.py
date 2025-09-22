@@ -227,7 +227,7 @@ class SaProtTransformNode(ParallelMapper):
         sa_seq = []
         foldseek_toks = self.foldseek_tokens[x.protein_id]
         assert len(foldseek_toks) == len(x.seq)
-        for aa, fs in zip(x.seq, foldseek_toks):
+        for aa, fs in zip(x.seq, foldseek_toks, strict=True):
             sa_seq.append(f"{aa}{fs}")
         sa_seq = "".join(sa_seq)
         return SaProtDataElement(

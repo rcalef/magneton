@@ -219,6 +219,7 @@ def run_supervised_classification(
         data_dir=config.evaluate.data_dir,
         model_type=config.embedding.model,
         distributed=want_distributed_sampler,
+        unk_amino_acid_char=config.model.model_params.get("unk_amino_acid_char", "X"),
     )
 
     if module.task_granularity == TASK_GRANULARITY.PROTEIN_CLASSIFICATION:
