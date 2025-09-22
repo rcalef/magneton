@@ -187,7 +187,7 @@ def run_supervised_classification(
         ),
     ]
     is_dev_run = (type(config.training.dev_run) is int) or bool(config.training.dev_run)
-    if is_dev_run:
+    if is_dev_run or config.evaluate.final_prediction_only:
         logger = None
     else:
         logger = WandbLogger(

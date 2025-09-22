@@ -21,8 +21,9 @@ TASK_TYPES = {
         "GO:BP",
         "GO:CC",
         "GO:MF",
+        "FLIP_bind",
     ],
-    EVAL_TASK.MULTICLASS: ["fold", "saprot_subloc", "FLIP_bind"],
+    EVAL_TASK.MULTICLASS: ["fold", "saprot_subloc"],
     EVAL_TASK.BINARY: [
         "biolip_binding",
         "biolip_catalytic",

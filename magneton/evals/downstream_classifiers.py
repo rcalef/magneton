@@ -386,9 +386,14 @@ class ResidueClassifier(L.LightningModule):
         labels = batch.labels.to(dtype=logits.dtype)
         loss = self.loss(logits, labels)
 
+        logits, labels = format_logits_and_labels_for_metrics(
+            logits,
+            batch.labels,
+            self.task_type,
+        )
+        self.train_metrics.update(logits, batch.labels)
         self.log("train_loss", loss, sync_dist=True)
         if batch_idx % 50 == 0:
-            self.train_metrics(logits, batch.labels)
             self.log_dict(self.train_metrics)
 
         return loss
@@ -399,8 +404,13 @@ class ResidueClassifier(L.LightningModule):
         labels = batch.labels.to(dtype=logits.dtype)
         loss = self.loss(logits, labels)
 
+        logits, labels = format_logits_and_labels_for_metrics(
+            logits,
+            batch.labels,
+            self.task_type,
+        )
         self.log("val_loss", loss, sync_dist=True)
-        self.val_metrics.update(logits, batch.labels)
+        self.val_metrics.update(logits, labels)
 
     def on_validation_epoch_end(self):
         self.log_dict(self.val_metrics)
