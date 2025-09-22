@@ -155,6 +155,14 @@ def run_supervised_classification(
     task_type = TASK_TO_TYPE[task]
 
     output_dir = Path(output_dir)
+    expected_final_metrics_path = output_dir / f"test_{task}_metrics.json"
+    if expected_final_metrics_path.exists():
+        if not config.evaluate.rerun_completed:
+            print(f"{task}: final predictions preset, recompute=False, skipping")
+            return
+        else:
+            print(f"{task}: final predictions preset, recompute=True, rerunning")
+
     # Set up callbacks with appropriate monitoring metric
     if task_type == EVAL_TASK.MULTICLASS:
         monitor_metric = "valid_accuracy"

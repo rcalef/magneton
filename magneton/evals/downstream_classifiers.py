@@ -375,7 +375,7 @@ class ResidueClassifier(L.LightningModule):
 
         # total_len X num_classes
         flat_logits = torch.cat(residue_logits)
-        if self.task_type:
+        if self.task_type == EVAL_TASK.BINARY:
             # Remove the trailing dim if this is a binary classification problem
             flat_logits = flat_logits.squeeze()
         return flat_logits

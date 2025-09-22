@@ -42,7 +42,8 @@ def compute_prosst_toks(
     pdbs_batch_size: int = 128,
     max_len: int | None = None,
     shard_num: int | None = None,
-    num_shards: int | None = None
+    num_shards: int | None = None,
+    concat_output: bool = False,
 ):
     """Compute ProSST structure tokens for all PDB files in a directory.
 
@@ -79,7 +80,14 @@ def compute_prosst_toks(
     for prot in tqdm(dataset):
         if max_len is not None and len(prot.seq) >= max_len:
             continue
-        all_pdb_paths.append((prot.protein_id, prot.structure_path))
+        if isinstance(prot.protein_id, str):
+            all_pdb_paths.append((prot.protein_id, prot.structure_path))
+        else:
+            # For PPI datasets
+            all_pdb_paths.append((prot.protein_id[0], str(prot.structure_path[0])))
+            all_pdb_paths.append((prot.protein_id[1], str(prot.structure_path[1])))
+
+
 
     num_pdbs = len(all_pdb_paths)
     print(f"got {num_pdbs} pdb paths")
@@ -96,12 +104,16 @@ def compute_prosst_toks(
         num_pdbs = len(all_pdb_paths)
         print(f"shard {shard_num} / {num_shards}, running [{my_start}:{my_end}]")
 
+    if concat_output:
+        to_output = []
     if resume_path is not None:
         keep = []
         with bz2.open(resume_path, "rt") as fh:
-            present = {l.split("\t")[0] for l in fh}
+            present_seqs = {l.split("\t")[0]: l.split("\t")[1].strip() for l in fh}
         for (uniprot_id, path) in all_pdb_paths:
-            if uniprot_id in present:
+            if uniprot_id in present_seqs:
+                if concat_output:
+                    to_output.append((uniprot_id, present_seqs[uniprot_id]))
                 continue
             keep.append((uniprot_id, path))
         print(f"resuming with {len(keep)} / {len(all_pdb_paths)} remaining")
@@ -118,6 +130,11 @@ def compute_prosst_toks(
     end = min(num_pdbs, pdbs_batch_size)
 
     with bz2.open(output_path, "wt") as fh, torch.inference_mode():
+        if concat_output:
+            print(f"outputting for {len(to_output)} previously processed proteins")
+            for uniprot_id, toks in to_output:
+                print(f"{uniprot_id}\t{toks}", file=fh)
+
         for _ in tqdm(range(num_batches)):
             batch = all_pdb_paths[start:end]
             uniprot_ids, paths = zip(*batch)

@@ -19,6 +19,7 @@ class EvalConfig:
     data_dir: str = MISSING
     model_checkpoint: str = MISSING
     final_prediction_only: bool = False
+    rerun_completed: bool = False
     # Whether or not the saved model used EWC loss
     has_fisher_info: bool = False
 

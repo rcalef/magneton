@@ -291,8 +291,8 @@ class FlipModule:
         logger.info("Extracting sequences from PDBs to verify dataset sequences.")
         seq_from_pdb: Dict[str, str] = parse_seqs_from_pdbs(
             fasta_path=fasta_cache_path,
-            file_paths=merged.structure_path.tolist(),
-            uniprot_ids=merged.uniprot_id.tolist(),
+            jobs=merged.structure_path.tolist(),
+            protein_ids=merged.uniprot_id.tolist(),
             num_workers=self.num_workers,
         )
 
