@@ -144,7 +144,9 @@ class MagnetonDataModule(L.LightningDataModule):
             self.data_config.data_dir,
             **self.data_config.model_specific_params,
         )
-        collate_fn = node.get_collate_fn()
+        collate_fn = node.get_collate_fn(
+            labels_mode="stack",
+        )
 
         node = Batcher(node, batch_size=self.data_config.batch_size)
         node = Prefetcher(node, prefetch_factor=16)
