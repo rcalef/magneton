@@ -40,7 +40,7 @@ def precompute_struct_tokens(
     init_shared_pool(num_workers)
     all_pdb_paths = []
     for data_elem in data_source:
-        all_pdb_paths.append((data_elem.protein_id, data_elem.structure_path))
+        all_pdb_paths.append((data_elem.protein_id, str(data_elem.structure_path)))
     num_pdbs = len(all_pdb_paths)
     logger.info(f"got {num_pdbs} pdb paths")
 

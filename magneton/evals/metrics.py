@@ -3,6 +3,7 @@ import math
 import numpy as np
 import torch
 from torchmetrics import (
+    AUROC,
     Accuracy,
     AveragePrecision,
     MeanAbsoluteError,
@@ -88,6 +89,7 @@ def get_task_torchmetrics(
         metrics = {
             "accuracy": Accuracy(task="binary"),
             "auprc": AveragePrecision(task="binary"),
+            "auroc": AUROC(task="binary"),
         }
     elif task_type == EVAL_TASK.REGRESSION:
         metrics = {
