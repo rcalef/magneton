@@ -44,6 +44,7 @@ def download_one_afdb_file(
             with open(path, "wb") as f:
                 f.write(r.content)
         else:
+            logger.debug(f"failed to fetch AFDB file ({path}): {r.status_code}")
             return False
     except Exception as e:
         logger.debug(f"failed to fetch AFDB file ({path}): {e}")
