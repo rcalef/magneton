@@ -494,7 +494,7 @@ class ContactPredictor(L.LightningModule):
 
         # These come out of the contact head as (batch, seq_len, seq_len, 1),
         # so squeeze off the last dim.
-        return self.contact_head(contact_inputs).squeeze()
+        return self.contact_head(contact_inputs).squeeze(-1)
 
     def _calc_loss(
         self,
