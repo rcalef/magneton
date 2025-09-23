@@ -69,6 +69,7 @@ class TrainingConfig:
     profile: bool = False
     loss_strategy: str = "standard"
     ewc_weight: float = 400
+    reuse_ewc_weights: Optional[str] = None
 
 
 @dataclass

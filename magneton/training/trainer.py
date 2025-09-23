@@ -98,7 +98,8 @@ class ModelTrainer:
     ) -> Dict[str, float]:
         """Train model and return metrics"""
         # Train model
-        if self.config.loss_strategy == "ewc":
+        has_pretrained_fisher = self.config.reuse_ewc_weights is not None
+        if self.config.loss_strategy == "ewc" and not has_pretrained_fisher:
             self.model.calc_fisher_state = True
 
             self.trainer.predict(

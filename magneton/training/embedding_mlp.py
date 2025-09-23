@@ -88,6 +88,15 @@ class EmbeddingMLP(L.LightningModule):
         self.loss_strategy = self.train_config.loss_strategy
         if self.loss_strategy == "ewc":
             self.ewc_weight = self.train_config.ewc_weight
+            if config.training.reuse_ewc_weights is not None:
+                ewc_ckpt = torch.load(config.training.reuse_ewc_weights, weights_only=False)
+                fisher_vec = ewc_ckpt["state_dict"]["fisher_info"]
+                self.register_buffer(
+                    "fisher_info",
+                    fisher_vec,
+                    persistent=True,
+                )
+                print(f"Loaded precomputed Fisher info complete: {fisher_vec[:10]}")
 
         # Metrics
         self.train_acc = Accuracy(task="multiclass", num_classes=num_classes)
