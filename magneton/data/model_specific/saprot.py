@@ -181,7 +181,7 @@ class SaProtTransformNode(ParallelMapper):
         source_node: BaseNode,
         data_dir: str | Path,
         tokenizer_path: str
-        | Path = "/home/rcalef/storage/om_storage/model_weights/SaProt_35M_AF2",
+        | Path = "/path/to/SaProt_35M_AF2",
         num_workers: int = 2,
     ):
         if isinstance(data_dir, str):

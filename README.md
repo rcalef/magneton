@@ -16,7 +16,7 @@ uv sync --managed-python
 # implementation to support flash attention, but EvoScale esm
 # is currently marked as transformers < 4.48.2. See:
 #  https://github.com/evolutionaryscale/esm/issues/265
-uv pip install --upgrade-package transformers transformers 
+uv pip install --upgrade-package transformers transformers
 source .venv/bin/activate
 ```
 
@@ -59,7 +59,7 @@ python magneton/cli.py \
 python magneton/cli.py \
   stages=["eval"] \
   evaluate=go \
- run_id="esmc_300m_orig" \
-  output_dir="/home/rcalef/storage/om_storage/projects/magneton/experiments/downstream_evals/esmc_300m_orig" \
- evaluate.model_checkpoint="/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/no_finetune/esmc_300m_domain/model_esmc_300m_domain.pt" 
+  run_id="esmc_300m_orig" \
+  output_dir="/path/to/output" \
+  evaluate.model_checkpoint="/path/to/saved_model.pt"
  ```

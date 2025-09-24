@@ -37,7 +37,7 @@ class ESM2TransformNode(ParallelMapper):
         source_node: BaseNode,
         data_dir: str | Path = None,
         tokenizer_path: str
-        | Path = "/home/rcalef/storage/om_storage/model_weights/esm2_t33_650M_UR50D",
+        | Path = "/path/to/model_weights/esm2_t33_650M_UR50D",
         num_workers: int = 2,
     ):
         self.tokenizer = EsmTokenizer.from_pretrained(

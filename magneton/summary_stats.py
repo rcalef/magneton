@@ -282,7 +282,7 @@ def update_substructure_metrics(
 
 def calc_summaries(
     prots: Iterable[Protein],
-    labels_path: str = "/weka/scratch/weka/kellislab/rcalef/data/interpro/102.0/label_sets/",
+    labels_path: str = "/path/to/interpro/103.0/label_sets/",
 ) -> Tuple[pd.DataFrame, Dict[str, Dict[str, SubstructureMetrics]]]:
     # Define label sets for elements and initialize metric dicts
     substructure_metrics = defaultdict(dict)

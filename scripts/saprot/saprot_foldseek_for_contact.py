@@ -115,7 +115,7 @@ def parse_foldseek_toks(
 
 
 def run(
-    contact_data_path: str = "/weka/scratch/weka/kellislab/rcalef/data/magneton-data/evaluations/saprot_processed/Contact",
+    contact_data_path: str = "/path/to/magneton-data/evaluations/saprot_processed/Contact",
     num_workers: int = 32,
 ):
     contact_data_path = Path(contact_data_path)

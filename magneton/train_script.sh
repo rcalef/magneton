@@ -12,7 +12,7 @@
 #SBATCH --exclude=node058,node055,node057,node056
 
 # Load necessary modules (adjust for your cluster)
-cd /net/vast-storage/scratch/vast/kellislab/artliang/magneton
+cd /path/to/repo/magneton
 source .venv/bin/activate
 
 # uv pip list

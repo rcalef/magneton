@@ -1,8 +1,0 @@
-model: "gearnet"
-model_params:
-  weights_path: "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/gearnet/mc_gearnet_edge.pth"
-  max_seq_length: 2048
-  hidden_dims: [512, 512, 512, 512, 512, 512]
-  num_relation: 7
-  edge_input_dim: 59
-  num_angle_bin: 8

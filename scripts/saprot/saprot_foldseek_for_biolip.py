@@ -98,7 +98,7 @@ def parse_foldseek_toks(
 
 
 def run(
-    biolip_path: str = "/weka/scratch/weka/kellislab/rcalef/data/magneton-data/evaluations/struct_token_bench",
+    biolip_path: str = "/path/to/magneton-data/evaluations/struct_token_bench",
     num_workers: int = 32,
 ):
     biolip_path = Path(biolip_path)

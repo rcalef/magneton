@@ -87,7 +87,7 @@ class ProSSTTransformNode(ParallelMapper):
         self,
         source_node: BaseNode,
         data_dir: str | Path,
-        tokenizer_path: str | Path = "/home/rcalef/storage/om_storage/model_weights/ProSST-2048",
+        tokenizer_path: str | Path = "/path/to/model_weights/ProSST-2048",
         num_workers: int = 2,
     ):
         if isinstance(data_dir, str):

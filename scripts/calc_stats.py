@@ -20,7 +20,7 @@ from magneton.summary_stats import (
 def summary_with_log(
     path: str,
     logger: logging.Logger,
-    labels_path: str = "/weka/scratch/weka/kellislab/rcalef/data/interpro/102.0/label_sets/",
+    labels_path: str = "/path/to/magneton-data/interpro_103.0/selected_subset/",
 ) -> Tuple[pd.DataFrame, Dict]:
     logger.info(f"{os.path.basename(path)}: starting summary calculation")
     summaries, substructure_metrics = calc_summaries(
@@ -33,7 +33,7 @@ def summary_with_log(
 def calc_and_write_summaries(
     dir_path: str,
     outdir: str,
-    labels_path: str = "/weka/scratch/weka/kellislab/rcalef/data/interpro/102.0/label_sets/",
+    labels_path: str = "/path/to/magneton-data/interpro_103.0/selected_subset/",
     nprocs: int = 32,
     prefix: str = "sharded_proteins",
 ):
