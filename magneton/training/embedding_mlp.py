@@ -365,13 +365,20 @@ class MultitaskEmbeddingMLP(L.LightningModule):
         )
 
         # Build MLP layers and metric loggers
+        embed_dim = self.embedder.get_embed_dim()
+        hidden_dims = parse_hidden_dims(
+            raw_dims=self.model_config.model_params["hidden_dims"],
+            embed_dim=embed_dim
+        )
+
         substruct_types = config.data.substruct_types
         mlps = {}
         for substruct_type in substruct_types:
             num_classes = self.num_classes[substruct_type]
             layers = []
-            prev_dim = self.embedder.get_embed_dim()
-            for hidden_dim in self.model_config.model_params["hidden_dims"]:
+
+            prev_dim = embed_dim
+            for hidden_dim in hidden_dims:
                 layers.extend(
                     [
                         nn.Linear(prev_dim, hidden_dim),
