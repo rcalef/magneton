@@ -24,7 +24,6 @@ source .venv/bin/activate
 
 ## Run specific stages
 ```
-python magneton/cli.py +stages=["embed"]
 python magneton/cli.py +stages=["train"]
 python magneton/cli.py +stages=["eval"]
 ```
