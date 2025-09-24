@@ -134,7 +134,7 @@ class EmbeddingMLP(L.LightningModule):
         batch: Batch,
         batch_idx: int,
         dataloader_idx: int = 0,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor | tuple[torch.Tensor]:
         if self.calc_fisher_state:
             with torch.inference_mode(False), torch.set_grad_enabled(True):
                 orig_loss = self.embedder.calc_original_loss(batch, reduction="sum")
@@ -151,8 +151,8 @@ class EmbeddingMLP(L.LightningModule):
                 self.zero_grad()
             return orig_loss
         else:
-            loss, logits, labels = self._calc_substruct_outputs(batch)
-            return loss, logits, labels
+            _, logits, labels = self._calc_substruct_outputs(batch)
+            return logits, labels
 
     def on_predict_end(self):
         # Nothing to do here if not calculating Fisher
@@ -270,7 +270,7 @@ class EmbeddingMLP(L.LightningModule):
     def _calc_substruct_outputs(
             self,
             batch: Batch,
-        ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         logits = self(batch)
         labels = torch.tensor(
             [
@@ -533,6 +533,25 @@ class MultitaskEmbeddingMLP(L.LightningModule):
         # Calculate loss for original task
         orig_loss = self.embedder.calc_original_loss(batch)
         self.log("orig_loss", orig_loss, sync_dist=True)
+
+    @torch.inference_mode()
+    def predict_step(self, batch: Batch, batch_idx: int) -> tuple[dict[str, torch.Tensor]]:
+        logits = self(batch)
+
+        all_labels = {}
+        for substruct_type, substruct_logits in logits.items():
+
+            labels = torch.tensor(
+                [
+                    substruct.label
+                    for prot_substructs in batch.substructures
+                    for substruct in prot_substructs
+                    if substruct.element_type == substruct_type
+                ],
+                device=self.device,
+            )
+            all_labels[substruct_type] = labels
+        return logits, all_labels
 
     def configure_optimizers(self):
         optim_params = []

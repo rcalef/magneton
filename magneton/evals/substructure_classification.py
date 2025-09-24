@@ -1,4 +1,5 @@
 import json
+from collections import defaultdict
 from pathlib import Path
 
 import lightning as L
@@ -28,7 +29,6 @@ def classify_substructs(
         model = MultitaskEmbeddingMLP.load_from_checkpoint(
             config.evaluate.model_checkpoint,
         )
-    model.eval()
 
     data_module = MagnetonDataModule(
         data_config=config.data,
@@ -36,7 +36,7 @@ def classify_substructs(
     )
 
     substruct_parser = get_substructure_parser(config.data)
-    num_classes=substruct_parser.num_labels()
+    num_classes = substruct_parser.num_labels()
 
     trainer = L.Trainer(
         accelerator=config.training.accelerator,
@@ -52,24 +52,27 @@ def classify_substructs(
     final_predictions = trainer.predict(
         model=model, dataloaders=loader, return_predictions=True
     )
+    if config.data.collapse_labels:
+        _embedding_mlp_results(
+            final_predictions=final_predictions,
+            output_dir=output_dir,
+            num_classes=num_classes,
+        )
+    else:
+        _multilabel_mlp_results(
+            final_predictions=final_predictions,
+            output_dir=output_dir,
+            num_classes=num_classes,
+        )
 
-    all_losses, all_logits, all_labels = zip(*final_predictions)
-    all_losses = torch.stack(all_losses)
+def _embedding_mlp_results(
+    final_predictions: list[tuple[torch.Tensor]],
+    output_dir: Path,
+    num_classes: int,
+):
+    all_logits, all_labels = zip(*final_predictions)
     all_logits = torch.cat(all_logits)
     all_labels = torch.cat(all_labels)
-
-    # Make another pass through dataset to collect IDs
-    protein_ids = []
-    for batch in loader:
-        protein_ids.extend(batch.protein_ids)
-
-    results_dict = {
-        "protein_ids": protein_ids,
-        "logits": all_logits,
-        "labels": all_labels,
-    }
-
-    torch.save(results_dict, output_dir / "test_results.pt")
 
     metrics = MetricCollection({
         "macro_accuracy": Accuracy(
@@ -93,6 +96,54 @@ def classify_substructs(
     print(f"final metrics: {metrics_dict}")
 
     # Save metrics to JSON file
+    metrics_json_path = Path(output_dir) / "test_substructure_metrics.json"
+    with open(metrics_json_path, "w") as f:
+        json.dump(metrics_dict, f, indent=2)
+    print(f"Metrics saved to: {metrics_json_path}")
+
+def _multilabel_mlp_results(
+    final_predictions: list[tuple[dict[str, torch.Tensor]]],
+    output_dir: Path,
+    num_classes: dict[str, int],
+):
+  # Collect logits and labels for every substructure type separately
+    logits_by_task = defaultdict(list)
+    labels_by_task = defaultdict(list)
+    for logits_dict, labels_dict in final_predictions:
+        for substruct_type, logits in logits_dict.items():
+            logits_by_task[substruct_type].append(logits)
+        for substruct_type, labels in labels_dict.items():
+            labels_by_task[substruct_type].append(labels)
+
+    # Concatenate all batches
+    for substruct_type in logits_by_task.keys():
+        logits_by_task[substruct_type] = torch.cat(logits_by_task[substruct_type])
+        labels_by_task[substruct_type] = torch.cat(labels_by_task[substruct_type])
+
+    metrics_dict = {"task": "multitask_substructure"}
+
+    for substruct_type, logits in logits_by_task.items():
+        this_num_classes = num_classes[substruct_type]
+
+        metrics = MetricCollection({
+            "macro_accuracy": Accuracy(
+                task="multiclass", average="macro", num_classes=this_num_classes
+            ),
+            "macro_auprc": AveragePrecision(
+                task="multiclass", average="macro", num_classes=this_num_classes
+            ),
+            "macro_auroc": AUROC(
+                task="multiclass", average="macro", num_classes=this_num_classes
+            ),
+        })
+
+        task_metrics = metrics(logits, labels_by_task[substruct_type])
+        for k, v in task_metrics.items():
+            metrics_dict[f"{substruct_type}_{k}"] = v.item()
+
+    print(f"final metrics: {metrics_dict}")
+
+    # Save metrics to JSON
     metrics_json_path = Path(output_dir) / "test_substructure_metrics.json"
     with open(metrics_json_path, "w") as f:
         json.dump(metrics_dict, f, indent=2)
