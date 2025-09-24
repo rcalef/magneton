@@ -1,5 +1,4 @@
 import os
-
 from pathlib import Path
 from pprint import pprint
 
@@ -12,8 +11,9 @@ from magneton.data.core import get_substructure_parser
 from magneton.evals.substructure_classification import classify_substructs
 from magneton.evals.supervised_classification import run_supervised_classification
 from magneton.evals.zero_shot_evaluation import run_zero_shot_evaluation
-from magneton.training.trainer import ModelTrainer
 from magneton.training.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
+from magneton.training.trainer import ModelTrainer
+
 
 class EmbeddingPipeline:
     """Main pipeline for protein embedding and analysis"""
@@ -36,7 +36,7 @@ class EmbeddingPipeline:
 
     def run(self):
         """Run complete pipeline"""
-        #self.run_embedding()
+        # self.run_embedding()
         self.run_training()
         self.run_evals()
 
@@ -50,7 +50,9 @@ class EmbeddingPipeline:
         assert self.config.training is not None, "No training config specified"
 
         # Initialize dataset
-        want_distributed_sampler = dist.is_initialized() and self.config.training.strategy in ["ddp", "fsdp"]
+        want_distributed_sampler = (
+            dist.is_initialized() and self.config.training.strategy in ["ddp", "fsdp"]
+        )
         data_module = MagnetonDataModule(
             data_config=self.config.data,
             model_type=self.config.embedding.model,
@@ -88,7 +90,9 @@ class EmbeddingPipeline:
         )
         trainer.setup(model)
 
-        metrics = trainer.train_and_evaluate(train_loader=train_loader, val_loader=val_loader)
+        metrics = trainer.train_and_evaluate(
+            train_loader=train_loader, val_loader=val_loader
+        )
 
         # Save model
         model_path = self.output_dir / f"model_{self.config.run_id}.pt"
@@ -103,27 +107,17 @@ class EmbeddingPipeline:
         assert self.config.evaluate is not None, "No evaluation config specified"
         print("Evaluating...")
 
-
         for task in self.config.evaluate.tasks:
             print(f"{task} - evaluation start")
+            output_dir = Path(self.config.output_dir) / task
+            output_dir.mkdir(exist_ok=True)
+
             if task == "substructure":
-                model = EmbeddingMLP.load_from_checkpoint(
-                    self.config.evaluate.model_checkpoint,
-                    load_pretrained_fisher=self.config.evaluate.has_fisher_info,
-                )
-                model.eval()
-                data_module = MagnetonDataModule(
-                    data_config=self.config.data,
-                    model_type=self.config.embedding.model,
-                )
                 classify_substructs(
-                    model,
-                    data_module.test_dataloader(),
+                    config=self.config,
+                    output_dir=output_dir,
                 )
             elif task == "zero_shot":
-                output_dir = os.path.join(self.config.output_dir, task)
-                os.makedirs(output_dir, exist_ok=True)
-
                 run_id = f"{self.config.run_id}_{task}"
                 run_zero_shot_evaluation(
                     config=self.config,
@@ -132,10 +126,6 @@ class EmbeddingPipeline:
                     run_id=run_id,
                 )
             else:
-                output_dir = os.path.join(self.config.output_dir, task)
-                os.makedirs(output_dir, exist_ok=True)
-
-                run_id = f"{self.config.run_id}_{task}"
                 run_supervised_classification(
                     config=self.config,
                     task=task,

@@ -1,92 +1,99 @@
-import torch
-import pandas as pd
+import json
+from pathlib import Path
 
-from tqdm import tqdm
+import lightning as L
+import torch
+from torchmetrics import (
+    AUROC,
+    Accuracy,
+    AveragePrecision,
+    MetricCollection,
+)
 
 from magneton.config import PipelineConfig
-from magneton.training.embedding_mlp import EmbeddingMLP
+from magneton.data import MagnetonDataModule
+from magneton.data.core import get_substructure_parser
+from magneton.training.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
+
 
 def classify_substructs(
-    model: EmbeddingMLP,
-    data: torch.utils.data.DataLoader,
     config: PipelineConfig,
+    output_dir: Path,
 ):
-    # UMAP
-    # Get embeddings for all substructures
-    all_embeddings = []
+    if config.data.collapse_labels:
+        model = EmbeddingMLP.load_from_checkpoint(
+            config.evaluate.model_checkpoint,
+        )
+    else:
+        model = MultitaskEmbeddingMLP.load_from_checkpoint(
+            config.evaluate.model_checkpoint,
+        )
+    model.eval()
 
-    results = {
-        'protein_ids': [],
-        'true_labels': [],
-        'true_mappings': [],
-        'pred_labels': [],  # Store argmax predictions
-        'pred_mappings': [],
-        'top_k_labels': [],  # Store top-k predictions
-        'top_k_probs': []   # Store top-k probabilities
+    data_module = MagnetonDataModule(
+        data_config=config.data,
+        model_type=config.embedding.model,
+    )
+
+    substruct_parser = get_substructure_parser(config.data)
+    num_classes=substruct_parser.num_labels()
+
+    trainer = L.Trainer(
+        accelerator=config.training.accelerator,
+        devices=config.training.devices,
+        default_root_dir=output_dir,
+        precision=config.training.precision,
+        use_distributed_sampler=False,
+        fast_dev_run=config.training.dev_run,
+        logger=False,
+    )
+    loader = data_module.test_dataloader()
+
+    final_predictions = trainer.predict(
+        model=model, dataloaders=loader, return_predictions=True
+    )
+
+    all_losses, all_logits, all_labels = zip(*final_predictions)
+    all_losses = torch.stack(all_losses)
+    all_logits = torch.cat(all_logits)
+    all_labels = torch.cat(all_labels)
+
+    # Make another pass through dataset to collect IDs
+    protein_ids = []
+    for batch in loader:
+        protein_ids.extend(batch.protein_ids)
+
+    results_dict = {
+        "protein_ids": protein_ids,
+        "logits": all_logits,
+        "labels": all_labels,
     }
-    accs = []
-    k = 3
 
-    # TODO Change based on type: Domain tsv
-    labels_tsv_path = f'/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/label_sets/selected_subset/{list(config.data.substruct_types)[0]}.labels.tsv'
-    labels_df = pd.read_csv(labels_tsv_path, sep='\t')
-    label_to_element = dict(zip(labels_df['label'], labels_df['element_name']))
+    torch.save(results_dict, output_dir / "test_results.pt")
 
-    with torch.no_grad():
-        for batch in tqdm(data, desc="Evaluating batches"):
-            # Skip batch if no substructs
-            # TODO Reevaluate how to deal with batches that have only proteins with no substructures
-            if [] in batch.substructures:
-                continue
+    metrics = MetricCollection({
+        "macro_accuracy": Accuracy(
+            task="multiclass", average="macro", num_classes=num_classes
+        ),
+        "macro_auprc": AveragePrecision(
+            task="multiclass", average="macro", num_classes=num_classes
+        ),
+        "macro_auroc": AUROC(
+            task="multiclass", average="macro", num_classes=num_classes
+        ),
+    })
 
-            # Get substructure embeddings
-            substruct_embeds = model.embed(batch)
-            all_embeddings.append(substruct_embeds)
+    metrics_dict = {
+        "task": "substructure",
+    }
+    metrics_dict.update(
+        {k: v.item() for k, v in metrics(all_logits, all_labels).items()}
+    )
 
-            # Get protein id
-            # batch_ids = batch.prot_ids
-            batch_ids = [batch.prot_ids[i] for i, prot_substructs in enumerate(batch.substructures)
-                    for substruct in prot_substructs]
+    print(f"final metrics: {metrics_dict}")
 
-            # Get labels
-            batch_labels = [substruct.label for prot_substructs in batch.substructures
-                        for substruct in prot_substructs]
-
-            # Forward pass
-            logits = model(batch)
-            probs = torch.softmax(logits, dim=1)
-            topk_probs, topk_indices = torch.topk(probs, k=k, dim=1)
-            preds = torch.argmax(logits, dim=1)
-
-            # Map from id to class
-            true_mappings = [label_to_element.get(label, f"Unknown label: {label}") for label in batch_labels]
-            pred_mappings = [label_to_element.get(label, f"Unknown label: {label}") for label in [int(x.item()) for x in preds]]
-
-            # Logging metrics
-            results['protein_ids'].extend(batch_ids)
-            results['true_labels'].extend(batch_labels)
-            results['true_mappings'].extend(true_mappings)
-
-            # results['pred_probs'].extend([str(x) for x in probs])
-            results['pred_labels'].extend([int(x.item()) for x in preds])
-            results['pred_mappings'].extend(pred_mappings)
-
-            results['top_k_labels'].extend(topk_indices.cpu().numpy().tolist())
-            results['top_k_probs'].extend(topk_probs.cpu().numpy().tolist())
-
-            acc = model.train_acc(preds, torch.tensor(batch_labels, device=logits.device))
-            accs.append(acc)
-            print(acc)
-
-    # Combine embeddings
-    all_embeddings = torch.cat(all_embeddings, dim=0)
-
-    # Write results
-    df = pd.DataFrame(results)
-
-    # TODO Change based on type
-    csv_path = config.output_dir / f"evaluation_{config.run_id}_{list(config.data.substruct_types)[0]}.csv"
-    df.to_csv(csv_path, index=False)
-
-    print(f"Accuracies for each batch: {accs}")
-    print(f"Saved detailed evaluation results to {config.output_dir}")
+    # Save metrics to JSON file
+    metrics_json_path = Path(output_dir) / "test_substructure_metrics.json"
+    with open(metrics_json_path, "w") as f:
+        json.dump(metrics_dict, f, indent=2)
+    print(f"Metrics saved to: {metrics_json_path}")

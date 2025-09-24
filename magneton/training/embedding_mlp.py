@@ -151,8 +151,8 @@ class EmbeddingMLP(L.LightningModule):
                 self.zero_grad()
             return orig_loss
         else:
-            _, logits, _ = self._calc_substruct_loss_and_logits(batch)
-            return logits
+            loss, logits, labels = self._calc_substruct_outputs(batch)
+            return loss, logits, labels
 
     def on_predict_end(self):
         # Nothing to do here if not calculating Fisher

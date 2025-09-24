@@ -147,14 +147,13 @@ def run_final_contact_predictions(
 def run_supervised_classification(
     config: PipelineConfig,
     task: str,
-    output_dir: str,
+    output_dir: Path,
     run_id: str,
 ):
     if task not in TASK_TO_TYPE:
         raise ValueError(f"unknown task: {task}")
     task_type = TASK_TO_TYPE[task]
 
-    output_dir = Path(output_dir)
     expected_final_metrics_path = output_dir / f"test_{task}_metrics.json"
     if expected_final_metrics_path.exists():
         if not config.evaluate.rerun_completed:
