@@ -22,6 +22,7 @@ class ESMBaseConfig(BaseConfig):
     rep_layer: int = 12
     max_seq_length: int = 2048
     mask_prob: float = 0.15
+    unk_amino_acid_char: str = "X"
 
 
 class ESMBaseEmbedder(BaseEmbedder):
