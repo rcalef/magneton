@@ -13,7 +13,6 @@ dependencies = [
     "certifi>=2025.4.26",
     "easydict>=1.13",
     "esm>=3.1.2",
-    "flash-attn",
     "fire>=0.7.0",
     "gpustat>=1.1.1",
     "h5py>=3.13.0",
@@ -40,6 +39,7 @@ dependencies = [
     "umap-learn>=0.5.7",
     "wandb>=0.19.6",
     "pytest>=8.4.2",
+    "lmdb>=1.7.3",
 ]
 classifiers = [
     "Private :: Do Not Upload",
@@ -48,6 +48,12 @@ classifiers = [
 
 [project.urls]
 Source-code = "https://github.com/rcalef/magneton/"
+
+[project.optional-dependencies]
+flash = [
+  "ninja>=1.13.0",
+  "flash-attn>=2.7.4-post1",
+]
 
 [build-system]
 requires = ["uv_build>=0.8.15,<0.9.0"]
@@ -72,7 +78,4 @@ url = "https://download.pytorch.org/whl/nightly/cpu"
 explicit = true
 
 [tool.uv.extra-build-dependencies]
-#flash-attn = [{ requirement = "torch", match-runtime = true }]
-
-[tool.uv.extra-build-variables]
-flash-attn = { FLASH_ATTENTION_SKIP_CUDA_BUILD = "TRUE" }
+flash-attn = [{ requirement = "torch", match-runtime = true }]
