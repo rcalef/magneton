@@ -57,6 +57,21 @@ class SecondaryStructure:
     def print(self):
         print(f"{DSSP_TO_NAME[self.dssp_type.value]}: {self.start} - {self.end}")
 
+    def toJSON(self) -> dict:
+        return {
+            "dssp_type": self.dssp_type.value,
+            "start": self.start,
+            "end": self.end,
+        }
+
+    @classmethod
+    def fromJSON(cls, data: dict) -> "SecondaryStructure":
+        return cls(
+            dssp_type=DsspType(data["dssp_type"]),
+            start=data["start"],
+            end=data["end"],
+        )
+
 
 class InterProType(StrEnum):
     FAMILY = "Family"
@@ -95,6 +110,29 @@ class InterproEntry:
     def print(self):
         pprint(self)
 
+    def toJSON(self) -> dict:
+        return {
+            "id": self.id,
+            "element_type": self.element_type,
+            "match_id": self.match_id,
+            "element_name": self.element_name,
+            "representative": self.representative,
+            # tuples -> lists for JSON
+            "positions": [list(p) for p in self.positions],
+        }
+
+    @classmethod
+    def fromJSON(cls, data: dict) -> "InterproEntry":
+        return cls(
+            id=data["id"],
+            element_type=InterProType(data["element_type"]),
+            match_id=data["match_id"],
+            element_name=data["element_name"],
+            representative=data["representative"],
+            # lists -> tuples
+            positions=[tuple(p) for p in data["positions"]],
+        )
+
 
 @dataclass
 class Protein:
@@ -123,6 +161,33 @@ class Protein:
 
     def __setstate__(self, state):
         return self.__init__(**state)
+
+    def toJSON(self) -> dict:
+        return {
+            "uniprot_id": self.uniprot_id,
+            "kb_id": self.kb_id,
+            "name": self.name,
+            "length": self.length,
+            "parsed_entries": self.parsed_entries,
+            "total_entries": self.total_entries,
+            "entries": [e.toJSON() for e in self.entries],
+            "secondary_structs": [s.toJSON() for s in self.secondary_structs],
+        }
+
+    @classmethod
+    def fromJSON(cls, data: dict) -> "Protein":
+        return cls(
+            uniprot_id=data["uniprot_id"],
+            kb_id=data["kb_id"],
+            name=data["name"],
+            length=data["length"],
+            parsed_entries=data["parsed_entries"],
+            total_entries=data["total_entries"],
+            entries=[InterproEntry.fromJSON(e) for e in data["entries"]],
+            secondary_structs=[
+                SecondaryStructure.fromJSON(s) for s in data["secondary_structs"]
+            ],
+        )
 
 
 class DataType(StrEnum):
