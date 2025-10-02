@@ -1,21 +1,19 @@
 import os
-
 from bisect import bisect
 from functools import partial
 from pathlib import Path
-from typing import Generator, List
+from typing import Generator
 
 import pandas as pd
-
 from torch.utils.data import Dataset, IterableDataset
 
+from magneton.data.core.substructure import BaseSubstructureParser
 from magneton.io.internal import (
     filter_proteins,
     get_sorted_files,
     parse_from_dir,
-    parse_from_pkl,
+    parse_from_json,
 )
-from magneton.data.core.substructure import BaseSubstructureParser
 from magneton.types import (
     Protein,
 )
@@ -24,7 +22,7 @@ from magneton.types import (
 class InMemoryProteinDataset(Dataset):
     def __init__(
         self,
-        proteins: List[Protein],
+        proteins: list[Protein],
     ):
         super().__init__()
 
@@ -51,7 +49,7 @@ class ShardedProteinDataset(IterableDataset):
     def __init__(
         self,
         input_path: str,
-        compression: str = "bz2",
+        compression: str = "gz",
         prefix: str = "sharded_proteins",
     ):
         super().__init__()
@@ -90,7 +88,7 @@ class ShardedProteinDataset(IterableDataset):
             raise ValueError(f"{uniprot_id} not found in {self.input_path}")
         index -= 1
 
-        for prot in parse_from_pkl(
+        for prot in parse_from_json(
             os.path.join(
                 self.input_path,
                 f"{self.prefix}.{index}.pkl.{self.compression}",
@@ -100,6 +98,7 @@ class ShardedProteinDataset(IterableDataset):
             if prot.uniprot_id == uniprot_id:
                 return prot
         raise ValueError(f"{uniprot_id} not found in {self.input_path} index {index}")
+
 
 def protein_has_substructs(
     prot: Protein,
@@ -111,19 +110,23 @@ def protein_has_substructs(
     parsed = want_subtype_parser.parse(prot)
     return len(parsed) > 0
 
+
 def passthrough_filter_func(prot: Protein) -> bool:
     return True
 
+
 def get_protein_dataset(
     input_path: str | Path,
-    compression: str = "bz2",
+    compression: str = "gz",
     in_memory: bool = False,
     prefix: str = "sharded_proteins",
     nprocs: int = 32,
     want_subtype_parser: BaseSubstructureParser | None = None,
 ) -> InMemoryProteinDataset | ShardedProteinDataset:
     if want_subtype_parser:
-        filter_func = partial(protein_has_substructs, want_subtype_parser=want_subtype_parser)
+        filter_func = partial(
+            protein_has_substructs, want_subtype_parser=want_subtype_parser
+        )
     else:
         filter_func = passthrough_filter_func
 
@@ -135,13 +138,15 @@ def get_protein_dataset(
     if input_path.is_dir():
         if in_memory:
             return InMemoryProteinDataset(
-                list(filter_proteins(
-                    input_path,
-                    prefix=prefix,
-                    compression=compression,
-                    nprocs=nprocs,
-                    filter_func=filter_func,
-                ))
+                list(
+                    filter_proteins(
+                        input_path,
+                        prefix=prefix,
+                        compression=compression,
+                        nprocs=nprocs,
+                        filter_func=filter_func,
+                    )
+                )
             )
         else:
             return ShardedProteinDataset(
@@ -149,9 +154,13 @@ def get_protein_dataset(
                 compression=compression,
                 prefix=prefix,
             )
-    elif ".pkl" in str(input_path):
+    elif ".jsonl" in str(input_path):
         return InMemoryProteinDataset(
-            [x for x in parse_from_pkl(input_path, compression=compression) if filter_func(x)]
+            [
+                x
+                for x in parse_from_json(input_path, compression=compression)
+                if filter_func(x)
+            ]
         )
     else:
         raise ValueError(f"expected dir or pickle file, got: {str(input_path)}")

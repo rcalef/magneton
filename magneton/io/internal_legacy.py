@@ -1,8 +1,8 @@
-import gzip
-import json
+import bz2
 import inspect
 import logging
 import os
+import pickle
 import re
 import sys
 
@@ -20,31 +20,32 @@ from tqdm import tqdm
 
 from magneton.types import Protein
 
-def parse_from_json(
+def parse_from_pkl(
     input_path: str,
-    compression: Optional[str] = "gz",
+    compression: Optional[str] = "bz2",
 ) -> Generator[Protein, None, None]:
     if compression is None:
         open_fn = open
-    elif compression == "gz":
-        open_fn = gzip.open
+    elif compression == "bz2":
+        open_fn = bz2.open
     else:
         raise ValueError(f"unknown compression: {compression}")
-    with open_fn(input_path, "r") as fh:
-        for line in fh:
+    with open_fn(input_path, "rb") as fh:
+        while True:
             try:
-                prot = Protein.fromJSON(json.loads(line))
-                yield prot
+                yield pickle.load(fh)
+            except EOFError as e:
+                break
             except Exception as e:
-                e.add_note(f"file {input_path}, line: {line}")
                 raise e
 
-def parse_from_json_w_fasta(
+
+def parse_from_pkl_w_fasta(
     input_path: str,
     fasta_path: str,
 ) -> Generator[Tuple[Protein, str], None, None]:
     fa = FastaFile(fasta_path)
-    for prot in parse_from_json(input_path):
+    for prot in parse_from_pkl(input_path):
         if prot.kb_id in fa:
             yield (prot, fa[prot.kb_id])
 
@@ -53,7 +54,7 @@ def get_sorted_files(
     dir: str,
     prefix: str = "sharded_proteins",
 ) -> List[Tuple[int, str]]:
-    pat = re.compile(f"{prefix}.(\d+).jsonl.gz")
+    pat = re.compile(f"{prefix}.(\d+).pkl.bz2")
     all_files = []
     for fn in os.listdir(dir):
         res = pat.match(fn)
@@ -65,7 +66,7 @@ def get_sorted_files(
 def parse_from_dir(
     dir: str,
     prefix: str = "sharded_proteins",
-    compression: str = "gz",
+    compression: str = "bz2",
     filter_func: Optional[Callable[[Protein], bool]] = None,
 ) -> Generator[Tuple[Protein, str], None, None]:
     all_files = get_sorted_files(dir, prefix)
@@ -73,7 +74,7 @@ def parse_from_dir(
         raise ValueError(f"no files found in {dir} with prefix {prefix}")
 
     for _, fn in all_files:
-        for prot in parse_from_json(os.path.join(dir, fn), compression=compression):
+        for prot in parse_from_pkl(os.path.join(dir, fn), compression=compression):
             if filter_func is not None and not filter_func(prot):
                 continue
             yield prot
@@ -93,8 +94,8 @@ def shard_proteins(
     curr_file_prots = 0
     curr_file_num = 0
 
-    output_path = os.path.join(output_dir, f"{prefix}.{curr_file_num}.jsonl.gz")
-    output_fh = gzip.open(output_path, "wt")
+    output_path = os.path.join(output_dir, f"{prefix}.{curr_file_num}.pkl.bz2")
+    output_fh = bz2.open(output_path, "wb")
     for prot in input_iter:
         assert prev_id < prot.uniprot_id, f"{prev_id} !< {prot.uniprot_id}"
         prev_id = prot.uniprot_id
@@ -102,7 +103,7 @@ def shard_proteins(
         if curr_file_prots == 0:
             index_entries.append(prot.uniprot_id)
 
-        print(prot.toJSON(), file=output_fh)
+        pickle.dump(prot, output_fh)
         curr_file_prots += 1
 
         if curr_file_prots == prots_per_file:
@@ -116,9 +117,9 @@ def shard_proteins(
             )
             output_fh.close()
             output_path = os.path.join(
-                output_dir, f"{prefix}.{curr_file_num}.jsonl.gz"
+                output_dir, f"{prefix}.{curr_file_num}.pkl.bz2"
             )
-            output_fh = gzip.open(output_path, "wt")
+            output_fh = bz2.open(output_path, "wb")
 
     index = pd.DataFrame({
         "file_num": range(len(index_entries)),
@@ -130,15 +131,15 @@ def shard_proteins(
 def _filter_protein_file(
     input_path: str,
     filter_func: Callable[[Protein], bool],
-    compression: Optional[str] = "gz",
+    compression: Optional[str] = "bz2",
 ) -> List[Protein]:
-    return [prot for prot in parse_from_json(input_path, compression=compression) if filter_func(prot)]
+    return [prot for prot in parse_from_pkl(input_path, compression=compression) if filter_func(prot)]
 
 def filter_proteins(
     shard_dir: str,
     filter_func: Callable[[Protein], bool],
     prefix: str = "sharded_proteins",
-    compression: Optional[str] = "gz",
+    compression: Optional[str] = "bz2",
     nprocs: int = 32,
 ) -> List[Protein]:
     filter_func=partial(

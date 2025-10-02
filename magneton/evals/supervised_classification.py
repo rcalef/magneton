@@ -39,6 +39,7 @@ def run_final_predictions(
     output_dir: Path,
     prefix: str,
 ):
+    """Run predictions only and output evaluation metrics."""
     final_predictions = trainer.predict(
         model=model, dataloaders=loader, return_predictions=True
     )
@@ -90,14 +91,21 @@ def run_final_predictions(
         json.dump(metrics_dict, f, indent=2)
     print(f"Metrics saved to: {metrics_json_path}")
 
-
 def run_final_contact_predictions(
     model: EvaluationClassifier,
     trainer: L.Trainer,
     loader: Loader,
+    task: str,
+    num_classes: int,
     output_dir: Path,
     prefix: str,
 ):
+    """Contact prediction-specific evaluation.
+
+    Contact prediction is just different enough (want original 2D labels, compute
+    P@L per batch, doesn't make sense to output full sets of predictions) that it
+    seemed easier to just have a different final prediction function.
+    """
     assert model.task_granularity == TASK_GRANULARITY.CONTACT_PREDICTION
     final_predictions = trainer.predict(
         model=model, dataloaders=loader, return_predictions=True
@@ -146,6 +154,15 @@ def run_supervised_classification(
     output_dir: Path,
     run_id: str,
 ):
+    """Main entrypoint for supervised evaluation tasks.
+
+    Args:
+        - config (PipelineConfig): Configuration for evaluation run.
+        - task (str): Name of desired evaluation task to run.
+        - output_dir (Path): Output directory for trained models and final metrics.
+        - run_id (str): Run ID used for Weights and Biases logging.
+
+    """
     if task not in TASK_TO_TYPE:
         raise ValueError(f"unknown task: {task}")
     task_type = TASK_TO_TYPE[task]
@@ -247,41 +264,29 @@ def run_supervised_classification(
     # Disable distributed sampler for final validations for reproducibility
     module.distributed = False
     if task_granularity == TASK_GRANULARITY.CONTACT_PREDICTION:
-        run_final_contact_predictions(
-            model=classifier,
-            trainer=trainer,
-            loader=module.val_dataloader(),
-            output_dir=output_dir,
-            prefix="validation",
-        )
-
-        run_final_contact_predictions(
-            model=classifier,
-            trainer=trainer,
-            loader=module.test_dataloader(),
-            output_dir=output_dir,
-            prefix="test",
-        )
+        final_eval_fn = run_final_contact_predictions
     else:
-        run_final_predictions(
-            model=classifier,
-            trainer=trainer,
-            loader=module.val_dataloader(),
-            task=task,
-            num_classes=module.num_classes(),
-            output_dir=output_dir,
-            prefix="validation",
-        )
+        final_eval_fn = run_final_predictions
 
-        run_final_predictions(
-            model=classifier,
-            trainer=trainer,
-            loader=module.test_dataloader(),
-            task=task,
-            num_classes=module.num_classes(),
-            output_dir=output_dir,
-            prefix="test",
-        )
+    final_eval_fn(
+        model=classifier,
+        trainer=trainer,
+        loader=module.val_dataloader(),
+        task=task,
+        num_classes=module.num_classes(),
+        output_dir=output_dir,
+        prefix="validation",
+    )
+
+    final_eval_fn(
+        model=classifier,
+        trainer=trainer,
+        loader=module.test_dataloader(),
+        task=task,
+        num_classes=module.num_classes(),
+        output_dir=output_dir,
+        prefix="test",
+    )
 
     if logger is not None:
         logger.experiment.finish()

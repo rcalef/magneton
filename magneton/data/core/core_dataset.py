@@ -1,21 +1,9 @@
 import os
 from dataclasses import dataclass, replace
-from functools import partial
-from typing import Generator, List
+from typing import Generator
 
 import torch
-from torchdata.nodes import (
-    BaseNode,
-    Mapper,
-    Filter,
-    SamplerWrapper,
-)
-from torch.utils.data import (
-    Dataset,
-    DistributedSampler,
-    RandomSampler,
-    SequentialSampler,
-)
+from torch.utils.data import Dataset
 from pysam import FastaFile
 
 from magneton.config import DataConfig
@@ -39,12 +27,12 @@ class Batch:
     - structure_list (List[str] | None): Paths to structure (.pdb) files for each protein.
     - labels (torch.Tensor | None): Labels for supervised tasks.
     """
-    protein_ids: List[str]
-    lengths: List[int]
-    seqs: List[str] | None = None
+    protein_ids: list[str]
+    lengths: list[int]
+    seqs: list[str] | None = None
     # First element is ranges, second element is labels
-    substructures: List[List[LabeledSubstructure]] | None = None
-    structure_list: List[str] | None = None
+    substructures: list[list[LabeledSubstructure]] | None = None
+    structure_list: list[str] | None = None
     labels: torch.Tensor | None = None
 
     def to(self, device: str):
@@ -74,7 +62,7 @@ class DataElement:
     length: int
     seq: str | None = None
     # First element is ranges, second element is labels
-    substructures: List[LabeledSubstructure] | None = None
+    substructures: list[LabeledSubstructure] | None = None
     structure_path: str | None = None
     # For any downstream supervised tasks
     labels: torch.Tensor | None = None
@@ -84,7 +72,7 @@ class CoreDataset(Dataset):
     def __init__(
         self,
         data_config: DataConfig,
-        want_datatypes: List[DataType],
+        want_datatypes: list[DataType],
         load_fasta_in_mem: bool = True,
     ):
         super().__init__()
@@ -143,7 +131,7 @@ class CoreDataset(Dataset):
         return self._prot_to_elem(self.dataset[index])
 
 def collate_meta_datasets(
-    entries: List[DataElement],
+    entries: list[DataElement],
     filter_empty_substruct=True,
 ) -> Batch:
     """
