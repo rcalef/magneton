@@ -21,12 +21,7 @@ from magneton.data.evals import (
     TASK_TO_TYPE,
 )
 
-from .downstream_classifiers import (
-    ContactPredictor,
-    MultiLabelMLP,
-    PPIPredictor,
-    ResidueClassifier,
-)
+from .downstream_classifiers import EvaluationClassifier
 from .metrics import (
     FMaxScore,
     PrecisionAtL,
@@ -36,7 +31,7 @@ from .metrics import (
 
 
 def run_final_predictions(
-    model: MultiLabelMLP,
+    model: EvaluationClassifier,
     trainer: L.Trainer,
     loader: Loader,
     task: str,
@@ -97,12 +92,13 @@ def run_final_predictions(
 
 
 def run_final_contact_predictions(
-    model: ContactPredictor,
+    model: EvaluationClassifier,
     trainer: L.Trainer,
     loader: Loader,
     output_dir: Path,
     prefix: str,
 ):
+    assert model.task_granularity == TASK_GRANULARITY.CONTACT_PREDICTION
     final_predictions = trainer.predict(
         model=model, dataloaders=loader, return_predictions=True
     )
@@ -221,25 +217,16 @@ def run_supervised_classification(
         unk_amino_acid_char=config.embedding.model_params.get("unk_amino_acid_char", "X"),
     )
 
-    if module.task_granularity == TASK_GRANULARITY.PROTEIN_CLASSIFICATION:
-        classifier_cls = MultiLabelMLP
-    elif module.task_granularity == TASK_GRANULARITY.RESIDUE_CLASSIFICATION:
-        classifier_cls = ResidueClassifier
-    elif module.task_granularity == TASK_GRANULARITY.CONTACT_PREDICTION:
-        classifier_cls = ContactPredictor
-    elif module.task_granularity == TASK_GRANULARITY.PPI_PREDICTION:
-        classifier_cls = PPIPredictor
-    else:
-        raise ValueError(f"unknown task type: {module.task_type}")
-
     # Either train a new downstream classifier head, or load an existing checkpoint
     final_ckpt_path = output_dir / "final_model.ckpt"
+    task_granularity = module.task_granularity
     if not config.evaluate.final_prediction_only:
-        classifier = classifier_cls(
+        classifier = EvaluationClassifier(
             config=config,
             task=task,
             num_classes=module.num_classes(),
             task_type=task_type,
+            task_granularity=task_granularity,
         )
 
         trainer.fit(
@@ -253,13 +240,13 @@ def run_supervised_classification(
             raise FileNotFoundError(f"No final checkpoint fount at: {final_ckpt_path}")
         print(f"{task}: running predictions preset with model at: {final_ckpt_path}")
 
-        classifier = classifier_cls.load_from_checkpoint(
+        classifier = EvaluationClassifier.load_from_checkpoint(
             final_ckpt_path,
         )
 
     # Disable distributed sampler for final validations for reproducibility
     module.distributed = False
-    if task == "contact_prediction":
+    if task_granularity == TASK_GRANULARITY.CONTACT_PREDICTION:
         run_final_contact_predictions(
             model=classifier,
             trainer=trainer,
