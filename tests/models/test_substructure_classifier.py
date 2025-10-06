@@ -194,8 +194,8 @@ def test_ewc_penalty_is_added_correctly(monkeypatch):
     logits = model.forward(batch)
     base_losses = []
     labels_per = model._gather_labels(batch)
-    for h, l in logits.items():
-        base_losses.append(model.loss(l, labels_per[h]))
+    for h, head_logits in logits.items():
+        base_losses.append(model.loss(head_logits, labels_per[h]))
     print(f"got: {base_losses}")
     base_total = torch.stack(base_losses).sum()
 

@@ -194,9 +194,9 @@ class PrecisionAtL(Metric):
                 labels = copy_label_map[selector]
 
                 for k, v in self.lengths.items():
-                    l = min(math.ceil(L / v), (labels == 1).sum().item())
+                    score_len = min(math.ceil(L / v), (labels == 1).sum().item())
 
-                    top_inds = torch.argsort(probs, descending=True)[:l]
+                    top_inds = torch.argsort(probs, descending=True)[:score_len]
                     top_labels = labels[top_inds]
 
                     if top_labels.numel() == 0:
