@@ -1,6 +1,6 @@
 import torch
 
-from magneton.data.core.core_dataset import Batch
+from magneton.data.core.unified_dataset import Batch
 from magneton.models.head_classifiers import (
     ProteinClassificationHead,
     ResidueClassificationHead,

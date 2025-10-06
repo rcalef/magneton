@@ -18,7 +18,7 @@ import pandas as pd
 from pysam import FastaFile
 from tqdm import tqdm
 
-from magneton.types import Protein
+from magneton.core_types import Protein
 
 def parse_from_pkl(
     input_path: str,

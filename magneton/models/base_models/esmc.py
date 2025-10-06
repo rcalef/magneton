@@ -11,8 +11,8 @@ from esm.tokenization import get_esmc_model_tokenizers
 from torch.nn import CrossEntropyLoss
 from tqdm import tqdm
 
+from magneton.core_types import DataType
 from magneton.data.model_specific.esmc import ESMCBatch
-from magneton.types import DataType
 
 from .interface import BaseConfig, BaseModel
 from .utils import get_seq_mask

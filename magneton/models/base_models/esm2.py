@@ -4,8 +4,8 @@ from typing import Literal, Set
 import torch
 from torch.nn import CrossEntropyLoss
 
+from magneton.core_types import DataType
 from magneton.data.model_specific.esm2 import ESM2Batch
-from magneton.types import DataType
 
 from .esm_transformers_base import TransformersESMBaseConfig, TransformersESMBaseModel
 from .utils import get_seq_mask

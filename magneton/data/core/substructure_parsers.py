@@ -2,37 +2,22 @@ import os
 from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass
-from enum import StrEnum
-from typing import Dict, List
 
 import pandas as pd
 import torch
 
 from magneton.config import DataConfig
-from magneton.types import (
+from magneton.core_types import (
     DSSP_TO_NAME,
     INTERPRO_REP_TYPES,
     Protein,
+    SubstructType,
 )
 
-# This isn't ideal, but sort of stuck with the existing
-# `InterProType` class due to writing out a ton of pickle
-# files with that class definition. In the future, probably
-# want to rename `InterProType` to `SubstructType` and add
-# a value for secondary structure
-class SubstructType(StrEnum):
-    FAMILY = "Family"
-    DOMAIN = "Domain"
-    HOMO_FAMILY = "Homologous_superfamily"
-    CONS_SITE = "Conserved_site"
-    ACT_SITE = "Active_site"
-    BIND_SITE = "Binding_site"
-    PTM = "PTM"
-    SS = "Secondary_struct"
 
 @dataclass
 class LabeledSubstructure:
-    ranges: List[torch.Tensor]
+    ranges: list[torch.Tensor]
     label: int
     element_type: SubstructType
 
@@ -42,7 +27,7 @@ class LabeledSubstructure:
         return self
 
 class BaseSubstructureParser(ABC):
-    def parse(self, prot: Protein) -> List[LabeledSubstructure]:
+    def parse(self, prot: Protein) -> list[LabeledSubstructure]:
         """
         Parse the protein and return a tensor of ranges and labels.
         """
@@ -62,7 +47,7 @@ class UnifiedSubstructureParser(BaseSubstructureParser):
     """
     def __init__(
         self,
-        want_types: List[SubstructType],
+        want_types: list[SubstructType],
         labels_dir: str,
         elem_name: str = "all",
     ):
@@ -86,7 +71,7 @@ class UnifiedSubstructureParser(BaseSubstructureParser):
 
             curr_label += len(labels)
 
-    def parse(self, prot: Protein) -> List[LabeledSubstructure]:
+    def parse(self, prot: Protein) -> list[LabeledSubstructure]:
         """
         Parse the protein and return a tensor of ranges and labels.
         """
@@ -124,7 +109,7 @@ class SeparatedSubstructureParser(BaseSubstructureParser):
     """
     def __init__(
         self,
-        want_types: List[SubstructType],
+        want_types: list[SubstructType],
         labels_dir: str,
     ):
         self.want_types = sorted(want_types)
@@ -142,7 +127,7 @@ class SeparatedSubstructureParser(BaseSubstructureParser):
             for label, name in labels:
                 self.type_to_label[type][name] = label
 
-    def parse(self, prot: Protein) -> List[LabeledSubstructure]:
+    def parse(self, prot: Protein) -> list[LabeledSubstructure]:
         """
         Parse the protein and return a tensor of ranges and labels.
         """
@@ -169,7 +154,7 @@ class SeparatedSubstructureParser(BaseSubstructureParser):
 
         return parsed
 
-    def num_labels(self) -> Dict[str, int]:
+    def num_labels(self) -> dict[str, int]:
         return {type: len(labels) for type, labels in self.type_to_label.items()}
 
 def get_substructure_parser(data_config: DataConfig) -> BaseSubstructureParser:

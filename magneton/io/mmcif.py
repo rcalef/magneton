@@ -3,7 +3,7 @@ from typing import List, Optional
 import pandas as pd
 from pdbecif.mmcif_io import CifFileReader
 
-from magneton.types import (
+from magneton.core_types import (
     DsspType,
     SecondaryStructure,
     MMCIF_TO_DSSP,

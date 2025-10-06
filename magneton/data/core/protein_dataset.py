@@ -1,4 +1,3 @@
-import os
 from bisect import bisect
 from functools import partial
 from pathlib import Path
@@ -7,19 +6,20 @@ from typing import Generator
 import pandas as pd
 from torch.utils.data import Dataset, IterableDataset
 
-from magneton.data.core.substructure import BaseSubstructureParser
+from magneton.core_types import Protein
 from magneton.io.internal import (
     filter_proteins,
     get_sorted_files,
     parse_from_dir,
     parse_from_json,
 )
-from magneton.types import (
-    Protein,
-)
+
+from .substructure_parsers import BaseSubstructureParser
 
 
 class InMemoryProteinDataset(Dataset):
+    """Dataset of Protein objects stored in memory."""
+
     def __init__(
         self,
         proteins: list[Protein],
@@ -46,6 +46,8 @@ class InMemoryProteinDataset(Dataset):
 
 
 class ShardedProteinDataset(IterableDataset):
+    """Dataset that yields protein objects from sharded files."""
+
     def __init__(
         self,
         input_path: str,
@@ -53,11 +55,11 @@ class ShardedProteinDataset(IterableDataset):
         prefix: str = "sharded_proteins",
     ):
         super().__init__()
-        self.input_path = input_path
+        self.input_path = Path(input_path)
         self.compression = compression
         self.prefix = prefix
 
-        assert os.path.isdir(input_path)
+        assert self.input_path.exists() and self.input_path.is_dir()
         all_files = get_sorted_files(input_path, prefix)
         if len(all_files) == 0:
             raise ValueError(f"no files found in {input_path} with prefix {prefix}")
@@ -66,7 +68,7 @@ class ShardedProteinDataset(IterableDataset):
 
     def _load_index(self):
         index = pd.read_table(
-            os.path.join(self.input_path, "index.tsv"),
+            self.input_path / "index.tsv",
             names=["file_num", "index_entry", "file_len"],
         )
         self.index_entries = index.index_entry.tolist()
@@ -89,10 +91,7 @@ class ShardedProteinDataset(IterableDataset):
         index -= 1
 
         for prot in parse_from_json(
-            os.path.join(
-                self.input_path,
-                f"{self.prefix}.{index}.pkl.{self.compression}",
-            ),
+            self.input_path / f"{self.prefix}.{index}.jsonl.{self.compression}",
             self.compression,
         ):
             if prot.uniprot_id == uniprot_id:
@@ -123,6 +122,7 @@ def get_protein_dataset(
     nprocs: int = 32,
     want_subtype_parser: BaseSubstructureParser | None = None,
 ) -> InMemoryProteinDataset | ShardedProteinDataset:
+    """Create a Protein dataset with the desired configurations."""
     if want_subtype_parser:
         filter_func = partial(
             protein_has_substructs, want_subtype_parser=want_subtype_parser
@@ -163,4 +163,4 @@ def get_protein_dataset(
             ]
         )
     else:
-        raise ValueError(f"expected dir or pickle file, got: {str(input_path)}")
+        raise ValueError(f"expected dir or JSONL file, got: {str(input_path)}")

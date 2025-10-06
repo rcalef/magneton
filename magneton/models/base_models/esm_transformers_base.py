@@ -8,8 +8,8 @@ from packaging.version import parse
 from transformers import EsmForMaskedLM, EsmTokenizer
 from transformers.models.esm.modeling_esm import average_product_correct, symmetrize
 
-from magneton.data.model_specific.saprot import SaProtBatch
-from magneton.types import DataType
+from magneton.core_types import DataType
+from magneton.data.core import Batch
 
 from .interface import BaseConfig, BaseModel
 from .utils import pool_residue_embeddings
@@ -207,7 +207,7 @@ class TransformersESMBaseModel(BaseModel):
 
     def calc_original_loss(
         self,
-        batch: SaProtBatch,
+        batch: Batch,
         reduction: str = "mean",
     ) -> torch.Tensor:
         """NOTE: this modifies the original tokenized seq tensor, call last."""

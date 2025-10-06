@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 
+from magneton.core_types import DataType
 from magneton.data.core import Batch
 from magneton.data.evaluations.task_types import TASK_GRANULARITY
 from magneton.models.base_models import BaseConfig, BaseModel
-from magneton.types import DataType
 
 
 class MockBaseModel(BaseModel):

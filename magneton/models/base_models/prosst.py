@@ -5,8 +5,8 @@ import torch.nn.functional as F
 from torch.nn import CrossEntropyLoss
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
+from magneton.core_types import DataType
 from magneton.data.model_specific.prosst import ProSSTBatch
-from magneton.types import DataType
 
 from .interface import BaseConfig, BaseModel
 from .utils import get_seq_mask, pool_residue_embeddings

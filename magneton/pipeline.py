@@ -10,7 +10,7 @@ from magneton.data.core import get_substructure_parser
 from magneton.evaluations.substructure_classification import classify_substructs
 from magneton.evaluations.supervised_classification import run_supervised_classification
 from magneton.evaluations.zero_shot_evaluation import run_zero_shot_evaluation
-from magneton.models.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
+from magneton.models.substructure_classifier import SubstructureClassifier
 from magneton.training.trainer import ModelTrainer
 
 
@@ -70,16 +70,11 @@ class EmbeddingPipeline:
         # really just counts the labels).
         substruct_parser = get_substructure_parser(self.config.data)
         # Train model
-        if self.config.data.collapse_labels:
-            model = EmbeddingMLP(
-                config=self.config,
-                num_classes=substruct_parser.num_labels(),
-            )
-        else:
-            model = MultitaskEmbeddingMLP(
-                config=self.config,
-                num_classes=substruct_parser.num_labels(),
-            )
+        model = SubstructureClassifier(
+            config=self.config,
+            num_classes=substruct_parser.num_labels(),
+        )
+        if len(self.config.data.substruct_types) != 1:
             self.config.training.strategy = "ddp_find_unused_parameters_true"
 
         trainer = ModelTrainer(

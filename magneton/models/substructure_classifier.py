@@ -11,7 +11,8 @@ from torch_scatter import scatter_mean
 from torchmetrics import Accuracy, F1Score, MetricCollection
 
 from magneton.config import PipelineConfig
-from magneton.data.core import Batch, SubstructType
+from magneton.core_types import SubstructType
+from magneton.data.core import Batch
 
 from .base_models import BaseModelFactory
 from .utils import describe_tensor, parse_hidden_dims
@@ -131,6 +132,7 @@ class SubstructureClassifier(L.LightningModule):
             head_metrics[f"{head_name}_f1"] = F1Score(
                 task="multiclass", num_classes=n_cls
             )
+
             self.train_metrics[head_name] = MetricCollection(
                 head_metrics, prefix="train"
             )
@@ -148,7 +150,8 @@ class SubstructureClassifier(L.LightningModule):
             )
             self.register_buffer("fisher_info", placeholder_vec, persistent=True)
 
-    # -------------------- EWC fisher accumulation (predict-mode) --------------------
+    # Prediction methods below are used for computing Fisher info if `calc_fisher_state` is set to True,
+    # otherwise just behaves as normal prediction returning logits and labels.
     def on_predict_start(self):
         super().on_predict_start()
         if self.calc_fisher_state:
@@ -192,7 +195,7 @@ class SubstructureClassifier(L.LightningModule):
             fisher_vec = torch.cat(fisher_vec_parts)
             logger.info(f"Fisher information calculation complete: {fisher_vec.shape}")
 
-            # Distributed sync if needed
+            # Collect Fisher info calculations across ranks if needed.
             if dist.is_initialized():
                 rank = dist.get_rank()
                 world_size = dist.get_world_size()

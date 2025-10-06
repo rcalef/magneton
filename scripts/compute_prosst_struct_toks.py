@@ -5,16 +5,14 @@ import logging
 from pathlib import Path
 
 import fire
-import hydra
 import torch
 
-from hydra.utils import instantiate
 from tqdm import tqdm
 
-from magneton.config import PipelineConfig, DataConfig
+from magneton.config import DataConfig
 from magneton.data.core import CoreDataset
 from magneton.data import SupervisedDownstreamTaskDataModule
-from magneton.types import DataType
+from magneton.data.core import DataType
 
 
 PROSST_REPO_PATH = (

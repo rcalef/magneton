@@ -12,14 +12,13 @@ from typing import (
 
 import pandas as pd
 
-from magneton.types import (
+from magneton.data.core import (
     InterproEntry,
     Protein,
     SecondaryStructure,
     DSSP_TO_NAME,
 )
 
-from magneton.types import DSSP_TO_NAME
 
 want_types = [
     "Family",

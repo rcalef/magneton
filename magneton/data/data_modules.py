@@ -19,8 +19,8 @@ from torchdata.nodes import (
     Unbatcher,
 )
 
+from magneton.core_types import DataType
 from magneton.config import DataConfig
-from magneton.types import DataType
 
 from .core import (
     get_core_dataset,

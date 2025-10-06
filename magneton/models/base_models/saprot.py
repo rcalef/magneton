@@ -5,8 +5,8 @@ import numpy as np
 import torch
 from torch.nn import CrossEntropyLoss
 
+from magneton.core_types import DataType
 from magneton.data.model_specific.saprot import SaProtBatch
-from magneton.types import DataType
 
 from .esm_transformers_base import TransformersESMBaseConfig, TransformersESMBaseModel
 

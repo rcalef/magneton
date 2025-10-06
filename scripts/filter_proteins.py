@@ -11,7 +11,7 @@ import fire
 from pysam import FastaFile
 
 from magneton.io.internal import parse_from_pkl, process_sharded_proteins
-from magneton.types import Protein
+from magneton.core_types import Protein
 
 
 def filter_proteins(

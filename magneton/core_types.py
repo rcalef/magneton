@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from enum import auto, IntEnum, StrEnum, unique
 from pprint import pprint
-from typing import List, Tuple
 
 
 @unique
@@ -18,6 +17,8 @@ class DsspType(IntEnum):
     X = auto()
 
 
+# Conversions between single letter DSSP codes
+# and human-readable or MMCIF structure names.
 DSSP_TO_NAME = [
     "Alphahelix",
     "Betabridge",
@@ -48,6 +49,7 @@ MMCIF_TO_DSSP = {mmcif: i for i, mmcif in enumerate(DSSP_TO_MMCIF)}
 
 @dataclass
 class SecondaryStructure:
+    """Representation of a single DSSP secondary structure"""
     dssp_type: DsspType
     # Note that positions are 1-indexed, as output by dssp.
     # Coordinates are half-open, i.e. [start, end)
@@ -73,7 +75,8 @@ class SecondaryStructure:
         )
 
 
-class InterProType(StrEnum):
+class SubstructType(StrEnum):
+    """Enum of available substructure types"""
     FAMILY = "Family"
     DOMAIN = "Domain"
     HOMO_FAMILY = "Homologous_superfamily"
@@ -81,11 +84,12 @@ class InterProType(StrEnum):
     ACT_SITE = "Active_site"
     BIND_SITE = "Binding_site"
     PTM = "PTM"
+    SS = "Secondary_struct"
 
 # InterPro types that use the `representative` field
 INTERPRO_REP_TYPES = [
-    InterProType.FAMILY,
-    InterProType.DOMAIN,
+    SubstructType.FAMILY,
+    SubstructType.DOMAIN,
 ]
 
 @dataclass
@@ -100,12 +104,12 @@ class InterproEntry:
     - positions (List[Tuple[int]]): List of [start, end) positions for this entry, 1-indexed as in InterPro.
     """
     id: str
-    element_type: InterProType
+    element_type: SubstructType
     match_id: str
     element_name: str
     representative: bool
     # Note that positions are 1-indexed, i.e. exactly as given in InterPro.
-    positions: List[Tuple[int]]
+    positions: list[tuple[int, int]]
 
     def print(self):
         pprint(self)
@@ -125,7 +129,7 @@ class InterproEntry:
     def fromJSON(cls, data: dict) -> "InterproEntry":
         return cls(
             id=data["id"],
-            element_type=InterProType(data["element_type"]),
+            element_type=SubstructType(data["element_type"]),
             match_id=data["match_id"],
             element_name=data["element_name"],
             representative=data["representative"],
@@ -153,8 +157,8 @@ class Protein:
     length: int
     parsed_entries: int
     total_entries: int
-    entries: List[InterproEntry]
-    secondary_structs: List[SecondaryStructure] = field(default_factory=list)
+    entries: list[InterproEntry]
+    secondary_structs: list[SecondaryStructure] = field(default_factory=list)
 
     def print(self):
         pprint(self)
@@ -191,22 +195,7 @@ class Protein:
 
 
 class DataType(StrEnum):
+    """Enum used to define the data types a given model requires."""
     SEQ = "sequence"
     STRUCT = "structure"
     SUBSTRUCT = "substructure"
-
-
-class PipelineStage(IntEnum):
-    EMBED = 0
-    TRAIN = auto()
-    EVALUATE = auto()
-
-
-stage_names = [
-    "embed",
-    "train",
-    "eval",
-]
-
-# Map stage names to their corresponding enum values
-name_to_stage = {name: PipelineStage(stage) for stage, name in enumerate(stage_names)}

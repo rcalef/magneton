@@ -4,8 +4,8 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 
+from magneton.core_types import DataType
 from magneton.data.core import Batch
-from magneton.types import DataType
 
 
 @dataclass(kw_only=True)

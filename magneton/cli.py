@@ -3,26 +3,20 @@ from hydra.utils import instantiate
 
 from magneton.config import PipelineConfig
 from magneton.pipeline import EmbeddingPipeline
-from magneton.types import name_to_stage, PipelineStage
+
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(cfg: PipelineConfig) -> None:
     """Main entry point for the protein embedding pipeline"""
     cfg = instantiate(cfg)
-    stages = sorted([name_to_stage[x] for x in cfg.stages])
     pipeline = EmbeddingPipeline(cfg)
 
-    for stage in stages:
-        if stage == PipelineStage.EMBED:
-            pipeline.run_embedding()
-        elif stage == PipelineStage.TRAIN:
-            pipeline.run_training()
-        elif stage == PipelineStage.EVALUATE:
-            pipeline.run_evals()
-        else:
-            raise ValueError(f"Unknown stage: {stage}")
-            # Default: run full pipeline
-            # pipeline.run()
+    if cfg.stage == "train":
+        pipeline.run_training()
+    elif cfg.stage == "eval":
+        pipeline.run_evals()
+    else:
+        raise ValueError(f"Unknown stage: {cfg.stage}")
 
 
 if __name__ == "__main__":

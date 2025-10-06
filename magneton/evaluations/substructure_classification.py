@@ -14,21 +14,16 @@ from torchmetrics import (
 from magneton.config import PipelineConfig
 from magneton.data import MagnetonDataModule
 from magneton.data.core import get_substructure_parser
-from magneton.models.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
+from magneton.models.substructure_classifier import SubstructureClassifier
 
 
 def classify_substructs(
     config: PipelineConfig,
     output_dir: Path,
 ):
-    if config.data.collapse_labels:
-        model = EmbeddingMLP.load_from_checkpoint(
-            config.evaluate.model_checkpoint,
-        )
-    else:
-        model = MultitaskEmbeddingMLP.load_from_checkpoint(
-            config.evaluate.model_checkpoint,
-        )
+    model = SubstructureClassifier.load_from_checkpoint(
+        config.evaluate.model_checkpoint,
+    )
 
     data_module = MagnetonDataModule(
         data_config=config.data,
@@ -52,61 +47,7 @@ def classify_substructs(
     final_predictions = trainer.predict(
         model=model, dataloaders=loader, return_predictions=True
     )
-    if config.data.collapse_labels:
-        _embedding_mlp_results(
-            final_predictions=final_predictions,
-            output_dir=output_dir,
-            num_classes=num_classes,
-        )
-    else:
-        _multilabel_mlp_results(
-            final_predictions=final_predictions,
-            output_dir=output_dir,
-            num_classes=num_classes,
-        )
-
-def _embedding_mlp_results(
-    final_predictions: list[tuple[torch.Tensor]],
-    output_dir: Path,
-    num_classes: int,
-):
-    all_logits, all_labels = zip(*final_predictions)
-    all_logits = torch.cat(all_logits)
-    all_labels = torch.cat(all_labels)
-
-    metrics = MetricCollection({
-        "macro_accuracy": Accuracy(
-            task="multiclass", average="macro", num_classes=num_classes
-        ),
-        "macro_auprc": AveragePrecision(
-            task="multiclass", average="macro", num_classes=num_classes
-        ),
-        "macro_auroc": AUROC(
-            task="multiclass", average="macro", num_classes=num_classes
-        ),
-    })
-
-    metrics_dict = {
-        "task": "substructure",
-    }
-    metrics_dict.update(
-        {k: v.item() for k, v in metrics(all_logits, all_labels).items()}
-    )
-
-    print(f"final metrics: {metrics_dict}")
-
-    # Save metrics to JSON file
-    metrics_json_path = Path(output_dir) / "test_substructure_metrics.json"
-    with open(metrics_json_path, "w") as f:
-        json.dump(metrics_dict, f, indent=2)
-    print(f"Metrics saved to: {metrics_json_path}")
-
-def _multilabel_mlp_results(
-    final_predictions: list[tuple[dict[str, torch.Tensor]]],
-    output_dir: Path,
-    num_classes: dict[str, int],
-):
-  # Collect logits and labels for every substructure type separately
+    
     logits_by_task = defaultdict(list)
     labels_by_task = defaultdict(list)
     for logits_dict, labels_dict in final_predictions:

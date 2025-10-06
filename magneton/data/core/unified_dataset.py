@@ -1,5 +1,5 @@
-import os
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Generator
 
 import torch
@@ -7,10 +7,10 @@ from torch.utils.data import Dataset
 from pysam import FastaFile
 
 from magneton.config import DataConfig
-from magneton.types import DataType, Protein
+from magneton.core_types import DataType, Protein
 
 from .protein_dataset import get_protein_dataset
-from .substructure import (
+from .substructure_parsers import (
     get_substructure_parser,
     LabeledSubstructure,
 )
@@ -69,6 +69,19 @@ class DataElement:
 
 
 class CoreDataset(Dataset):
+    """Dataset that yields proteins and associated sequence, structure, and substructures.
+
+    This is the main Dataset object for the Magneton datasets. The individual elements are
+    `DataElement` objects as defined above, converted from the serialized `core_types.Protein`
+    objects. The types of data contained in each `DataElement` are configured via the
+    `want_datatypes` argument.
+
+    Args:
+        - data_config (DataConfig): Config specifying data file locations.
+        - want_datatypes (list[DataType]): List of desired datatypes for returned elements.
+        - load_fasta_in_mem (bool): Whether to load full FASTA file of sequences into memory
+            or to read on the fly using pysam.
+    """
     def __init__(
         self,
         data_config: DataConfig,
@@ -130,31 +143,15 @@ class CoreDataset(Dataset):
     def __getitem__(self, index):
         return self._prot_to_elem(self.dataset[index])
 
-def collate_meta_datasets(
-    entries: list[DataElement],
-    filter_empty_substruct=True,
-) -> Batch:
-    """
-    Collate the entries into a batch.
-    """
-    if filter_empty_substruct and entries[0].substructures is not None:
-        entries = [x for x in entries if len(x.substructures) > 0]
-    batch = Batch(
-        protein_ids=[e.protein_id for e in entries],
-        seqs=[e.seq for e in entries] if entries[0].seq is not None else None,
-        substructures=[e.substructures for e in entries] if entries[0].substructures is not None else None,
-        structure_list=[e.structure_path for e in entries] if entries[0].structure_path is not None else None,
-    )
-    return batch
-
 def get_core_dataset(
     data_config: DataConfig,
     want_datatypes: list[DataType],
     split: str = "train",
     load_fasta_in_mem: bool = True,
 ) -> Dataset:
+    """Convenience function for getting dataset for a given split."""
     if split != "all":
-        split_dir = os.path.join(data_config.data_dir, f"{split}_sharded")
+        split_dir = Path(data_config.data_dir) / f"{split}_sharded"
         prefix = f"swissprot.with_ss.{split}"
         data_config = replace(
             data_config,
