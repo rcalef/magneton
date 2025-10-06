@@ -35,6 +35,15 @@ def get_seq_mask(
     rng: torch.Generator,
     mask_prob: float = 0.15,
 ) -> torch.Tensor:
+    """Get mask for MLM tasks.
+
+    Args:
+        - tokenized_seqs (torch.Tensor) - tensor of input tokens.
+        - ignore_tokens (torch.Tensor) - 1D tensor containing tokens
+            to avoid masking (e.g. CLS, EOS, PAD).
+        - rng (torch.Generator): Random number generator for reproducibility.
+        - mask_prob (float): Masking probability.
+    """
     probs = torch.rand(
         tokenized_seqs.shape, generator=rng,
     ).to(tokenized_seqs.device)

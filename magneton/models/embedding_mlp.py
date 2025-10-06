@@ -5,38 +5,14 @@ import lightning as L
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-from torchmetrics import Accuracy, F1Score
 from torch_scatter import scatter_mean
+from torchmetrics import Accuracy, F1Score
 
 from magneton.config import PipelineConfig
 from magneton.data.core import Batch
-from magneton.embedders.factory import EmbedderFactory
-from magneton.utils import describe_tensor
 
-# Some older runs used different namings, use this function as a catch-all for compatibility
-# fixes
-def compatibility_fixes(
-    cfg: PipelineConfig,
-):
-    if cfg.embedding.model == "esmc_300m":
-        cfg.embedding.model = "esmc"
-
-
-def parse_hidden_dims(
-    raw_dims: list[int | str],
-    embed_dim: int,
-) -> list[int]:
-    parsed_dims = []
-    for dim in raw_dims:
-        try:
-            dim = int(dim)
-        except ValueError:
-            if dim != "embed":
-                raise ValueError(f"unknown hidden dim: {dim}")
-            else:
-                dim = embed_dim
-        parsed_dims.append(dim)
-    return parsed_dims
+from .base_models import BaseModelFactory
+from .utils import describe_tensor, parse_hidden_dims
 
 
 class EmbeddingMLP(L.LightningModule):
@@ -48,27 +24,25 @@ class EmbeddingMLP(L.LightningModule):
         for_contact_prediction: bool = False,
     ):
         super().__init__()
-        compatibility_fixes(config)
         self.save_hyperparameters()
         self.model_config = config.model
         self.train_config = config.training
         self.embed_config = config.embedding
         self.num_classes = num_classes
 
-        self.embed_config.model_params["for_contact_prediction"] = for_contact_prediction
-        self.embedder = EmbedderFactory.create_embedder(
+        self.embed_config.model_params["for_contact_prediction"] = (
+            for_contact_prediction
+        )
+        self.embedder = BaseModelFactory.create_base_model(
             self.embed_config,
             frozen=self.model_config.frozen_embedder,
         )
-
-        # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Build MLP layers
         layers = []
         embed_dim = self.embedder.get_embed_dim()
         hidden_dims = parse_hidden_dims(
-            raw_dims=self.model_config.model_params["hidden_dims"],
-            embed_dim=embed_dim
+            raw_dims=self.model_config.model_params["hidden_dims"], embed_dim=embed_dim
         )
         prev_dim = embed_dim
         for hidden_dim in hidden_dims:
@@ -89,7 +63,9 @@ class EmbeddingMLP(L.LightningModule):
         if self.loss_strategy == "ewc":
             self.ewc_weight = self.train_config.ewc_weight
             if config.training.reuse_ewc_weights is not None:
-                ewc_ckpt = torch.load(config.training.reuse_ewc_weights, weights_only=False)
+                ewc_ckpt = torch.load(
+                    config.training.reuse_ewc_weights, weights_only=False
+                )
                 fisher_vec = ewc_ckpt["state_dict"]["fisher_info"]
                 self.register_buffer(
                     "fisher_info",
@@ -106,7 +82,9 @@ class EmbeddingMLP(L.LightningModule):
 
         self.calc_fisher_state = False
         if load_pretrained_fisher:
-            placeholder_vec = torch.zeros_like(torch.nn.utils.parameters_to_vector(self.embedder.parameters()))
+            placeholder_vec = torch.zeros_like(
+                torch.nn.utils.parameters_to_vector(self.embedder.parameters())
+            )
             self.register_buffer(
                 "fisher_info",
                 placeholder_vec,
@@ -122,10 +100,12 @@ class EmbeddingMLP(L.LightningModule):
                 self.embedder._unfreeze(unfreeze_all=True)
                 fisher = []
                 for params in self.embedder.model.parameters():
-                    fisher.append(torch.zeros_like(
-                        params,
-                        requires_grad=False,
-                    ))
+                    fisher.append(
+                        torch.zeros_like(
+                            params,
+                            requires_grad=False,
+                        )
+                    )
                 self.fisher_state = fisher
                 self.fisher_samples = 0
 
@@ -140,9 +120,8 @@ class EmbeddingMLP(L.LightningModule):
                 orig_loss = self.embedder.calc_original_loss(batch, reduction="sum")
                 orig_loss.backward()
 
-                for (fisher_params, params) in zip(
-                    self.fisher_state,
-                    self.embedder.model.parameters()
+                for fisher_params, params in zip(
+                    self.fisher_state, self.embedder.model.parameters()
                 ):
                     if params.requires_grad:
                         fisher_params += params.grad.detach().pow_(2)
@@ -175,7 +154,9 @@ class EmbeddingMLP(L.LightningModule):
             if dist.is_initialized():
                 rank = dist.get_rank()
                 world_size = dist.get_world_size()
-                print(f"Synchronizing Fisher information calculation: rank {rank} / {world_size}")
+                print(
+                    f"Synchronizing Fisher information calculation: rank {rank} / {world_size}"
+                )
                 describe_tensor(fisher_vec, prefix=f"rank {rank}")
 
                 dist.reduce(fisher_vec, dst=0, op=dist.ReduceOp.SUM)
@@ -191,7 +172,7 @@ class EmbeddingMLP(L.LightningModule):
 
                 dist.barrier()
             else:
-                describe_tensor(fisher_vec, prefix=f"fisher")
+                describe_tensor(fisher_vec, prefix="fisher")
 
             self.register_buffer(
                 "fisher_info",
@@ -268,8 +249,8 @@ class EmbeddingMLP(L.LightningModule):
         return self.mlp(substruct_embeds)
 
     def _calc_substruct_outputs(
-            self,
-            batch: Batch,
+        self,
+        batch: Batch,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         logits = self(batch)
         labels = torch.tensor(
@@ -283,7 +264,6 @@ class EmbeddingMLP(L.LightningModule):
         loss = self.loss(logits, labels)
         return loss, logits, labels
 
-
     def training_step(self, batch: Batch, batch_idx) -> torch.Tensor:
         loss, logits, labels = self._calc_substruct_outputs(batch)
 
@@ -296,7 +276,9 @@ class EmbeddingMLP(L.LightningModule):
             )
 
             self.log("substruct_loss", loss, sync_dist=True)
-            ewc_loss = ((curr_params_vec - self.original_params).pow_(2) * self.fisher_info).sum()
+            ewc_loss = (
+                (curr_params_vec - self.original_params).pow_(2) * self.fisher_info
+            ).sum()
             loss += self.ewc_weight * ewc_loss
             self.log("ewc_loss", ewc_loss, sync_dist=True)
 
@@ -326,17 +308,21 @@ class EmbeddingMLP(L.LightningModule):
     def configure_optimizers(self):
         optim_params = []
         # MLP params
-        optim_params.append({
-            "params": self.mlp.parameters(),
-            "lr": self.train_config.learning_rate,
-            "weight_decay": self.train_config.weight_decay,
-        })
+        optim_params.append(
+            {
+                "params": self.mlp.parameters(),
+                "lr": self.train_config.learning_rate,
+                "weight_decay": self.train_config.weight_decay,
+            }
+        )
         if not self.model_config.frozen_embedder:
-            optim_params.append({
-                "params": self.embedder.parameters(),
-                "lr": self.train_config.embedding_learning_rate,
-                "weight_decay": self.train_config.embedding_weight_decay,
-            })
+            optim_params.append(
+                {
+                    "params": self.embedder.parameters(),
+                    "lr": self.train_config.embedding_learning_rate,
+                    "weight_decay": self.train_config.embedding_weight_decay,
+                }
+            )
         optimizer = torch.optim.AdamW(
             optim_params,
         )
@@ -359,7 +345,7 @@ class MultitaskEmbeddingMLP(L.LightningModule):
         self.embed_config = config.embedding
         self.num_classes = num_classes
 
-        self.embedder = EmbedderFactory.create_embedder(
+        self.embedder = BaseModelFactory.create_base_model(
             self.embed_config,
             frozen=self.model_config.frozen_embedder,
         )
@@ -367,8 +353,7 @@ class MultitaskEmbeddingMLP(L.LightningModule):
         # Build MLP layers and metric loggers
         embed_dim = self.embedder.get_embed_dim()
         hidden_dims = parse_hidden_dims(
-            raw_dims=self.model_config.model_params["hidden_dims"],
-            embed_dim=embed_dim
+            raw_dims=self.model_config.model_params["hidden_dims"], embed_dim=embed_dim
         )
 
         substruct_types = config.data.substruct_types
@@ -404,7 +389,6 @@ class MultitaskEmbeddingMLP(L.LightningModule):
         protein_embeds: torch.Tensor,
         batch: Batch,
     ) -> Dict[str, torch.Tensor]:
-
         embed_dim = protein_embeds.shape[-1]
         dtype = protein_embeds.dtype
 
@@ -462,13 +446,8 @@ class MultitaskEmbeddingMLP(L.LightningModule):
     def training_step(self, batch: Batch, batch_idx) -> torch.Tensor:
         logits = self(batch)
 
-        for substruct_type, substruct_logits in logits.items():
-            dtype = substruct_logits.dtype
-            break
-
         losses = []
         for substruct_type, substruct_logits in logits.items():
-
             labels = torch.tensor(
                 [
                     substruct.label
@@ -499,13 +478,8 @@ class MultitaskEmbeddingMLP(L.LightningModule):
     def validation_step(self, batch: Batch, batch_idx):
         logits = self(batch)
 
-        for substruct_type, substruct_logits in logits.items():
-            dtype = substruct_logits.dtype
-            break
-
         losses = []
         for substruct_type, substruct_logits in logits.items():
-
             labels = torch.tensor(
                 [
                     substruct.label
@@ -535,12 +509,13 @@ class MultitaskEmbeddingMLP(L.LightningModule):
         self.log("orig_loss", orig_loss, sync_dist=True)
 
     @torch.inference_mode()
-    def predict_step(self, batch: Batch, batch_idx: int) -> tuple[dict[str, torch.Tensor]]:
+    def predict_step(
+        self, batch: Batch, batch_idx: int
+    ) -> tuple[dict[str, torch.Tensor]]:
         logits = self(batch)
 
         all_labels = {}
         for substruct_type, substruct_logits in logits.items():
-
             labels = torch.tensor(
                 [
                     substruct.label
@@ -556,17 +531,21 @@ class MultitaskEmbeddingMLP(L.LightningModule):
     def configure_optimizers(self):
         optim_params = []
         # MLP params
-        optim_params.append({
-            "params": self.mlps.parameters(),
-            "lr": self.train_config.learning_rate,
-            "weight_decay": self.train_config.weight_decay,
-        })
+        optim_params.append(
+            {
+                "params": self.mlps.parameters(),
+                "lr": self.train_config.learning_rate,
+                "weight_decay": self.train_config.weight_decay,
+            }
+        )
         if not self.model_config.frozen_embedder:
-            optim_params.append({
-                "params": self.embedder.parameters(),
-                "lr": self.train_config.embedding_learning_rate,
-                "weight_decay": self.train_config.embedding_weight_decay,
-            })
+            optim_params.append(
+                {
+                    "params": self.embedder.parameters(),
+                    "lr": self.train_config.embedding_learning_rate,
+                    "weight_decay": self.train_config.embedding_weight_decay,
+                }
+            )
         optimizer = torch.optim.AdamW(
             optim_params,
         )

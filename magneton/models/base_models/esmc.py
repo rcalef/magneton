@@ -1,10 +1,8 @@
 import os
-
 from dataclasses import dataclass
 from typing import Literal, Set
 
 import torch
-
 from esm.models.esmc import ESMC
 from esm.sdk.api import (
     ESMProtein,
@@ -15,16 +13,18 @@ from tqdm import tqdm
 
 from magneton.data.model_specific.esmc import ESMCBatch
 from magneton.types import DataType
-from magneton.utils import get_chunk_idxs
 
-from .base_embedder import BaseConfig, BaseEmbedder
+from .interface import BaseConfig, BaseModel
 from .utils import get_seq_mask
 
 ESMC_300M = "300m"
 ESMC_600M = "600m"
 
+
 @dataclass(kw_only=True)
 class ESMCConfig(BaseConfig):
+    """ESM-C configuration options"""
+
     weights_path: str
     model_size: Literal[ESMC_300M, ESMC_600M] = ESMC_600M
     use_flash_attn: bool = False
@@ -33,7 +33,9 @@ class ESMCConfig(BaseConfig):
     mask_prob: float = 0.15
 
 
-class ESMCEmbedder(BaseEmbedder):
+class ESMCBaseModel(BaseModel):
+    """Base model implementation for ESM-C models."""
+
     def __init__(
         self,
         config: ESMCConfig,
@@ -53,7 +55,7 @@ class ESMCEmbedder(BaseEmbedder):
                 tokenizer=get_esmc_model_tokenizers(),
                 use_flash_attn=config.use_flash_attn,
             )
-            self.embed_dim=1152
+            self.embed_dim = 1152
         elif config.model_size == ESMC_300M:
             self.model = ESMC(
                 d_model=960,
@@ -62,7 +64,7 @@ class ESMCEmbedder(BaseEmbedder):
                 tokenizer=get_esmc_model_tokenizers(),
                 use_flash_attn=config.use_flash_attn,
             )
-            self.embed_dim=960
+            self.embed_dim = 960
         else:
             raise ValueError(f"unknown ESM-C model size: {config.model_size}")
 
@@ -103,13 +105,12 @@ class ESMCEmbedder(BaseEmbedder):
             # Freeze layers that do not contribute to the embeddings
             # that we're extracting to prevent DDP exceptions.
             num_blocks = len(self.model.transformer.blocks)
-            if self.rep_layer != num_blocks-1:
-                for block in self.model.transformer.blocks[self.rep_layer+1:]:
+            if self.rep_layer != num_blocks - 1:
+                for block in self.model.transformer.blocks[self.rep_layer + 1 :]:
                     for param in block.parameters():
                         param.requires_grad = False
             for param in self.model.sequence_head.parameters():
                 param.requires_grad = False
-
 
     def _get_embedding(
         self,
@@ -138,9 +139,11 @@ class ESMCEmbedder(BaseEmbedder):
                 # Make mask that's 1 at every position that corresponds to an actual
                 # residue position, 0 otherwise.
                 residue_mask = torch.ones_like(batch.tokenized_seq)
-                mask = (batch.tokenized_seq == self.model.tokenizer.pad_token_id) \
-                       | (batch.tokenized_seq == self.model.tokenizer.eos_token_id) \
-                       | (batch.tokenized_seq == self.model.tokenizer.cls_token_id)
+                mask = (
+                    (batch.tokenized_seq == self.model.tokenizer.pad_token_id)
+                    | (batch.tokenized_seq == self.model.tokenizer.eos_token_id)
+                    | (batch.tokenized_seq == self.model.tokenizer.cls_token_id)
+                )
                 residue_mask.masked_fill_(
                     mask=mask,
                     value=0,
@@ -174,8 +177,8 @@ class ESMCEmbedder(BaseEmbedder):
         residue_embeds = residue_embeds[:, 1:-1, :]
         seq_len = residue_embeds.size(dim=1)
         # expand and broadcast
-        x_i = residue_embeds.unsqueeze(2) # (batch, seq_len, 1, embed)
-        x_j = residue_embeds.unsqueeze(1) # (batch, 1, seq_len, embed)
+        x_i = residue_embeds.unsqueeze(2)  # (batch, seq_len, 1, embed)
+        x_j = residue_embeds.unsqueeze(1)  # (batch, 1, seq_len, embed)
 
         # both broadcast to (batch, seq_len, seq_len, embed)
         x_i = x_i.expand(-1, -1, seq_len, -1)
@@ -184,7 +187,6 @@ class ESMCEmbedder(BaseEmbedder):
         # concatenate along the embedding dimension
         return torch.cat([x_i, x_j], dim=-1)
 
-    # the following two functions are deprecated for the current data module setup
     @torch.inference_mode()
     def embed_single_protein(self, seq: str) -> torch.Tensor:
         """Process a single protein sequence through ESM"""
@@ -227,12 +229,15 @@ class ESMCEmbedder(BaseEmbedder):
         """Calculate original MLM loss for a batch of tokenized sequences."""
         seqs = batch.tokenized_seq
 
-        ignore_tokens = torch.tensor([
-            self.model.tokenizer.pad_token_id,
-            self.model.tokenizer.bos_token_id,
-            self.model.tokenizer.cls_token_id,
-            self.model.tokenizer.eos_token_id,
-        ], device=seqs.device)
+        ignore_tokens = torch.tensor(
+            [
+                self.model.tokenizer.pad_token_id,
+                self.model.tokenizer.bos_token_id,
+                self.model.tokenizer.cls_token_id,
+                self.model.tokenizer.eos_token_id,
+            ],
+            device=seqs.device,
+        )
 
         mask = get_seq_mask(
             seqs,
@@ -251,7 +256,9 @@ class ESMCEmbedder(BaseEmbedder):
 
         # Flatten logits along batch dim and get logits for just masked positions
         masked_pos_logits = logits.reshape(-1, logits.shape[-1])[masked_idxs]
-        return CrossEntropyLoss(reduction=reduction)(masked_pos_logits, orig_values_flat)
+        return CrossEntropyLoss(reduction=reduction)(
+            masked_pos_logits, orig_values_flat
+        )
 
     def get_embed_dim(self):
         return self.embed_dim
@@ -265,3 +272,20 @@ class ESMCEmbedder(BaseEmbedder):
     @classmethod
     def get_required_input_type(cls) -> Set[DataType]:
         return {DataType.SEQ}
+
+
+def get_chunk_idxs(seq_len: int, max_len: int) -> list[tuple[int, int]]:
+    """Get indices for chunking long sequences"""
+    num_pieces = (seq_len + max_len - 1) // max_len
+    lo_size = seq_len // num_pieces
+    hi_size = lo_size + 1
+    num_hi = seq_len % num_pieces
+
+    chunk_lens = [hi_size] * num_hi + [lo_size] * (num_pieces - num_hi)
+
+    chunk_idxs = []
+    curr = 0
+    for chunk_len in chunk_lens:
+        chunk_idxs.append((curr, curr + chunk_len))
+        curr += chunk_len
+    return chunk_idxs

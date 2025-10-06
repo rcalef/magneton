@@ -8,18 +8,22 @@ from torch.nn import CrossEntropyLoss
 from magneton.data.model_specific.saprot import SaProtBatch
 from magneton.types import DataType
 
-from .esm_transformers_base import ESMBaseConfig, ESMBaseEmbedder
+from .esm_transformers_base import TransformersESMBaseConfig, TransformersESMBaseModel
 
 SAPROT_35M = "35m"
 SAPROT_650M = "650m"
 
 
 @dataclass(kw_only=True)
-class SaProtConfig(ESMBaseConfig):
+class SaProtConfig(TransformersESMBaseConfig):
+    """Configuration for SaProt models"""
+
     model_size: Literal[SAPROT_35M, SAPROT_650M] = SAPROT_35M
 
 
-class SaProtEmbedder(ESMBaseEmbedder):
+class SaProtBaseModel(TransformersESMBaseModel):
+    """SaProt protein sequence+structure models."""
+
     def __init__(
         self,
         config: SaProtConfig,
@@ -47,17 +51,6 @@ class SaProtEmbedder(ESMBaseEmbedder):
         batch: SaProtBatch,
     ) -> torch.Tensor:
         return super().forward_for_contact(batch.tokenized_sa_seq)
-
-    # the following two functions are deprecated for the current data module setup
-    @torch.no_grad()
-    def embed_single_protein(self, seq: str) -> torch.Tensor:
-        """Process a single protein sequence through ESM"""
-        pass
-
-    @torch.no_grad()
-    def embed_sequences(self, sequences: list[str]) -> list[torch.Tensor]:
-        """Embed multiple protein sequences"""
-        pass
 
     def calc_original_loss(
         self,

@@ -24,7 +24,11 @@ def format_logits_and_labels_for_metrics(
     """Perform any reshaping and dtype conversions for metric calculations."""
     if task_type == EVAL_TASK.BINARY:
         # For binary metrics, convert labels to int (AveragePrecision expects int targets)
-        return logits.squeeze(-1), labels.squeeze(-1).int()
+        labels = labels.int()
+        #if logits.shape[0] != 1:
+        print(logits.shape)
+        print(logits.squeeze(-1).shape)
+        return logits.squeeze(-1), labels.squeeze(-1)
     elif task_type in [EVAL_TASK.MULTILABEL, EVAL_TASK.MULTICLASS]:
         return logits, labels.int()
     else:

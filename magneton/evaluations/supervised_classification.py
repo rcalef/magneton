@@ -20,133 +20,14 @@ from magneton.data.evals import (
     TASK_GRANULARITY,
     TASK_TO_TYPE,
 )
+from magneton.models.evaluation_classifier import EvaluationClassifier
 
-from .downstream_classifiers import EvaluationClassifier
 from .metrics import (
     FMaxScore,
     PrecisionAtL,
     format_logits_and_labels_for_metrics,
     get_task_torchmetrics,
 )
-
-
-def run_final_predictions(
-    model: EvaluationClassifier,
-    trainer: L.Trainer,
-    loader: Loader,
-    task: str,
-    num_classes: int,
-    output_dir: Path,
-    prefix: str,
-):
-    """Run predictions only and output evaluation metrics."""
-    final_predictions = trainer.predict(
-        model=model, dataloaders=loader, return_predictions=True
-    )
-
-    all_logits, all_labels = zip(*final_predictions)
-    all_logits = torch.cat(all_logits)
-    all_labels = torch.cat(all_labels)
-
-    # Make another pass through dataset to collect IDs
-    protein_ids = []
-    for batch in loader:
-        protein_ids.extend(batch.protein_ids)
-
-    results_dict = {
-        "protein_ids": protein_ids,
-        "logits": all_logits,
-        "labels": all_labels,
-    }
-
-    torch.save(results_dict, output_dir / f"{prefix}_results.pt")
-
-    # Calculate task-specific metrics and prepare for JSON export
-    task_type = TASK_TO_TYPE[task]
-    metrics = get_task_torchmetrics(task_type, num_classes, prefix=f"{prefix}_")
-    if task_type == EVAL_TASK.MULTILABEL:
-        # Fmax isn't included by default since it's too expensive to compute
-        # as a metric on every iteration
-        metrics.add_metrics({"fmax": FMaxScore(num_thresh_steps=101)})
-
-    metrics_dict = {
-        "task": task,
-        "task_type": task_type,
-    }
-
-    all_logits, all_labels = format_logits_and_labels_for_metrics(
-        all_logits,
-        all_labels,
-        task_type,
-    )
-    metrics_dict.update(
-        {k: v.item() for k, v in metrics(all_logits, all_labels).items()}
-    )
-
-    print(f"{prefix} final metrics: {metrics_dict}")
-
-    # Save metrics to JSON file
-    metrics_json_path = Path(output_dir) / f"{prefix}_{task}_metrics.json"
-    with open(metrics_json_path, "w") as f:
-        json.dump(metrics_dict, f, indent=2)
-    print(f"Metrics saved to: {metrics_json_path}")
-
-def run_final_contact_predictions(
-    model: EvaluationClassifier,
-    trainer: L.Trainer,
-    loader: Loader,
-    task: str,
-    num_classes: int,
-    output_dir: Path,
-    prefix: str,
-):
-    """Contact prediction-specific evaluation.
-
-    Contact prediction is just different enough (want original 2D labels, compute
-    P@L per batch, doesn't make sense to output full sets of predictions) that it
-    seemed easier to just have a different final prediction function.
-    """
-    assert model.task_granularity == TASK_GRANULARITY.CONTACT_PREDICTION
-    final_predictions = trainer.predict(
-        model=model, dataloaders=loader, return_predictions=True
-    )
-
-    # Make another pass through dataset to collect labels, IDs, and lengths
-    all_labels = []
-    protein_ids = []
-    protein_lengths = []
-    for batch in loader:
-        all_labels.append(batch.labels)
-        protein_ids.append(batch.protein_ids)
-        protein_lengths.append(batch.lengths)
-
-    results_dict = {
-        "protein_ids": protein_ids,
-        "lengths": protein_lengths,
-        "logits": final_predictions,
-        "labels": all_labels,
-    }
-
-    torch.save(results_dict, output_dir / f"{prefix}_results.pt")
-
-    # Calculate task-specific metrics and prepare for JSON export
-    metrics_dict = {
-        "task": "contact_prediction",
-    }
-    p_at_l = PrecisionAtL(sync_on_compute=False)
-    for logits, labels, lengths in zip(final_predictions, all_labels, protein_lengths):
-        p_at_l.update(logits, labels, lengths)
-
-    metrics_dict.update({k: v.item() for k, v in p_at_l.compute().items()})
-
-    print(f"{prefix} final metrics: {metrics_dict}")
-
-    # Save metrics to JSON file
-    metrics_json_path = Path(output_dir) / f"{prefix}_contact_prediction_metrics.json"
-    with open(metrics_json_path, "w") as f:
-        json.dump(metrics_dict, f, indent=2)
-    print(f"Metrics saved to: {metrics_json_path}")
-
 
 def run_supervised_classification(
     config: PipelineConfig,
@@ -290,3 +171,123 @@ def run_supervised_classification(
 
     if logger is not None:
         logger.experiment.finish()
+
+
+def run_final_predictions(
+    model: EvaluationClassifier,
+    trainer: L.Trainer,
+    loader: Loader,
+    task: str,
+    num_classes: int,
+    output_dir: Path,
+    prefix: str,
+):
+    """Run predictions only and output evaluation metrics."""
+    final_predictions = trainer.predict(
+        model=model, dataloaders=loader, return_predictions=True
+    )
+
+    all_logits, all_labels = zip(*final_predictions)
+    all_logits = torch.cat(all_logits)
+    all_labels = torch.cat(all_labels)
+
+    # Make another pass through dataset to collect IDs
+    protein_ids = []
+    for batch in loader:
+        protein_ids.extend(batch.protein_ids)
+
+    results_dict = {
+        "protein_ids": protein_ids,
+        "logits": all_logits,
+        "labels": all_labels,
+    }
+
+    torch.save(results_dict, output_dir / f"{prefix}_results.pt")
+
+    # Calculate task-specific metrics and prepare for JSON export
+    task_type = TASK_TO_TYPE[task]
+    metrics = get_task_torchmetrics(task_type, num_classes, prefix=f"{prefix}_")
+    if task_type == EVAL_TASK.MULTILABEL:
+        # Fmax isn't included by default since it's too expensive to compute
+        # as a metric on every iteration
+        metrics.add_metrics({"fmax": FMaxScore(num_thresh_steps=101)})
+
+    metrics_dict = {
+        "task": task,
+        "task_type": task_type,
+    }
+
+    all_logits, all_labels = format_logits_and_labels_for_metrics(
+        all_logits,
+        all_labels,
+        task_type,
+    )
+    metrics_dict.update(
+        {k: v.item() for k, v in metrics(all_logits, all_labels).items()}
+    )
+
+    print(f"{prefix} final metrics: {metrics_dict}")
+
+    # Save metrics to JSON file
+    metrics_json_path = Path(output_dir) / f"{prefix}_{task}_metrics.json"
+    with open(metrics_json_path, "w") as f:
+        json.dump(metrics_dict, f, indent=2)
+    print(f"Metrics saved to: {metrics_json_path}")
+
+def run_final_contact_predictions(
+    model: EvaluationClassifier,
+    trainer: L.Trainer,
+    loader: Loader,
+    task: str,
+    num_classes: int,
+    output_dir: Path,
+    prefix: str,
+):
+    """Contact prediction-specific evaluation.
+
+    Contact prediction is just different enough (want original 2D labels, compute
+    P@L per batch, doesn't make sense to output full sets of predictions) that it
+    seemed easier to just have a different final prediction function.
+    """
+    assert model.task_granularity == TASK_GRANULARITY.CONTACT_PREDICTION
+    final_predictions = trainer.predict(
+        model=model, dataloaders=loader, return_predictions=True
+    )
+
+    # Make another pass through dataset to collect labels, IDs, and lengths
+    all_labels = []
+    protein_ids = []
+    protein_lengths = []
+    for batch in loader:
+        all_labels.append(batch.labels)
+        protein_ids.append(batch.protein_ids)
+        protein_lengths.append(batch.lengths)
+
+    results_dict = {
+        "protein_ids": protein_ids,
+        "lengths": protein_lengths,
+        "logits": final_predictions,
+        "labels": all_labels,
+    }
+
+    torch.save(results_dict, output_dir / f"{prefix}_results.pt")
+
+    # Calculate task-specific metrics and prepare for JSON export
+    metrics_dict = {
+        "task": "contact_prediction",
+    }
+    p_at_l = PrecisionAtL(sync_on_compute=False)
+    for logits, labels, lengths in zip(final_predictions, all_labels, protein_lengths):
+        p_at_l.update(logits, labels, lengths)
+
+    metrics_dict.update({k: v.item() for k, v in p_at_l.compute().items()})
+
+    print(f"{prefix} final metrics: {metrics_dict}")
+
+    # Save metrics to JSON file
+    metrics_json_path = Path(output_dir) / f"{prefix}_contact_prediction_metrics.json"
+    with open(metrics_json_path, "w") as f:
+        json.dump(metrics_dict, f, indent=2)
+    print(f"Metrics saved to: {metrics_json_path}")
+
+

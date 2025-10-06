@@ -11,24 +11,39 @@ from transformers.models.esm.modeling_esm import average_product_correct, symmet
 from magneton.data.model_specific.saprot import SaProtBatch
 from magneton.types import DataType
 
-from .base_embedder import BaseConfig, BaseEmbedder
+from .interface import BaseConfig, BaseModel
 from .utils import pool_residue_embeddings
 
 
 @dataclass(kw_only=True)
-class ESMBaseConfig(BaseConfig):
+class TransformersESMBaseConfig(BaseConfig):
+    """Config for models using transformers ESM model implementation.
+
+    Args:
+        - weights_path (str): Path to directory containing weights from
+            HuggingFace.
+        - use_flash_attn (bool): Whether or not to use Flash Attention.
+        - rep_layer (int): The layer of the model to extract hidden
+            representations from as embeddings.
+        - mask_prob (float): Mask probability to use when calculating
+            original MLM loss.
+        - unk_amino_acid_char (str): The character used to represent
+            unknown amino acids.
+    """
+
     weights_path: str
     use_flash_attn: bool = False
     rep_layer: int = 12
-    max_seq_length: int = 2048
     mask_prob: float = 0.15
     unk_amino_acid_char: str = "X"
 
 
-class ESMBaseEmbedder(BaseEmbedder):
+class TransformersESMBaseModel(BaseModel):
+    """Base class containing shared logic for models based on transformers ESM implementation."""
+
     def __init__(
         self,
-        config: ESMBaseConfig,
+        config: TransformersESMBaseConfig,
         frozen: bool = True,
     ):
         super().__init__(config)
@@ -190,17 +205,6 @@ class ESMBaseEmbedder(BaseEmbedder):
             # Remove CLS dimension so substructure indices match
             return residue_embeddings[:, 1:, :]
 
-    # the following two functions are deprecated for the current data module setup
-    @torch.no_grad()
-    def embed_single_protein(self, seq: str) -> torch.Tensor:
-        """Process a single protein sequence through ESM"""
-        pass
-
-    @torch.no_grad()
-    def embed_sequences(self, sequences: list[str]) -> list[torch.Tensor]:
-        """Embed multiple protein sequences"""
-        pass
-
     def calc_original_loss(
         self,
         batch: SaProtBatch,
@@ -224,24 +228,3 @@ class ESMBaseEmbedder(BaseEmbedder):
     @classmethod
     def get_required_input_type(cls) -> Set[DataType]:
         raise NotImplementedError("EsmBaseEmbedder is expected to be subclassed")
-
-
-def get_seq_mask(
-    tokenized_seqs: torch.Tensor,
-    pad_token_id: int,
-    bos_token_id: int,
-    eos_token_id: int,
-    rng: torch.Generator,
-    mask_prob: float = 0.15,
-) -> torch.Tensor:
-    probs = torch.rand(
-        tokenized_seqs.shape,
-        generator=rng,
-    ).to(tokenized_seqs.device)
-    mask = (
-        (probs < mask_prob)
-        & (tokenized_seqs != pad_token_id)
-        & (tokenized_seqs != bos_token_id)
-        & (tokenized_seqs != eos_token_id)
-    )
-    return mask

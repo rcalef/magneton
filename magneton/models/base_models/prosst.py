@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
@@ -8,20 +8,24 @@ from transformers import AutoModelForMaskedLM, AutoTokenizer
 from magneton.data.model_specific.prosst import ProSSTBatch
 from magneton.types import DataType
 
-from .base_embedder import BaseConfig, BaseEmbedder
+from .interface import BaseConfig, BaseModel
 from .utils import get_seq_mask, pool_residue_embeddings
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ProSSTConfig(BaseConfig):
-    weights_path: str = field(kw_only=True)
-    structure_vocab_size: int = field(kw_only=True, default=2048)
+    """Configuration options for ProSST models"""
+
+    weights_path: str
+    structure_vocab_size: int = 2048
     # Default to final layer hidden states
-    rep_layer: int = field(kw_only=True, default=12)
+    rep_layer: int = 12
     mask_prob: float = 0.15
 
 
-class ProSSTEmbedder(BaseEmbedder):
+class ProSSTEmbedder(BaseModel):
+    "ProSST sequence+structure models."
+
     def __init__(
         self,
         config: ProSSTConfig,
@@ -107,17 +111,6 @@ class ProSSTEmbedder(BaseEmbedder):
             # Remove CLS token so substructure indices line up
             return residue_embeddings[:, 1:, :]
 
-    # the following two functions are deprecated for the current data module setup
-    @torch.no_grad()
-    def embed_single_protein(self, seq: str) -> torch.Tensor:
-        """Process a single protein sequence through ESM"""
-        pass
-
-    @torch.no_grad()
-    def embed_sequences(self, sequences: list[str]) -> list[torch.Tensor]:
-        """Embed multiple protein sequences"""
-        pass
-
     def calc_original_loss(
         self,
         batch: ProSSTBatch,
@@ -154,8 +147,6 @@ class ProSSTEmbedder(BaseEmbedder):
 
         attention_mask = torch.ones_like(batch.tokenized_seq)
         attention_mask[batch.tokenized_seq == self.tokenizer.pad_token_id] = 0
-
-
 
         # Not fully sure why, but the structure tokens come through as inference mode
         # tensors. Maybe lightning is working some magic on the train side to make

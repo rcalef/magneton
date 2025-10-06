@@ -1,13 +1,13 @@
 import torch
 
 from magneton.data.core.core_dataset import Batch
-from magneton.evals.downstream_classifiers import (
+from magneton.models.head_classifiers import (
     ProteinClassificationHead,
     ResidueClassificationHead,
     ContactPredictionHead,
     PPIPredictionHead,
 )
-from .mocks import MockEmbedder
+from ..mocks import MockBaseModel
 
 
 def make_batch(num_items: int, lengths: list[int], labels: torch.Tensor) -> Batch:
@@ -24,7 +24,7 @@ def test_protein_head_forward_and_labels():
     embed_dim = 8
     num_classes = 5
     head = ProteinClassificationHead(embed_dim, hidden_dims=[embed_dim], num_classes=num_classes, dropout_rate=0.0)
-    embedder = MockEmbedder(embed_dim)
+    embedder = MockBaseModel(embed_dim)
 
     batch = make_batch(num_items=3, lengths=[10, 12, 8], labels=torch.randint(0, 2, (3, num_classes)).float())
     logits = head.forward(batch, embedder)
@@ -38,7 +38,7 @@ def test_residue_head_forward_and_labels():
     embed_dim = 6
     num_classes = 3
     head = ResidueClassificationHead(embed_dim, hidden_dims=[embed_dim], num_classes=num_classes, dropout_rate=0.0)
-    embedder = MockEmbedder(embed_dim)
+    embedder = MockBaseModel(embed_dim)
 
     lengths = [4, 7]
     total_len = sum(lengths)
@@ -55,7 +55,7 @@ def test_residue_head_forward_and_labels():
 def test_contact_head_forward_and_labels():
     input_dim = 4
     head = ContactPredictionHead(input_dim=input_dim, hidden_dims=[8])
-    embedder = MockEmbedder(embed_dim=input_dim)
+    embedder = MockBaseModel(embed_dim=input_dim)
 
     lengths = [5]
     L = lengths[0]
@@ -75,7 +75,7 @@ def test_contact_head_forward_and_labels():
 def test_ppi_head_forward_and_labels():
     embed_dim = 5
     head = PPIPredictionHead(embed_dim=embed_dim, hidden_dims=[embed_dim], dropout_rate=0.0)
-    embedder = MockEmbedder(embed_dim)
+    embedder = MockBaseModel(embed_dim)
 
     lengths = [10, 12, 9, 7]
     # labels duplicated per pair: [y0, y0, y1, y1]

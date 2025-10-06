@@ -7,8 +7,8 @@ from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 from hydra.utils import instantiate
 
-from magneton.evals.supervised_classification import run_supervised_classification
-from .mocks import MockEmbeddingMLP
+from magneton.evaluations.supervised_classification import run_supervised_classification
+from ..mocks import MockSubstructureClassifier
 
 
 # @pytest.mark.parametrize("task", ["GO:MF", "EC", "fold", "solubility", "fluorescence"])
@@ -40,7 +40,7 @@ def test_multilabelmlp_with_dummy_embedder(tmp_path, task):
         )
         config = instantiate(cfg)
 
-    with patch("magneton.evals.downstream_classifiers.EmbeddingMLP", MockEmbeddingMLP):
+    with patch("magneton.models.evaluation_classifier.SubstructureClassifier", MockSubstructureClassifier):
         run_supervised_classification(
             config=config, task=task, output_dir=tmp_path, run_id=f"test_{task},"
         )

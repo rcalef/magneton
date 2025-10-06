@@ -7,10 +7,10 @@ import torch.distributed as dist
 from magneton.config import PipelineConfig
 from magneton.data import MagnetonDataModule
 from magneton.data.core import get_substructure_parser
-from magneton.evals.substructure_classification import classify_substructs
-from magneton.evals.supervised_classification import run_supervised_classification
-from magneton.evals.zero_shot_evaluation import run_zero_shot_evaluation
-from magneton.training.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
+from magneton.evaluations.substructure_classification import classify_substructs
+from magneton.evaluations.supervised_classification import run_supervised_classification
+from magneton.evaluations.zero_shot_evaluation import run_zero_shot_evaluation
+from magneton.models.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
 from magneton.training.trainer import ModelTrainer
 
 

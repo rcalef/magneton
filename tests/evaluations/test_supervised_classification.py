@@ -14,8 +14,8 @@ from magneton.config import (
 )
 from magneton.data.core.core_dataset import Batch
 from magneton.data.evals.task_types import TASK_GRANULARITY
-from magneton.evals import supervised_classification
-from .mocks import MockEmbedder, MockDataModule, MockTrainer
+from magneton.evaluations import supervised_classification
+from ..mocks import MockBaseModel, MockDataModule, MockTrainer
 
 
 @pytest.mark.parametrize(
@@ -36,13 +36,13 @@ def test_run_supervised_classification_minimal(
     monkeypatch.setattr(supervised_classification.L, "Trainer", MockTrainer)
 
     # Monkeypatch EmbeddingMLP.load_from_checkpoint to return stub with embedder
-    from magneton.evals import downstream_classifiers as dc
+    from magneton.models import substructure_classifier as sc
 
     def fake_load_from_checkpoint(*args, **kwargs):
-        return SimpleNamespace(embedder=MockEmbedder(embed_dim=8))
+        return SimpleNamespace(embedder=MockBaseModel(embed_dim=8))
 
     monkeypatch.setattr(
-        dc.EmbeddingMLP, "load_from_checkpoint", staticmethod(fake_load_from_checkpoint)
+        sc.SubstructureClassifier, "load_from_checkpoint", staticmethod(fake_load_from_checkpoint)
     )
 
     # Monkeypatch SupervisedDownstreamTaskDataModule to a tiny fake

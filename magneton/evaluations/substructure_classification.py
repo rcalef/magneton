@@ -14,7 +14,7 @@ from torchmetrics import (
 from magneton.config import PipelineConfig
 from magneton.data import MagnetonDataModule
 from magneton.data.core import get_substructure_parser
-from magneton.training.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
+from magneton.models.embedding_mlp import EmbeddingMLP, MultitaskEmbeddingMLP
 
 
 def classify_substructs(
