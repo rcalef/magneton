@@ -13,7 +13,7 @@ from torchmetrics import (
     SpearmanCorrCoef,
 )
 
-from magneton.data.evals import EVAL_TASK
+from magneton.data.evaluations import EVAL_TASK
 
 
 def format_logits_and_labels_for_metrics(

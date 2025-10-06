@@ -15,7 +15,7 @@ from magneton.config import PipelineConfig
 from magneton.data import (
     SupervisedDownstreamTaskDataModule,
 )
-from magneton.data.evals import (
+from magneton.data.evaluations import (
     EVAL_TASK,
     TASK_GRANULARITY,
     TASK_TO_TYPE,

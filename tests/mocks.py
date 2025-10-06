@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from magneton.data.core import Batch
-from magneton.data.evals.task_types import TASK_GRANULARITY
+from magneton.data.evaluations.task_types import TASK_GRANULARITY
 from magneton.models.base_models import BaseConfig, BaseModel
 from magneton.types import DataType
 

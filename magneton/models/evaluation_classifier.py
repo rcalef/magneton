@@ -7,7 +7,7 @@ import torch.nn as nn
 
 from magneton.config import PipelineConfig, TrainingConfig
 from magneton.data.core import Batch
-from magneton.data.evals import EVAL_TASK, TASK_GRANULARITY
+from magneton.data.evaluations import EVAL_TASK, TASK_GRANULARITY
 from magneton.evaluations.metrics import (
     FMaxScore,
     PrecisionAtL,
@@ -132,7 +132,7 @@ class EvaluationClassifier(L.LightningModule):
             self.task_type,
         )
         self.train_metrics.update(logits, labels)
-        
+
         if batch_idx % 50 == 0:
             self.log_dict(self.train_metrics, sync_dist=True)
         return loss

@@ -10,7 +10,7 @@ import fire
 import pandas as pd
 from tqdm import tqdm
 
-from magneton.data.evals.biolip_dataset import BioLIP2Module
+from magneton.data.evaluations.biolip_dataset import BioLIP2Module
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

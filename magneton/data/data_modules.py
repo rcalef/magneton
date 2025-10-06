@@ -25,7 +25,7 @@ from magneton.types import DataType
 from .core import (
     get_core_dataset,
 )
-from .evals import (
+from .evaluations import (
     PEER_TASK_TO_CONFIGS,
     TASK_GRANULARITY,
     TASK_TO_TYPE,

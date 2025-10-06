@@ -9,7 +9,7 @@ import fire
 import pandas as pd
 from tqdm import tqdm
 
-from magneton.data.evals import ContactPredictionModule
+from magneton.data.evaluations import ContactPredictionModule
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

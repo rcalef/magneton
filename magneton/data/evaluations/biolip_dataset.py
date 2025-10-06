@@ -11,7 +11,7 @@ import torch
 from torch.utils.data import Dataset
 
 from magneton.data.core import DataElement
-from magneton.data.evals.utils import parse_seqs_from_pdbs
+from magneton.data.evaluations.utils import parse_seqs_from_pdbs
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)

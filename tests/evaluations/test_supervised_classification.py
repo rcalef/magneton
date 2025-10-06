@@ -13,7 +13,7 @@ from magneton.config import (
     TrainingConfig,
 )
 from magneton.data.core.core_dataset import Batch
-from magneton.data.evals.task_types import TASK_GRANULARITY
+from magneton.data.evaluations.task_types import TASK_GRANULARITY
 from magneton.evaluations import supervised_classification
 from ..mocks import MockBaseModel, MockDataModule, MockTrainer
 
