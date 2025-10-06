@@ -150,7 +150,6 @@ Probably provide a notebook to show all the stats and split creation -->
 | | Subcellular localization | Multiclass | Accuracy | [Almagro Armenteros et al. (2017)](https://academic.oup.com/bioinformatics/article/33/21/3387/3931857) | `saprot_subloc` |
 | | Binary localization | Binary | Accuracy | [Almagro Armenteros et al. (2017)](https://academic.oup.com/bioinformatics/article/33/21/3387/3931857) | `binary_localization`, `saprot_binloc` |
 | | Thermostability prediction | Regression | Spearman's ρ | [Rao et al. (2019)](https://arxiv.org/abs/1906.08230) | `thermostability`, `saprot_thermostability` |
-<!-- | **Substructure** | Substructure classification | Multiclass | Macro accuracy | Ours | `TBD` | -->
 | **Residue** | Contact prediction | Binary | Precision@L | [Rao et al. (2019)](https://arxiv.org/abs/1906.08230) | `contact_prediction` |
 | | Variant effect prediction | Regression | Spearman's ρ | [Notin et al. (2023)](https://www.biorxiv.org/content/10.1101/2023.12.07.570727v1) | `proteingym` |
 | | Binding residue categorization | Multilabel | F<sub>max</sub> | [Dallago et al. (2021)](https://www.biorxiv.org/content/10.1101/2021.11.09.467890v1) | `FLIP_bind` |
