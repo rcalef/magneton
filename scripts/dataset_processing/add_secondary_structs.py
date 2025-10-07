@@ -1,20 +1,18 @@
 import bz2
 import logging
 import os
-import pickle
-
-from typing import Tuple
-
 from functools import partial
+from pathlib import Path
+from typing import Tuple
 
 import fire
 
+from magneton.core_types import Protein
 from magneton.io.internal import (
-    parse_from_pkl,
+    parse_from_json,
     process_sharded_proteins,
 )
 from magneton.io.mmcif import mmcif_to_secondary_structs
-from magneton.core_types import Protein
 
 
 def add_secondary_structs_to_protein(
@@ -27,7 +25,9 @@ def add_secondary_structs_to_protein(
         return prot, False
 
     try:
-        prot.secondary_structs = mmcif_to_secondary_structs(path, expected_len=prot.length)
+        prot.secondary_structs = mmcif_to_secondary_structs(
+            path, expected_len=prot.length
+        )
     except Exception as e:
         print(e)
         return prot, False
@@ -50,7 +50,7 @@ def add_ss_to_interpro_pkl(
     first_kept = None
     logger.info(f"{os.path.basename(pkl_path)}: begin")
     with bz2.open(outpath, "wb") as fh:
-        for prot in parse_from_pkl(pkl_path, compression="bz2"):
+        for prot in parse_from_json(pkl_path, compression="gz"):
             tot += 1
             try:
                 prot_with_ss, has_struct = add_secondary_structs_to_protein(
@@ -61,22 +61,24 @@ def add_ss_to_interpro_pkl(
                 raise e
             if has_struct:
                 num_kept += 1
-                pickle.dump(prot_with_ss, fh)
+                print(prot_with_ss.toJSON(), file=fh)
                 if first_kept is None:
                     first_kept = prot.uniprot_id
-    logger.info(f"{os.path.basename(pkl_path)}: found {tot-num_kept} / {tot} missing")
+    logger.info(f"{os.path.basename(pkl_path)}: found {tot - num_kept} / {tot} missing")
     return first_kept, num_kept
 
 
 def add_ss_to_interpro_sharded(
-    dir_path: str,
+    input_dir: str,
     outdir: str,
     cif_tmpl: str,
     nprocs: int = 32,
     prefix: str = "sharded_proteins",
 ):
+    outdir = Path(outdir)
+
     new_index_entries = process_sharded_proteins(
-        dir_path,
+        input_dir,
         partial(
             add_ss_to_interpro_pkl, prefix=prefix, outdir=outdir, cif_tmpl=cif_tmpl
         ),

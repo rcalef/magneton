@@ -1,17 +1,18 @@
-import bz2
 import logging
 import os
-import pickle
-
 from functools import partial
+from itertools import chain
 from typing import List
 
 import fire
-
 from pysam import FastaFile
 
-from magneton.io.internal import parse_from_pkl, process_sharded_proteins
 from magneton.core_types import Protein
+from magneton.io.internal import (
+    parse_from_json,
+    process_sharded_proteins,
+    shard_proteins,
+)
 
 
 def filter_proteins(
@@ -33,7 +34,7 @@ def filter_proteins(
     logger.info(f"Filtering file {os.path.basename(input_path)}")
     filtered_proteins = []
     tot = 0
-    for prot in parse_from_pkl(input_path, compression="bz2"):
+    for prot in parse_from_json(input_path, compression="gz"):
         if prot.uniprot_id in want_ids:
             filtered_proteins.append(prot)
         tot += 1
@@ -45,22 +46,25 @@ def filter_proteins(
 
 
 def filter_dir(
-    dir_path: str,
-    output_path: str,
+    input_dir: str,
+    output_dir: str,
     filter_path: str,
+    output_prefix: str = "sharded_proteins",
+    prots_per_shard: int = 10000,
     nprocs: int = 16,
 ) -> List[Protein]:
     filter_func = partial(filter_proteins, filter_path=filter_path)
     filtered_proteins = process_sharded_proteins(
-        dir_path,
+        input_dir,
         filter_func,
         nprocs=nprocs,
     )
-
-    with bz2.open(output_path, "wb") as fh:
-        for subres in filtered_proteins:
-            for prot in subres:
-                pickle.dump(prot, fh)
+    shard_proteins(
+        chain(*filtered_proteins),
+        output_dir=output_dir,
+        prefix=output_prefix,
+        prots_per_file=prots_per_shard,
+    )
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import fire
 
-from magneton.io.interpro import parse_from_xml
 from magneton.io.internal import shard_proteins
+from magneton.io.interpro import parse_from_xml
 
 
 def parse_and_write(

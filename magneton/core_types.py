@@ -85,6 +85,7 @@ class SubstructType(StrEnum):
     BIND_SITE = "Binding_site"
     PTM = "PTM"
     SS = "Secondary_struct"
+    REPEAT = "Repeat"
 
 # InterPro types that use the `representative` field
 INTERPRO_REP_TYPES = [
