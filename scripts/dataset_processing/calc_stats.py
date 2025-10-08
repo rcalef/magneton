@@ -1,7 +1,9 @@
+import logging
 import os
-
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import partial
+from pathlib import Path
 from typing import (
     Dict,
     Iterable,
@@ -10,35 +12,27 @@ from typing import (
     Tuple,
 )
 
+import fire
 import pandas as pd
 
-from magneton.data.core import (
+from magneton.core_types import (
+    DSSP_TO_NAME,
+    INTERPRO_REP_TYPES,
     InterproEntry,
     Protein,
     SecondaryStructure,
-    DSSP_TO_NAME,
+    SubstructType,
 )
+from magneton.io.internal import (
+    parse_from_json,
+    process_sharded_proteins,
+)
+from magneton.utils import get_data_dir
 
-
-want_types = [
-    "Family",
-    "Domain",
-    "Homologous_superfamily",
-    "Conserved_site",
-    "Repeat",
-    "Active_site",
-    "Binding_site",
-    "PTM",
-]
-
-interpro_cat_dtype = pd.CategoricalDtype(categories=want_types, ordered=True)
-
-# These InterPro element types actually use the `representative` field.
-have_representative = {
-    "Family",
-    "Domain",
-    "Repeat",
-}
+interpro_cat_dtype = pd.CategoricalDtype(
+    categories=[x for x in SubstructType if x != SubstructType.SS],
+    ordered=True,
+)
 
 ss_cat_dtype = pd.CategoricalDtype(categories=DSSP_TO_NAME, ordered=True)
 
@@ -77,8 +71,8 @@ def summarize_protein(
     filtered_entries = [
         x
         for x in prot.entries
-        if (x.element_type in have_representative and x.representative)
-        or (x.element_type not in have_representative)
+        if (x.element_type in INTERPRO_REP_TYPES and x.representative)
+        or (x.element_type not in INTERPRO_REP_TYPES)
     ]
     entry_types = [x.element_type for x in filtered_entries]
     interpro_counts = pd.Series(entry_types, dtype=interpro_cat_dtype).value_counts()
@@ -96,6 +90,7 @@ def summarize_protein(
     ret.update(ss_counts.to_dict())
 
     return pd.DataFrame(ret, index=[prot.uniprot_id])
+
 
 @dataclass
 class SubstructureMetrics:
@@ -250,8 +245,8 @@ def update_substructure_metrics(
     filtered_entries = [
         x
         for x in prot.entries
-        if (x.element_type in have_representative and x.representative)
-        or (x.element_type not in have_representative)
+        if (x.element_type in INTERPRO_REP_TYPES and x.representative)
+        or (x.element_type not in INTERPRO_REP_TYPES)
     ]
     counts = defaultdict(int)
     for entry in filtered_entries:
@@ -272,7 +267,9 @@ def update_substructure_metrics(
 
     for ss in prot.secondary_structs:
         count = counts[ss.dssp_type.value]
-        metrics["secondary_struct"][DSSP_TO_NAME[ss.dssp_type.value]].update_from_secondary_struct(
+        metrics["secondary_struct"][
+            DSSP_TO_NAME[ss.dssp_type.value]
+        ].update_from_secondary_struct(
             ss,
             prot.length,
             count,
@@ -281,11 +278,13 @@ def update_substructure_metrics(
 
 def calc_summaries(
     prots: Iterable[Protein],
-    labels_path: str = "/weka/scratch/weka/kellislab/rcalef/data/interpro/102.0/label_sets/",
+    labels_path: str,
 ) -> Tuple[pd.DataFrame, Dict[str, Dict[str, SubstructureMetrics]]]:
     # Define label sets for elements and initialize metric dicts
     substructure_metrics = defaultdict(dict)
-    for interpro_type in want_types:
+    for interpro_type in SubstructType:
+        if interpro_type == SubstructType.SS:
+            continue
         labels = pd.read_table(os.path.join(labels_path, f"{interpro_type}.labels.tsv"))
         for _, row in labels.iterrows():
             substructure_metrics[interpro_type][row.interpro_id] = SubstructureMetrics(
@@ -332,8 +331,73 @@ def merge_summaries(
     ret_dfs = {}
     for element_type, type_metrics in merged_substructure_summaries.items():
         ret_dfs[element_type] = (
-            pd.DataFrame(type_metrics)
-            .transpose()
-            .reset_index(drop=True)
+            pd.DataFrame(type_metrics).transpose().reset_index(drop=True)
         )
     return merged_prot_summaries, ret_dfs
+
+
+def summary_with_log(
+    path: str,
+    logger: logging.Logger,
+    labels_dir: str,
+    want_subset: list[str] | None = None,
+) -> tuple[pd.DataFrame, dict]:
+    logger.info(f"{os.path.basename(path)}: starting summary calculation")
+    want_subset = set(want_subset)
+    summaries, substructure_metrics = calc_summaries(
+        filter(
+            lambda x: x.uniprot_id in want_subset,
+            parse_from_json(path, compression="gz"),
+        ),
+        labels_path=labels_dir,
+    )
+    logger.info(f"{os.path.basename(path)}: finished summary calculation")
+    return summaries, substructure_metrics
+
+
+def calc_and_write_summaries(
+    dir_path: str,
+    outdir: str,
+    labels_dir: str | None = None,
+    nprocs: int = 32,
+    prefix: str = "sharded_proteins",
+    splits_file: str | None = None,
+):
+    if labels_dir is None:
+        labels_dir = get_data_dir() / "interpro_103.0" / "labels" / "full_set"
+    if splits_file is not None:
+        splits = pd.read_table(splits_file)
+        split_names = splits.split.drop_duplicates().to_list()
+        subsets = {
+            name: splits.query("split == @name").uniprot_id.to_list()
+            for name in split_names
+        }
+    else:
+        subsets = {"all": None}
+
+    outdir = Path(outdir)
+    outdir.mkdir(exist_ok=True)
+    for name, subset in subsets.items():
+        this_outdir = outdir / name
+        this_outdir.mkdir(exist_ok=True)
+        print(f"{name}: want {len(subset)} proteins")
+
+        results = process_sharded_proteins(
+            dir_path,
+            partial(summary_with_log, labels_dir=labels_dir, want_subset=subset),
+            nprocs=nprocs,
+            prefix=prefix,
+        )
+        prot_summaries, struct_summaries = zip(*results)
+        merged_prot_summaries, merged_struct_summaries = merge_summaries(
+            prot_summaries, struct_summaries
+        )
+        with open(this_outdir / "protein_summaries.tsv", "w") as fh:
+            merged_prot_summaries.to_csv(fh, sep="\t", index=False)
+        for interpro_type, metrics in merged_struct_summaries.items():
+            with open(this_outdir / f"{interpro_type}_summaries.tsv", "w") as fh:
+                metrics.to_csv(fh, sep="\t", index=False)
+
+
+if __name__ == "__main__":
+    fire.Fire(calc_and_write_summaries)

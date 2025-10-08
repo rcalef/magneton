@@ -30,7 +30,6 @@ class TransformersESMBaseConfig(BaseConfig):
         - unk_amino_acid_char (str): The character used to represent
             unknown amino acids.
     """
-
     weights_path: str
     use_flash_attn: bool = False
     rep_layer: int = 12
@@ -48,7 +47,6 @@ class TransformersESMBaseModel(BaseModel):
     ):
         super().__init__(config)
 
-        self.max_len = config.max_seq_length
         self.rep_layer = config.rep_layer
         self.model_size = config.model_size
 

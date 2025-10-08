@@ -159,6 +159,7 @@ def process_sharded_proteins(
     func: Callable,
     nprocs: int = 32,
     prefix: str = "sharded_proteins",
+    message: str = "processing proteins"
 ) -> List:
     """Run a function on each shard in a directory"""
 
@@ -175,4 +176,23 @@ def process_sharded_proteins(
     ]
 
     with Pool(nprocs) as p:
-        return list(tqdm(p.imap(func, all_files), total=len(all_files)))
+        return list(tqdm(p.imap(func, all_files), total=len(all_files), desc=message))
+
+def passthrough(prot: Protein) -> bool:
+    return True
+
+def parse_from_dir_parallel(
+    dir: str,
+    prefix: str = "sharded_proteins",
+    compression: str = "gz",
+    filter_func: Optional[Callable[[Protein], bool]] = None,
+    nprocs: int = 32,
+) -> Generator[Tuple[Protein, str], None, None]:
+    if filter_func is None:
+        filter_func = passthrough
+    return filter_proteins(
+        shard_dir=dir,
+        filter_func=filter_func,
+        prefix=prefix,
+        compression=compression,
+        nprocs=nprocs)

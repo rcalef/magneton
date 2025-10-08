@@ -22,9 +22,7 @@ from torchdata.nodes import (
 from magneton.core_types import DataType
 from magneton.config import DataConfig
 
-from .core import (
-    get_core_dataset,
-)
+from .core import CoreDataset
 from .evaluations import (
     PEER_TASK_TO_CONFIGS,
     TASK_GRANULARITY,
@@ -85,6 +83,7 @@ def filter_and_sample(
             seed=seed,
             drop_last=drop_last,
         )
+        print(f"using distributed sampler: {len(sampler)}")
     else:
         if shuffle:
             generator = torch.Generator()
@@ -98,6 +97,7 @@ def filter_and_sample(
             sampler = SequentialSampler(
                 data_source=dataset,
             )
+        print(f"NOT using distributed sampler: {len(sampler)}")
     sampler_node = SamplerWrapper(
         sampler=sampler,
     )
@@ -127,7 +127,7 @@ class MagnetonDataModule(L.LightningDataModule):
         split: str,
         shuffle: bool,
     ) -> Loader:
-        dataset = get_core_dataset(
+        dataset = CoreDataset(
             data_config=self.data_config,
             want_datatypes=self.want_datatypes,
             split=split,
@@ -173,7 +173,7 @@ class MagnetonDataModule(L.LightningDataModule):
 
     def predict_dataloader(self):
         return self._get_dataloader(
-            "all",
+            "train",
             shuffle=False,
         )
 

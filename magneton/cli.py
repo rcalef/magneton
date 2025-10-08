@@ -2,14 +2,14 @@ import hydra
 from hydra.utils import instantiate
 
 from magneton.config import PipelineConfig
-from magneton.pipeline import EmbeddingPipeline
+from magneton.pipeline import Pipeline
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(cfg: PipelineConfig) -> None:
     """Main entry point for the protein embedding pipeline"""
     cfg = instantiate(cfg)
-    pipeline = EmbeddingPipeline(cfg)
+    pipeline = Pipeline(cfg)
 
     if cfg.stage == "train":
         pipeline.run_training()

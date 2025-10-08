@@ -91,6 +91,7 @@ class SubstructType(StrEnum):
 INTERPRO_REP_TYPES = [
     SubstructType.FAMILY,
     SubstructType.DOMAIN,
+    SubstructType.REPEAT,
 ]
 
 @dataclass

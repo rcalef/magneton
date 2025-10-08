@@ -1,6 +1,7 @@
-data_dir: "/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/swissprot/sharded_swissprot/with_ss/dataset_splits/seq_splits"
-fasta_path: "/weka/scratch/weka/kellislab/rcalef/data/uniprot/uniprot_sprot.fasta.gz"
+data_dir: "${oc.env:MAGNETON_DATA_DIR}/interpro_103.0/swissprot_subset"
+fasta_path: "${oc.env:MAGNETON_DATA_DIR}/sequences/uniprot_sprot.fasta.gz"
+splits: "${oc.env:MAGNETON_DATA_DIR}/interpro_103.0/dataset_splits/seq_splits.tsv"
+labels_path: "${oc.env:MAGNETON_DATA_DIR}/interpro_103.0/labels/selected_subset"
 prefix: "swissprot.with_ss"
-labels_path: "/weka/scratch/weka/kellislab/rcalef/data/interpro/103.0/label_sets/selected_subset"
-substruct_types: ["Conserved_site"]
+substruct_types: ["Domain"]
 struct_template: "/weka/scratch/weka/kellislab/rcalef/data/pdb_alphafolddb/AF-%s-F1-model_v4.pdb"

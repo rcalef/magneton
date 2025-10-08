@@ -334,7 +334,6 @@ class SubstructureClassifier(L.LightningModule):
 
             self.log(f"train_{head_name}_loss", loss, sync_dist=False)
             self.log(f"{head_name}_eff_batch_size", len(labels), sync_dist=True)
-        print(f"want: {losses}")
         total_loss = torch.stack(losses).sum()
 
         # EWC penalty (if configured and fisher_info/original_params exist)
@@ -366,7 +365,7 @@ class SubstructureClassifier(L.LightningModule):
             loss = self.loss(head_logits, labels)
             losses.append(loss)
 
-            self.val_metrics[head_name].update(logits, labels)
+            self.val_metrics[head_name].update(head_logits, labels)
 
             self.log(f"val_{head_name}_loss", loss, sync_dist=True)
 
@@ -377,14 +376,10 @@ class SubstructureClassifier(L.LightningModule):
         orig_loss = self.base_model.calc_original_loss(batch)
         self.log("orig_loss", orig_loss, on_step=True, sync_dist=True)
 
-        if batch_idx % 50 == 0:
-            for metrics in self.val_metrics.values():
-                self.log_dict(metrics, sync_dist=True)
-
-    def on_validation_end(self):
+    def on_validation_epoch_end(self):
         for metrics in self.val_metrics.values():
             self.log_dict(metrics, sync_dist=True)
-        return super().on_validation_end()
+        return super().on_validation_epoch_end()
 
     def configure_optimizers(self):
         optim_params = [

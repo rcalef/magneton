@@ -1,13 +1,14 @@
 from pathlib import Path
 from typing import Dict
 
-import torch
 import lightning as L
-from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
+import torch
+from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from lightning.pytorch.profilers import AdvancedProfiler
 
 from magneton.config import TrainingConfig
+
 
 class InterruptCallback(L.Callback):
     def __init__(self):
@@ -15,6 +16,7 @@ class InterruptCallback(L.Callback):
 
     def on_exception(self, trainer, module, exception):
         raise exception
+
 
 class ModelTrainer:
     """Trainer class that integrates with the pipeline"""
@@ -45,13 +47,9 @@ class ModelTrainer:
                 monitor="val_loss",
                 mode="min",
                 save_top_k=3,
-                filename="{epoch}-{val_loss:.2f}"
+                filename="{epoch}-{val_loss:.2f}",
             ),
-            EarlyStopping(
-                monitor="val_loss",
-                mode="min",
-                patience=3
-            ),
+            EarlyStopping(monitor="val_loss", mode="min", patience=3),
         ]
 
         # Set up logger
@@ -93,8 +91,7 @@ class ModelTrainer:
 
     def train_and_evaluate(
         self,
-        train_loader: torch.utils.data.DataLoader,
-        val_loader: torch.utils.data.DataLoader,
+        module: L.LightningDataModule,
     ) -> Dict[str, float]:
         """Train model and return metrics"""
         # Train model
@@ -104,7 +101,7 @@ class ModelTrainer:
 
             self.trainer.predict(
                 self.model,
-                dataloaders=train_loader,
+                datamodule=module,
                 return_predictions=False,
             )
 
@@ -112,12 +109,11 @@ class ModelTrainer:
 
         self.trainer.fit(
             self.model,
-            train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
+            datamodule=module,
         )
 
         # Test model
-        metrics = self.trainer.validate(self.model, dataloaders=val_loader)
+        metrics = self.trainer.validate(self.model, datamodule=module)
 
         return metrics[0] if metrics else {}
 

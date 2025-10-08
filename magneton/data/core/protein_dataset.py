@@ -1,4 +1,5 @@
 from bisect import bisect
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from typing import Generator
@@ -113,6 +114,15 @@ def protein_has_substructs(
 def passthrough_filter_func(prot: Protein) -> bool:
     return True
 
+def protein_in_subset(prot: Protein, subset: set[str]) -> bool:
+    return prot.uniprot_id in subset
+
+def check_filters(prot: Protein, funcs: list[Callable[[Protein], bool]]) -> bool:
+    for func in funcs:
+        if not func(prot):
+            return False
+    return True
+
 
 def get_protein_dataset(
     input_path: str | Path,
@@ -121,12 +131,18 @@ def get_protein_dataset(
     prefix: str = "sharded_proteins",
     nprocs: int = 32,
     want_subtype_parser: BaseSubstructureParser | None = None,
+    want_subset: list[str] | None = None,
 ) -> InMemoryProteinDataset | ShardedProteinDataset:
     """Create a Protein dataset with the desired configurations."""
-    if want_subtype_parser:
-        filter_func = partial(
+    filters = []
+    if want_subtype_parser is not None:
+        filters.append(partial(
             protein_has_substructs, want_subtype_parser=want_subtype_parser
-        )
+        ))
+    if want_subset is not None:
+        filters.append(partial(protein_in_subset, subset=set(want_subset)))
+    if len(filters) > 0:
+        filter_func = partial(check_filters, funcs=filters)
     else:
         filter_func = passthrough_filter_func
 

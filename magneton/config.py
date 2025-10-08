@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Optional
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
-
 @dataclass
 class EmbeddingConfig:
     _target_: str = "magneton.config.EmbeddingConfig"
@@ -28,8 +27,9 @@ class EvalConfig:
 class DataConfig:
     _target_: str = "magneton.config.DataConfig"
     data_dir: str = MISSING
-    compression: str = "bz2"
-    prefix: str = "sharded_proteins"
+    compression: str = "gz"
+    prefix: str = "swissprot.with_ss"
+    splits: str = MISSING
     batch_size: int = 32
     fasta_path: Optional[str] = None
     labels_path: Optional[str] = None

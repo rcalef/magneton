@@ -1,7 +1,9 @@
-from dataclasses import dataclass, replace
-from pathlib import Path
-from typing import Generator
+import logging
 
+from dataclasses import dataclass
+from typing import Generator, Literal
+
+import pandas as pd
 import torch
 from torch.utils.data import Dataset
 from pysam import FastaFile
@@ -14,6 +16,9 @@ from .substructure_parsers import (
     get_substructure_parser,
     LabeledSubstructure,
 )
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @dataclass(kw_only=True)
 class Batch:
@@ -87,6 +92,7 @@ class CoreDataset(Dataset):
         data_config: DataConfig,
         want_datatypes: list[DataType],
         load_fasta_in_mem: bool = True,
+        split: Literal["all", "train", "val", "test"] = "train",
     ):
         super().__init__()
 
@@ -112,6 +118,16 @@ class CoreDataset(Dataset):
             assert data_config.struct_template is not None, "Structure path is required for structure data"
             self.struct_template = data_config.struct_template
 
+        if split != "all":
+            want_ids = (
+                pd.read_table(data_config.splits)
+                .query("split == @split")
+                .uniprot_id
+                .tolist()
+            )
+        else:
+            want_ids = None
+
         self.dataset = get_protein_dataset(
             input_path=data_config.data_dir,
             compression=data_config.compression,
@@ -119,7 +135,9 @@ class CoreDataset(Dataset):
             want_subtype_parser=self.substruct_parser if DataType.SUBSTRUCT in self.datatypes else None,
             # TODO: make large protein datasets random access
             in_memory=True,
+            want_subset=want_ids,
         )
+        logger.info(f"split {split}: got {len(self.dataset)} proteins")
 
     def _prot_to_elem(self, prot: Protein) -> DataElement:
         ret = DataElement(protein_id=prot.uniprot_id, length=prot.length)
@@ -142,26 +160,3 @@ class CoreDataset(Dataset):
 
     def __getitem__(self, index):
         return self._prot_to_elem(self.dataset[index])
-
-def get_core_dataset(
-    data_config: DataConfig,
-    want_datatypes: list[DataType],
-    split: str = "train",
-    load_fasta_in_mem: bool = True,
-) -> Dataset:
-    """Convenience function for getting dataset for a given split."""
-    if split != "all":
-        split_dir = Path(data_config.data_dir) / f"{split}_sharded"
-        prefix = f"swissprot.with_ss.{split}"
-        data_config = replace(
-            data_config,
-            data_dir=split_dir,
-            prefix=prefix,
-        )
-
-    prot_dataset = CoreDataset(
-        data_config=data_config,
-        want_datatypes=want_datatypes,
-        load_fasta_in_mem=load_fasta_in_mem,
-    )
-    return prot_dataset

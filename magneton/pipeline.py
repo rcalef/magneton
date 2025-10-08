@@ -1,8 +1,8 @@
+import logging
 from pathlib import Path
 from pprint import pprint
 
 import torch
-import torch.distributed as dist
 
 from magneton.config import PipelineConfig
 from magneton.data import MagnetonDataModule
@@ -14,7 +14,7 @@ from magneton.models.substructure_classifier import SubstructureClassifier
 from magneton.training.trainer import ModelTrainer
 
 
-class EmbeddingPipeline:
+class Pipeline:
     """Main pipeline for protein embedding and analysis"""
 
     def __init__(self, cfg: PipelineConfig):
@@ -35,48 +35,32 @@ class EmbeddingPipeline:
 
     def run(self):
         """Run complete pipeline"""
-        # self.run_embedding()
         self.run_training()
         self.run_evals()
-
-    def run_embedding(self):
-        """Generate and save embeddings"""
-        raise ValueError("not implemented")
 
     def run_training(self):
         """Train and evaluate model using Lightning"""
         print("Training model...")
         assert self.config.training is not None, "No training config specified"
 
-        # Initialize dataset
-        want_distributed_sampler = (
-            dist.is_initialized() and self.config.training.strategy in ["ddp", "fsdp"]
+        # Setup model
+        substruct_parser = get_substructure_parser(self.config.data)
+        model = SubstructureClassifier(
+            config=self.config,
+            num_classes=substruct_parser.num_labels(),
         )
+
+        # Setup dataset
+        want_distributed_sampler = torch.cuda.device_count() > 1
         data_module = MagnetonDataModule(
             data_config=self.config.data,
             model_type=self.config.embedding.model,
             distributed=want_distributed_sampler,
         )
 
-        train_loader = data_module.train_dataloader()
-        val_loader = data_module.val_dataloader()
-
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"Training Device: {device}")
-
-        # Not really a great way to get number of substructures being used without
-        # reaching deep into the dataset which could be nested at different levels
-        # depending on the model/config. So easiest to just get a new parser (which
-        # really just counts the labels).
-        substruct_parser = get_substructure_parser(self.config.data)
-        # Train model
-        model = SubstructureClassifier(
-            config=self.config,
-            num_classes=substruct_parser.num_labels(),
-        )
+        # Setup trainer
         if len(self.config.data.substruct_types) != 1:
             self.config.training.strategy = "ddp_find_unused_parameters_true"
-
         trainer = ModelTrainer(
             self.config.training,
             self.output_dir,
@@ -84,9 +68,8 @@ class EmbeddingPipeline:
         )
         trainer.setup(model)
 
-        metrics = trainer.train_and_evaluate(
-            train_loader=train_loader, val_loader=val_loader
-        )
+        # Train model
+        metrics = trainer.train_and_evaluate(module=data_module)
 
         # Save model
         model_path = self.output_dir / f"model_{self.config.run_id}.pt"
