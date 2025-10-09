@@ -16,6 +16,7 @@ from esm.sdk.api import ESMProtein, LogitsConfig
 
 from magneton.config import PipelineConfig
 
+PROTEINGYM_REPO_PATH = Path(__file__).parent.parent / "external" / "proteingym"
 
 def run_zero_shot_evaluation(
     config: PipelineConfig,
@@ -48,14 +49,11 @@ def run_zero_shot_evaluation(
         raise FileNotFoundError(f"Model checkpoint not found: {model_checkpoint}")
 
     # Set up paths
-    proteingym_base = (
-        "/net/vast-storage/scratch/vast/kellislab/artliang/magneton/external/proteingym"
-    )
-    dms_data_folder = f"{proteingym_base}/DMS_ProteinGym_substitutions"
-    dms_reference_file = f"{proteingym_base}/reference_files/DMS_substitutions.csv"
+    dms_data_folder = PROTEINGYM_REPO_PATH / "DMS_ProteinGym_substitutions"
+    dms_reference_file = PROTEINGYM_REPO_PATH / "reference_files" / "DMS_substitutions.csv"
 
-    if not os.path.exists(dms_reference_file):
-        raise FileNotFoundError(f"DMS reference file not found: {dms_reference_file}")
+    if not dms_reference_file.exists():
+        raise FileNotFoundError(f"DMS reference file not found: {str(dms_reference_file)}")
 
     # Create output directories
     run_output_dir = os.path.join(output_dir, run_id)
@@ -207,7 +205,6 @@ def score_mutations_lean(
     # Create protein object
     protein = ESMProtein(sequence=sequence)
     protein_tensor = model.encode(protein)
-    sequence_tokens = protein_tensor.sequence
 
     # Get all unique positions that need scoring
     positions_to_score = get_unique_positions(parsed_mutations)

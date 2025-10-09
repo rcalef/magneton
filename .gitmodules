@@ -1,5 +1,5 @@
 [submodule "external/proteingym"]
-	path = external/proteingym
+	path = magneton/external/proteingym
 	url = https://github.com/OATML-Markslab/ProteinGym.git
 
 [submodule "magneton/external/ProSST"]
