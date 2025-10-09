@@ -333,7 +333,7 @@ class SubstructureClassifier(L.LightningModule):
             self.train_metrics[head_name](head_logits, labels)
 
             self.log(f"train_{head_name}_loss", loss, sync_dist=False)
-            self.log(f"{head_name}_eff_batch_size", len(labels), sync_dist=True)
+            self.log(f"{head_name}_eff_batch_size", len(labels), sync_dist=False)
         total_loss = torch.stack(losses).sum()
 
         # EWC penalty (if configured and fisher_info/original_params exist)
@@ -347,7 +347,7 @@ class SubstructureClassifier(L.LightningModule):
             total_loss = total_loss + self.ewc_weight * ewc_loss
             self.log("ewc_loss", ewc_loss, sync_dist=False)
 
-        self.log("train_loss", total_loss, sync_dist=False)
+        self.log("train_loss", total_loss, sync_dist=True)
 
         if batch_idx % 50 == 0:
             for metrics in self.train_metrics.values():
@@ -367,14 +367,14 @@ class SubstructureClassifier(L.LightningModule):
 
             self.val_metrics[head_name].update(head_logits, labels)
 
-            self.log(f"val_{head_name}_loss", loss, sync_dist=True)
+            self.log(f"val_{head_name}_loss", loss, sync_dist=False)
 
         total_loss = torch.stack(losses).sum()
         self.log("val_loss", total_loss, sync_dist=True)
 
         # Also compute and log original-task loss from embedder
         orig_loss = self.base_model.calc_original_loss(batch)
-        self.log("orig_loss", orig_loss, on_step=True, sync_dist=True)
+        self.log("orig_loss", orig_loss, sync_dist=True)
 
     def on_validation_epoch_end(self):
         for metrics in self.val_metrics.values():
