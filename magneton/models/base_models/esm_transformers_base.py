@@ -30,6 +30,7 @@ class TransformersESMBaseConfig(BaseConfig):
         - unk_amino_acid_char (str): The character used to represent
             unknown amino acids.
     """
+
     weights_path: str
     use_flash_attn: bool = False
     rep_layer: int = 12

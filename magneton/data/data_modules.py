@@ -55,6 +55,7 @@ model_data = {
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def filter_and_sample(
     dataset: Dataset,
     shuffle: bool,
@@ -76,7 +77,9 @@ def filter_and_sample(
                 raise ValueError(f"unexpected length type ({i}): {item.length}")
             if check_length < max_len:
                 valid_indices.append(i)
-        logger.info(f"remaining proteins after length filter: {len(valid_indices)} / {len(dataset)}")
+        logger.info(
+            f"remaining proteins after length filter: {len(valid_indices)} / {len(dataset)}"
+        )
         dataset = Subset(dataset, valid_indices)
 
     if distributed:

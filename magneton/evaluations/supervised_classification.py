@@ -29,6 +29,7 @@ from .metrics import (
     get_task_torchmetrics,
 )
 
+
 def run_supervised_classification(
     config: PipelineConfig,
     task: str,
@@ -112,7 +113,9 @@ def run_supervised_classification(
         data_dir=config.evaluate.data_dir,
         model_type=config.embedding.model,
         distributed=want_distributed_sampler,
-        unk_amino_acid_char=config.embedding.model_params.get("unk_amino_acid_char", "X"),
+        unk_amino_acid_char=config.embedding.model_params.get(
+            "unk_amino_acid_char", "X"
+        ),
     )
 
     # Either train a new downstream classifier head, or load an existing checkpoint
@@ -234,6 +237,7 @@ def run_final_predictions(
         json.dump(metrics_dict, f, indent=2)
     print(f"Metrics saved to: {metrics_json_path}")
 
+
 def run_final_contact_predictions(
     model: EvaluationClassifier,
     trainer: L.Trainer,
@@ -289,5 +293,3 @@ def run_final_contact_predictions(
     with open(metrics_json_path, "w") as f:
         json.dump(metrics_dict, f, indent=2)
     print(f"Metrics saved to: {metrics_json_path}")
-
-

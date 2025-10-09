@@ -36,7 +36,6 @@ PEER_DATASET_INFO = {
         "task_type": "multiclass",
         "test_split": "test_fold_holdout",
     },
-
     "fluorescence": {
         "url": "http://s3.amazonaws.com/songlabdata/proteindata/data_pytorch/fluorescence.tar.gz",
         "format": "lmdb",
@@ -44,9 +43,8 @@ PEER_DATASET_INFO = {
         "extracted_dir": "fluorescence",
         "lmdb_pattern": "fluorescence/fluorescence_{split}.lmdb",
         "task_type": "regression",
-        "target_field": "log_fluorescence"
+        "target_field": "log_fluorescence",
     },
-
     "stability": {
         "url": "http://s3.amazonaws.com/songlabdata/proteindata/data_pytorch/stability.tar.gz",
         "format": "lmdb",
@@ -54,9 +52,8 @@ PEER_DATASET_INFO = {
         "extracted_dir": "stability",
         "lmdb_pattern": "stability/stability_{split}.lmdb",
         "task_type": "regression",
-        "target_field": "stability_score"
+        "target_field": "stability_score",
     },
-
     "beta_lactamase": {
         "url": "https://miladeepgraphlearningproteindata.s3.us-east-2.amazonaws.com/peerdata/beta_lactamase.tar.gz",
         "format": "lmdb",
@@ -66,7 +63,6 @@ PEER_DATASET_INFO = {
         "task_type": "regression",
         "target_field": "scaled_effect1",
     },
-
     "solubility": {
         "url": "https://miladeepgraphlearningproteindata.s3.us-east-2.amazonaws.com/peerdata/solubility.tar.gz",
         "format": "lmdb",
@@ -75,7 +71,6 @@ PEER_DATASET_INFO = {
         "lmdb_pattern": "solubility/solubility_{split}.lmdb",
         "task_type": "binary",
     },
-
     "subcellular_localization": {
         "url": "https://miladeepgraphlearningproteindata.s3.us-east-2.amazonaws.com/peerdata/subcellular_localization.tar.gz",
         "format": "lmdb",
@@ -85,7 +80,6 @@ PEER_DATASET_INFO = {
         "task_type": "binary",
         "target_field": "localization",
     },
-
     "binary_localization": {
         "url": "https://miladeepgraphlearningproteindata.s3.us-east-2.amazonaws.com/peerdata/subcellular_localization_2.tar.gz",
         "format": "lmdb",
@@ -95,7 +89,6 @@ PEER_DATASET_INFO = {
         "task_type": "binary",
         "target_field": "localization",
     },
-
     # FLIP CSV-based datasets
     "aav": {
         "url": "https://github.com/J-SNACKKB/FLIP/raw/d5c35cc716ca93c3c74a0b43eef5b60cbf88521f/splits/aav/splits.zip",
@@ -112,7 +105,6 @@ PEER_DATASET_INFO = {
         "sequence_col": "sequence",
         "target_col": "target",
     },
-
     "gb1": {
         "url": "https://github.com/J-SNACKKB/FLIP/raw/d5c35cc716ca93c3c74a0b43eef5b60cbf88521f/splits/gb1/splits.zip",
         "format": "csv",
@@ -128,7 +120,6 @@ PEER_DATASET_INFO = {
         "sequence_col": "sequence",
         "target_col": "target",
     },
-
     "thermostability": {
         "url": "https://github.com/J-SNACKKB/FLIP/raw/d5c35cc716ca93c3c74a0b43eef5b60cbf88521f/splits/meltome/splits.zip",
         "format": "csv",
@@ -216,10 +207,10 @@ class PeerDataset(Dataset):
         # Extract
         print(f"Extracting {archive_name}...")
         if self.info["archive_type"] == "zip":
-            with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+            with zipfile.ZipFile(archive_path, "r") as zip_ref:
                 zip_ref.extractall(self.task_dir)
         elif self.info["archive_type"] == "tar.gz":
-            with tarfile.open(archive_path, 'r:gz') as tar_ref:
+            with tarfile.open(archive_path, "r:gz") as tar_ref:
                 tar_ref.extractall(self.task_dir)
         else:
             raise ValueError(f"Unknown archive type: {self.info['archive_type']}")
@@ -248,7 +239,7 @@ class PeerDataset(Dataset):
                         # Skip metadata entries that aren't protein data
                         if not isinstance(item, dict):
                             continue
-                        item['_key'] = key.decode()
+                        item["_key"] = key.decode()
                         data.append(item)
                     except Exception as e:
                         print(f"Error loading item {key}: {e}")
@@ -286,13 +277,15 @@ class PeerDataset(Dataset):
                     "train": "train",
                     "val": "val",
                     "valid": "val",
-                    "test": "test"
+                    "test": "test",
                 }
                 flip_split = split_mapping.get(self.split, self.split)
                 df = df[df[split_column] == flip_split]
 
             if len(df) == 0:
-                raise ValueError(f"No data found for split '{self.split}' in {csv_file}")
+                raise ValueError(
+                    f"No data found for split '{self.split}' in {csv_file}"
+                )
 
         data = []
         seq_col = self.info["sequence_col"]
@@ -302,7 +295,7 @@ class PeerDataset(Dataset):
             item = {
                 "primary": row[seq_col],
                 target_col: row[target_col],
-                "_key": str(idx)
+                "_key": str(idx),
             }
             data.append(item)
 
@@ -315,7 +308,7 @@ class PeerDataset(Dataset):
         # Extract sequence
         seq = item.get("primary", item.get("sequence", ""))
         if isinstance(seq, bytes):
-            seq = seq.decode('utf-8')
+            seq = seq.decode("utf-8")
 
         # Extract target
         target_field = self.info.get("target_field", "target")
@@ -327,7 +320,10 @@ class PeerDataset(Dataset):
             target_field = "stability_score"
         elif self.task == "solubility":
             target_field = "solubility"
-        elif self.task == "subcellular_localization" or self.task == "binary_localization":
+        elif (
+            self.task == "subcellular_localization"
+            or self.task == "binary_localization"
+        ):
             target_field = "localization"
 
         labels = item.get(target_field)
@@ -335,9 +331,9 @@ class PeerDataset(Dataset):
         # Convert labels to tensor
         if labels is not None:
             # Handle numpy arrays (convert to Python scalar/list)
-            if hasattr(labels, 'item'):  # numpy scalar
+            if hasattr(labels, "item"):  # numpy scalar
                 labels = labels.item()
-            elif hasattr(labels, 'tolist'):  # numpy array
+            elif hasattr(labels, "tolist"):  # numpy array
                 labels = labels.tolist()
 
             if task_type == "multiclass":
@@ -351,10 +347,7 @@ class PeerDataset(Dataset):
                 labels = torch.tensor(labels)
 
         return DataElement(
-            protein_id=item['_key'],
-            length=len(seq),
-            seq=seq,
-            labels=labels
+            protein_id=item["_key"], length=len(seq), seq=seq, labels=labels
         )
 
     def __len__(self):
@@ -366,9 +359,9 @@ class PeerDataset(Dataset):
 
 # For backward compatibility
 PEER_TASK_TO_CONFIGS = {
-    task: {"task_type": info["task_type"]}
-    for task, info in PEER_DATASET_INFO.items()
+    task: {"task_type": info["task_type"]} for task, info in PEER_DATASET_INFO.items()
 }
+
 
 class PeerDataModule:
     """DataModule wrapper"""

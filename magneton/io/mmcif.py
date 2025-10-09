@@ -9,6 +9,7 @@ from magneton.core_types import (
     MMCIF_TO_DSSP,
 )
 
+
 def mmcif_to_secondary_structs(
     path: str,
     expected_len: Optional[int] = None,
@@ -24,8 +25,10 @@ def mmcif_to_secondary_structs(
 
     if expected_len is not None:
         seq_len = len(cif_obj["_entity_poly_seq"]["mon_id"])
-        if seq_len !=  expected_len:
-            raise ValueError(f"{keys[0]}: expected {expected_len} residues, got {seq_len}")
+        if seq_len != expected_len:
+            raise ValueError(
+                f"{keys[0]}: expected {expected_len} residues, got {seq_len}"
+            )
 
     # Some mmCIF files don't have secondary structure annotations, e.g. very
     # short peptides (e.g. A0A0C5B5G6)
@@ -43,10 +46,12 @@ def mmcif_to_secondary_structs(
     structs = []
     for begin, end, dssp_type in ss_df[want_cols].itertuples(index=False):
         type_id = MMCIF_TO_DSSP[dssp_type]
-        structs.append(SecondaryStructure(
-            start=int(begin),
-            # Convert end to exclusive coordinates to better mesh with Python
-            end=int(end)+1,
-            dssp_type=DsspType(type_id),
-        ))
+        structs.append(
+            SecondaryStructure(
+                start=int(begin),
+                # Convert end to exclusive coordinates to better mesh with Python
+                end=int(end) + 1,
+                dssp_type=DsspType(type_id),
+            )
+        )
     return structs

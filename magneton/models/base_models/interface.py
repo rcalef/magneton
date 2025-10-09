@@ -11,6 +11,7 @@ from magneton.data.core import Batch
 @dataclass(kw_only=True)
 class BaseConfig:
     """Config containing parameters shared by all base models."""
+
     for_contact_prediction: bool = False
 
 

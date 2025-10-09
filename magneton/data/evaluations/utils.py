@@ -14,23 +14,27 @@ from tqdm import tqdm
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def pdb_id_to_uniprot(pdb: str, chain: str) -> str | None:
     try:
-        content = urlopen('https://www.ebi.ac.uk/pdbe/api/mappings/uniprot/' + pdb).read()
+        content = urlopen(
+            "https://www.ebi.ac.uk/pdbe/api/mappings/uniprot/" + pdb
+        ).read()
     except Exception as e:
         logger.debug(f"{pdb} {chain} PDB Not Found (HTTP Error 404). Skipped. {e}")
         return None
 
-    content = json.loads(content.decode('utf-8'))
+    content = json.loads(content.decode("utf-8"))
 
     # find uniprot id
-    for uniprot in content[pdb.lower()]['UniProt'].keys():
-        for mapping in content[pdb.lower()]['UniProt'][uniprot]['mappings']:
-            if mapping['chain_id'] == chain:
+    for uniprot in content[pdb.lower()]["UniProt"].keys():
+        for mapping in content[pdb.lower()]["UniProt"][uniprot]["mappings"]:
+            if mapping["chain_id"] == chain:
                 return uniprot
 
     logger.debug(f"{pdb} {chain} PDB Found but Chain Not Found. Skipped.")
     return None
+
 
 def download_one_afdb_file(
     path: Path,
@@ -51,6 +55,7 @@ def download_one_afdb_file(
         return False
     return True
 
+
 def download_afdb_files(
     file_paths: list[Path],
     num_workers: int,
@@ -59,11 +64,12 @@ def download_afdb_files(
         download_results = list(
             tqdm(
                 p.imap_unordered(download_one_afdb_file, file_paths),
-                total=len(file_paths)
+                total=len(file_paths),
             )
         )
     success = sum(download_results)
     logger.info(f"succesfully downloaded {success}  / {len(file_paths)} files")
+
 
 def parse_single_seq_pdb(
     path: Path,
@@ -87,6 +93,7 @@ def parse_single_seq_pdb(
     if len(chains) != 1:
         raise ValueError(f"expected single chain, got {len(chains)}: {path}")
     return "".join([str(pp.get_sequence()) for pp in ppb.build_peptides(chains[0])])
+
 
 def parse_seqs_from_pdbs(
     fasta_path: Path,
@@ -112,7 +119,9 @@ def parse_seqs_from_pdbs(
 
     logger.info("No FASTA cache found, parsing sequences from PDB files")
     with Pool(num_workers) as p:
-        sequences = list(tqdm(p.imap(parse_func, jobs), total=len(jobs), desc="Parsing PDBs"))
+        sequences = list(
+            tqdm(p.imap(parse_func, jobs), total=len(jobs), desc="Parsing PDBs")
+        )
 
     ret: dict[str, str] = {}
     fasta_path.parent.mkdir(parents=True, exist_ok=True)

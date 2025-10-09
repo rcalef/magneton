@@ -14,12 +14,14 @@ from magneton.utils import get_model_dir, MODEL_DIR_ENV_VAR
 
 from ..core import Batch, DataElement
 
+
 @dataclass(kw_only=True)
 class ESM2DataElement(DataElement):
     """Single data element for ESM-C.
 
     - tokenized_seq (torch.Tensor): Tokenized AA seq.
     """
+
     tokenized_seq: torch.Tensor
 
 
@@ -55,6 +57,7 @@ class ESM2TransformNode(ParallelMapper):
         self.tokenizer = EsmTokenizer.from_pretrained(
             tokenizer_path, trust_remote_code=True
         )
+
         def _process(
             x: DataElement,
         ) -> ESM2DataElement:
@@ -65,8 +68,8 @@ class ESM2TransformNode(ParallelMapper):
                 substructures=x.substructures,
                 labels=x.labels,
             )
-        super().__init__(source=source_node, map_fn=_process, num_workers=num_workers)
 
+        super().__init__(source=source_node, map_fn=_process, num_workers=num_workers)
 
     def get_collate_fn(
         self,
@@ -77,6 +80,7 @@ class ESM2TransformNode(ParallelMapper):
             pad_id=self.tokenizer.pad_token_id,
             labels_mode=labels_mode,
         )
+
 
 def esm2_collate(
     entries: list[ESM2DataElement],

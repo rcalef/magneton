@@ -12,12 +12,14 @@ from torchdata.nodes import BaseNode, ParallelMapper
 
 from ..core import Batch, DataElement
 
+
 @dataclass(kw_only=True)
 class ESMCDataElement(DataElement):
     """Single data element for ESM-C.
 
     - tokenized_seq (torch.Tensor): Tokenized AA seq.
     """
+
     tokenized_seq: torch.Tensor
 
 
@@ -39,6 +41,7 @@ class ESMCTransformNode(ParallelMapper):
         num_workers: int = 2,
     ):
         tokenizer = get_esmc_model_tokenizers()
+
         def _process(
             x: DataElement,
         ) -> ESMCDataElement:
@@ -49,8 +52,8 @@ class ESMCTransformNode(ParallelMapper):
                 substructures=x.substructures,
                 labels=x.labels,
             )
-        super().__init__(source=source_node, map_fn=_process, num_workers=num_workers)
 
+        super().__init__(source=source_node, map_fn=_process, num_workers=num_workers)
 
     def get_collate_fn(
         self,

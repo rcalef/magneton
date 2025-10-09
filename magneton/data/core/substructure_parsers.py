@@ -26,12 +26,14 @@ class LabeledSubstructure:
             self.ranges[i] = self.ranges[i].to(device)
         return self
 
+
 class BaseSubstructureParser(ABC):
     def parse(self, prot: Protein) -> list[LabeledSubstructure]:
         """
         Parse the protein and return a tensor of ranges and labels.
         """
         raise NotImplementedError("Must be implemented in subclass")
+
 
 class UnifiedSubstructureParser(BaseSubstructureParser):
     """Converts substructures to labels and ranges. All substructures share a label set.
@@ -45,6 +47,7 @@ class UnifiedSubstructureParser(BaseSubstructureParser):
     the resulting parser will generate labels in [0, 3050), with the first 50 labels
     corresponding to conserved sites and the last 3000 labels corresponding to domains.
     """
+
     def __init__(
         self,
         want_types: list[SubstructType],
@@ -81,23 +84,30 @@ class UnifiedSubstructureParser(BaseSubstructureParser):
                 continue
             if entry.element_type in INTERPRO_REP_TYPES and not entry.representative:
                 continue
-            parsed.append(LabeledSubstructure(
-                ranges=[torch.tensor((start, end)) for start, end in entry.positions],
-                label=self.type_to_label[entry.id],
-                element_type=self.elem_name,
-            ))
+            parsed.append(
+                LabeledSubstructure(
+                    ranges=[
+                        torch.tensor((start, end)) for start, end in entry.positions
+                    ],
+                    label=self.type_to_label[entry.id],
+                    element_type=self.elem_name,
+                )
+            )
 
         if self.parse_ss:
             for ss in prot.secondary_structs:
-                parsed.append(LabeledSubstructure(
-                    ranges=[torch.tensor((ss.start, ss.end))],
-                    label=self.type_to_label[DSSP_TO_NAME[ss.dssp_type]],
-                    element_type=SubstructType.SS,
-                ))
+                parsed.append(
+                    LabeledSubstructure(
+                        ranges=[torch.tensor((ss.start, ss.end))],
+                        label=self.type_to_label[DSSP_TO_NAME[ss.dssp_type]],
+                        element_type=SubstructType.SS,
+                    )
+                )
         return parsed
 
     def num_labels(self) -> int:
         return len(self.type_to_label)
+
 
 class SeparatedSubstructureParser(BaseSubstructureParser):
     """Converts substructures to labels and ranges. Each substructure type has its own label set.
@@ -107,6 +117,7 @@ class SeparatedSubstructureParser(BaseSubstructureParser):
     resulting parser will generate labels in [0, 3000) for domains and [0, 50) for conserved
     sites.
     """
+
     def __init__(
         self,
         want_types: list[SubstructType],
@@ -139,23 +150,30 @@ class SeparatedSubstructureParser(BaseSubstructureParser):
                 continue
             if entry.element_type in INTERPRO_REP_TYPES and not entry.representative:
                 continue
-            parsed.append(LabeledSubstructure(
-                ranges=[torch.tensor((start, end)) for start, end in entry.positions],
-                label=self.type_to_label[entry.element_type][entry.id],
-                element_type=entry.element_type,
-            ))
+            parsed.append(
+                LabeledSubstructure(
+                    ranges=[
+                        torch.tensor((start, end)) for start, end in entry.positions
+                    ],
+                    label=self.type_to_label[entry.element_type][entry.id],
+                    element_type=entry.element_type,
+                )
+            )
         if self.parse_ss:
             for ss in prot.secondary_structs:
-                parsed.append(LabeledSubstructure(
-                    ranges=[torch.tensor((ss.start, ss.end))],
-                    label=ss.dssp_type,
-                    element_type=SubstructType.SS,
-                ))
+                parsed.append(
+                    LabeledSubstructure(
+                        ranges=[torch.tensor((ss.start, ss.end))],
+                        label=ss.dssp_type,
+                        element_type=SubstructType.SS,
+                    )
+                )
 
         return parsed
 
     def num_labels(self) -> dict[str, int]:
         return {type: len(labels) for type, labels in self.type_to_label.items()}
+
 
 def get_substructure_parser(data_config: DataConfig) -> BaseSubstructureParser:
     if data_config.collapse_labels:
@@ -163,7 +181,9 @@ def get_substructure_parser(data_config: DataConfig) -> BaseSubstructureParser:
         return UnifiedSubstructureParser(
             want_types=data_config.substruct_types,
             labels_dir=data_config.labels_path,
-            elem_name="all" if len(data_config.substruct_types) > 1 else data_config.substruct_types[0],
+            elem_name="all"
+            if len(data_config.substruct_types) > 1
+            else data_config.substruct_types[0],
         )
     else:
         return SeparatedSubstructureParser(

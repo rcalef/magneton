@@ -20,6 +20,7 @@ from .substructure_parsers import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 @dataclass(kw_only=True)
 class Batch:
     """Collated batch of dataset entries.
@@ -32,6 +33,7 @@ class Batch:
     - structure_list (List[str] | None): Paths to structure (.pdb) files for each protein.
     - labels (torch.Tensor | None): Labels for supervised tasks.
     """
+
     protein_ids: list[str]
     lengths: list[int]
     seqs: list[str] | None = None
@@ -52,6 +54,7 @@ class Batch:
     def total_length(self) -> int:
         return sum(map(len, self.substructures))
 
+
 @dataclass(kw_only=True)
 class DataElement:
     """Single dataset entry.
@@ -63,6 +66,7 @@ class DataElement:
     - structure_path (str | None): Path to structure (.pdb) file.
     - labels: (torch.Tensor | None): Labels for supervised tasks.
     """
+
     protein_id: str
     length: int
     seq: str | None = None
@@ -87,6 +91,7 @@ class CoreDataset(Dataset):
         - load_fasta_in_mem (bool): Whether to load full FASTA file of sequences into memory
             or to read on the fly using pysam.
     """
+
     def __init__(
         self,
         data_config: DataConfig,
@@ -98,15 +103,22 @@ class CoreDataset(Dataset):
 
         self.datatypes = set(want_datatypes)
         if DataType.SEQ in self.datatypes:
-            assert data_config.fasta_path is not None, "Fasta path is required for sequence data"
+            assert data_config.fasta_path is not None, (
+                "Fasta path is required for sequence data"
+            )
             if load_fasta_in_mem:
                 fa = FastaFile(data_config.fasta_path)
                 self.fasta = {k: fa.fetch(k) for k in fa.references}
             else:
                 self.fasta = FastaFile(data_config.fasta_path)
         if DataType.SUBSTRUCT in self.datatypes:
-            assert data_config.labels_path is not None, "Labels path is required for substructure data"
-            if not data_config.collapse_labels and len(data_config.substruct_types) == 1:
+            assert data_config.labels_path is not None, (
+                "Labels path is required for substructure data"
+            )
+            if (
+                not data_config.collapse_labels
+                and len(data_config.substruct_types) == 1
+            ):
                 print(
                     "Warning: collapse_labels is set to False, but only one InterPro type is provided.\n"
                     "Forcing collapse_labels to True for simplicity."
@@ -115,15 +127,16 @@ class CoreDataset(Dataset):
             self.substruct_parser = get_substructure_parser(data_config)
 
         if DataType.STRUCT in self.datatypes:
-            assert data_config.struct_template is not None, "Structure path is required for structure data"
+            assert data_config.struct_template is not None, (
+                "Structure path is required for structure data"
+            )
             self.struct_template = data_config.struct_template
 
         if split != "all":
             want_ids = (
                 pd.read_table(data_config.splits)
                 .query("split == @split")
-                .uniprot_id
-                .tolist()
+                .uniprot_id.tolist()
             )
         else:
             want_ids = None
@@ -132,7 +145,9 @@ class CoreDataset(Dataset):
             input_path=data_config.data_dir,
             compression=data_config.compression,
             prefix=data_config.prefix,
-            want_subtype_parser=self.substruct_parser if DataType.SUBSTRUCT in self.datatypes else None,
+            want_subtype_parser=self.substruct_parser
+            if DataType.SUBSTRUCT in self.datatypes
+            else None,
             # TODO: make large protein datasets random access
             in_memory=True,
             want_subset=want_ids,
@@ -147,7 +162,11 @@ class CoreDataset(Dataset):
             ret.substructures = self.substruct_parser.parse(prot)
         if DataType.STRUCT in self.datatypes:
             # Extract uniprot ID from protein ID (removing any additional identifiers)
-            uniprot_id = prot.uniprot_id.split('|')[0] if '|' in prot.uniprot_id else prot.uniprot_id
+            uniprot_id = (
+                prot.uniprot_id.split("|")[0]
+                if "|" in prot.uniprot_id
+                else prot.uniprot_id
+            )
             ret.structure_path = self.struct_template % uniprot_id
         return ret
 

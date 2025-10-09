@@ -23,10 +23,16 @@ def make_batch(num_items: int, lengths: list[int], labels: torch.Tensor) -> Batc
 def test_protein_head_forward_and_labels():
     embed_dim = 8
     num_classes = 5
-    head = ProteinClassificationHead(embed_dim, hidden_dims=[embed_dim], num_classes=num_classes, dropout_rate=0.0)
+    head = ProteinClassificationHead(
+        embed_dim, hidden_dims=[embed_dim], num_classes=num_classes, dropout_rate=0.0
+    )
     embedder = MockBaseModel(embed_dim)
 
-    batch = make_batch(num_items=3, lengths=[10, 12, 8], labels=torch.randint(0, 2, (3, num_classes)).float())
+    batch = make_batch(
+        num_items=3,
+        lengths=[10, 12, 8],
+        labels=torch.randint(0, 2, (3, num_classes)).float(),
+    )
     logits = head.forward(batch, embedder)
     assert logits.shape == (3, num_classes)
 
@@ -37,7 +43,9 @@ def test_protein_head_forward_and_labels():
 def test_residue_head_forward_and_labels():
     embed_dim = 6
     num_classes = 3
-    head = ResidueClassificationHead(embed_dim, hidden_dims=[embed_dim], num_classes=num_classes, dropout_rate=0.0)
+    head = ResidueClassificationHead(
+        embed_dim, hidden_dims=[embed_dim], num_classes=num_classes, dropout_rate=0.0
+    )
     embedder = MockBaseModel(embed_dim)
 
     lengths = [4, 7]
@@ -74,7 +82,9 @@ def test_contact_head_forward_and_labels():
 
 def test_ppi_head_forward_and_labels():
     embed_dim = 5
-    head = PPIPredictionHead(embed_dim=embed_dim, hidden_dims=[embed_dim], dropout_rate=0.0)
+    head = PPIPredictionHead(
+        embed_dim=embed_dim, hidden_dims=[embed_dim], dropout_rate=0.0
+    )
     embedder = MockBaseModel(embed_dim)
 
     lengths = [10, 12, 9, 7]
@@ -90,5 +100,3 @@ def test_ppi_head_forward_and_labels():
     assert processed.shape == (2,)
     # labels should be float and pair-collapsed
     assert torch.allclose(processed, y)
-
-

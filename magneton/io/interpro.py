@@ -49,6 +49,7 @@ from magneton.core_types import InterproEntry, Protein
 # and with InterPro 102.0 matches of type family are also eligible. For
 # InterPro 103.0 we will add a "type" attribute to the `<match>` element.
 
+
 def parse_one_protein(prot_ele: ET.Element) -> Protein:
     all_entries = [parse_one_match(x) for x in prot_ele.iter(tag="match")]
     parsed_entries = [x for x in all_entries if x]
@@ -66,6 +67,7 @@ def parse_one_protein(prot_ele: ET.Element) -> Protein:
         parsed_entries=len(parsed_entries),
         total_entries=len(all_entries),
     )
+
 
 def parse_one_match(match_ele: ET.Element) -> InterproEntry:
     grouped = defaultdict(list)
@@ -86,7 +88,7 @@ def parse_one_match(match_ele: ET.Element) -> InterproEntry:
     # Want either all True or all False
     is_representative = [x.get("representative") for x in grouped["lcn"]]
     assert all(is_representative) or all([not x for x in is_representative])
-    representative = is_representative[0] == 'true'
+    representative = is_representative[0] == "true"
 
     positions = [(int(x.get("start")), int(x.get("end"))) for x in grouped["lcn"]]
 
@@ -98,6 +100,7 @@ def parse_one_match(match_ele: ET.Element) -> InterproEntry:
         representative=representative,
         positions=positions,
     )
+
 
 def parse_from_xml(
     input_path: str,

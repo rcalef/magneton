@@ -29,6 +29,7 @@ def parse_hidden_dims(
         parsed_dims.append(dim)
     return parsed_dims
 
+
 def describe_tensor(
     x: torch.Tensor,
     prefix: str = "x",

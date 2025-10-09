@@ -20,6 +20,7 @@ from tqdm import tqdm
 
 from magneton.core_types import Protein
 
+
 def parse_from_json(
     input_path: str,
     compression: Optional[str] = "gz",
@@ -38,6 +39,7 @@ def parse_from_json(
             except Exception as e:
                 e.add_note(f"file {input_path}, line: {line}")
                 raise e
+
 
 def parse_from_json_w_fasta(
     input_path: str,
@@ -111,28 +113,34 @@ def shard_proteins(
             curr_file_prots = 0
             curr_file_num += 1
 
-            print(
-                f"completed file {curr_file_num}, starting file {curr_file_num+1}"
-            )
+            print(f"completed file {curr_file_num}, starting file {curr_file_num + 1}")
             output_fh.close()
-            output_path = os.path.join(
-                output_dir, f"{prefix}.{curr_file_num}.jsonl.gz"
-            )
+            output_path = os.path.join(output_dir, f"{prefix}.{curr_file_num}.jsonl.gz")
             output_fh = gzip.open(output_path, "wt")
 
-    index = pd.DataFrame({
-        "file_num": range(len(index_entries)),
-        "index_entry": index_entries,
-        "file_len": file_lens + [curr_file_prots],
-    })
-    index.to_csv(os.path.join(output_dir, "index.tsv"), sep="\t", index=False, header=False)
+    index = pd.DataFrame(
+        {
+            "file_num": range(len(index_entries)),
+            "index_entry": index_entries,
+            "file_len": file_lens + [curr_file_prots],
+        }
+    )
+    index.to_csv(
+        os.path.join(output_dir, "index.tsv"), sep="\t", index=False, header=False
+    )
+
 
 def _filter_protein_file(
     input_path: str,
     filter_func: Callable[[Protein], bool],
     compression: Optional[str] = "gz",
 ) -> List[Protein]:
-    return [prot for prot in parse_from_json(input_path, compression=compression) if filter_func(prot)]
+    return [
+        prot
+        for prot in parse_from_json(input_path, compression=compression)
+        if filter_func(prot)
+    ]
+
 
 def filter_proteins(
     shard_dir: str,
@@ -141,7 +149,7 @@ def filter_proteins(
     compression: Optional[str] = "gz",
     nprocs: int = 32,
 ) -> List[Protein]:
-    filter_func=partial(
+    filter_func = partial(
         _filter_protein_file,
         filter_func=filter_func,
         compression=compression,
@@ -154,12 +162,13 @@ def filter_proteins(
     )
     return list(chain.from_iterable(filtered_lists))
 
+
 def process_sharded_proteins(
     shard_dir: str,
     func: Callable,
     nprocs: int = 32,
     prefix: str = "sharded_proteins",
-    message: str = "processing proteins"
+    message: str = "processing proteins",
 ) -> List:
     """Run a function on each shard in a directory"""
 
@@ -178,8 +187,10 @@ def process_sharded_proteins(
     with Pool(nprocs) as p:
         return list(tqdm(p.imap(func, all_files), total=len(all_files), desc=message))
 
+
 def passthrough(prot: Protein) -> bool:
     return True
+
 
 def parse_from_dir_parallel(
     dir: str,
@@ -195,4 +206,5 @@ def parse_from_dir_parallel(
         filter_func=filter_func,
         prefix=prefix,
         compression=compression,
-        nprocs=nprocs)
+        nprocs=nprocs,
+    )

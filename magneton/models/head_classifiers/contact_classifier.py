@@ -4,6 +4,7 @@ import torch.nn as nn
 from magneton.data.core import Batch
 from .interface import HeadModule
 
+
 class ContactPredictionHead(nn.Module, HeadModule):
     """Head module for contact prediction tasks.
     Args:

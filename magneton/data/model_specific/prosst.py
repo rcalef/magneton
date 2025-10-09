@@ -24,16 +24,13 @@ from magneton.utils import (
     MODEL_DIR_ENV_VAR,
 )
 
-PROSST_REPO_PATH = (
-    Path(__file__).parent.parent.parent /
-    "external" /
-    "ProSST"
-)
+PROSST_REPO_PATH = Path(__file__).parent.parent.parent / "external" / "ProSST"
 sys.path.append(str(PROSST_REPO_PATH))
 from prosst.structure.get_sst_seq import SSTPredictor, init_shared_pool
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def precompute_struct_tokens(
     data_source: BaseNode,
@@ -75,6 +72,7 @@ class ProSSTDataElement(DataElement):
     tokenized_seq: torch.Tensor
     tokenized_struct: torch.Tensor
 
+
 @dataclass(kw_only=True)
 class ProSSTBatch(Batch):
     tokenized_seq: torch.Tensor
@@ -85,6 +83,7 @@ class ProSSTBatch(Batch):
         self.tokenized_seq = self.tokenized_seq.to(device)
         self.tokenized_struct = self.tokenized_struct.to(device)
         return self
+
 
 class ProSSTTransformNode(ParallelMapper):
     def __init__(
@@ -104,7 +103,7 @@ class ProSSTTransformNode(ParallelMapper):
                 f"Please set the '{MODEL_DIR_ENV_VAR}' environment variable appropriately "
                 "or download weights from https://huggingface.co/AI4Protein/ProSST-2048"
             )
-        
+
         if isinstance(data_dir, str):
             data_dir = Path(data_dir)
         struct_tokens_path = data_dir / "prosst_toks.tsv.bz2"
@@ -121,7 +120,9 @@ class ProSSTTransformNode(ParallelMapper):
             dist.barrier()
 
         logger.info(f"ProSST tokens file found at: {struct_tokens_path}")
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer_path, trust_remote_code=True
+        )
 
         self.struct_tokens = {}
         with bz2.open(struct_tokens_path, "rt") as fh:
@@ -132,16 +133,24 @@ class ProSSTTransformNode(ParallelMapper):
                 # +3 here is taken from ProSST author's notebook for variant effect prediction,
                 # see cell 6 here:
                 #  https://github.com/ai4protein/ProSST/blob/main/zero_shot/score_mutant.ipynb
-                raw_tokens = list(map(lambda x: int(x)+3, tokens.split()))
+                raw_tokens = list(map(lambda x: int(x) + 3, tokens.split()))
                 # Similar to above, from same notebook,  prepending 1 and appending 2 tokens.
                 # These correspond to the CLS and EOS tokens from their tokenizer, which
                 # is in fact different from ESM's tokenizer.
-                modified_tokens = [self.tokenizer.cls_token_id] + raw_tokens + [self.tokenizer.eos_token_id]
+                modified_tokens = (
+                    [self.tokenizer.cls_token_id]
+                    + raw_tokens
+                    + [self.tokenizer.eos_token_id]
+                )
                 self.struct_tokens[uniprot_id] = torch.tensor(modified_tokens)
 
-        logger.info(f"read ProSST structure tokens for {len(self.struct_tokens)} proteins")
+        logger.info(
+            f"read ProSST structure tokens for {len(self.struct_tokens)} proteins"
+        )
 
-        super().__init__(source=source_node, map_fn=self.process_example, num_workers=num_workers)
+        super().__init__(
+            source=source_node, map_fn=self.process_example, num_workers=num_workers
+        )
 
     def process_example(
         self,

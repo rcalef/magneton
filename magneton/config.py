@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
+
 @dataclass
 class BaseModelConfig:
     _target_: str = "magneton.config.BaseModelConfig"

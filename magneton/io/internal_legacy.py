@@ -20,6 +20,7 @@ from tqdm import tqdm
 
 from magneton.core_types import Protein
 
+
 def parse_from_pkl(
     input_path: str,
     compression: Optional[str] = "bz2",
@@ -112,28 +113,34 @@ def shard_proteins(
             curr_file_prots = 0
             curr_file_num += 1
 
-            print(
-                f"completed file {curr_file_num}, starting file {curr_file_num+1}"
-            )
+            print(f"completed file {curr_file_num}, starting file {curr_file_num + 1}")
             output_fh.close()
-            output_path = os.path.join(
-                output_dir, f"{prefix}.{curr_file_num}.pkl.bz2"
-            )
+            output_path = os.path.join(output_dir, f"{prefix}.{curr_file_num}.pkl.bz2")
             output_fh = bz2.open(output_path, "wb")
 
-    index = pd.DataFrame({
-        "file_num": range(len(index_entries)),
-        "index_entry": index_entries,
-        "file_len": file_lens + [curr_file_prots],
-    })
-    index.to_csv(os.path.join(output_dir, "index.tsv"), sep="\t", index=False, header=False)
+    index = pd.DataFrame(
+        {
+            "file_num": range(len(index_entries)),
+            "index_entry": index_entries,
+            "file_len": file_lens + [curr_file_prots],
+        }
+    )
+    index.to_csv(
+        os.path.join(output_dir, "index.tsv"), sep="\t", index=False, header=False
+    )
+
 
 def _filter_protein_file(
     input_path: str,
     filter_func: Callable[[Protein], bool],
     compression: Optional[str] = "bz2",
 ) -> List[Protein]:
-    return [prot for prot in parse_from_pkl(input_path, compression=compression) if filter_func(prot)]
+    return [
+        prot
+        for prot in parse_from_pkl(input_path, compression=compression)
+        if filter_func(prot)
+    ]
+
 
 def filter_proteins(
     shard_dir: str,
@@ -142,7 +149,7 @@ def filter_proteins(
     compression: Optional[str] = "bz2",
     nprocs: int = 32,
 ) -> List[Protein]:
-    filter_func=partial(
+    filter_func = partial(
         _filter_protein_file,
         filter_func=filter_func,
         compression=compression,
@@ -154,6 +161,7 @@ def filter_proteins(
         prefix=prefix,
     )
     return list(chain.from_iterable(filtered_lists))
+
 
 def process_sharded_proteins(
     shard_dir: str,

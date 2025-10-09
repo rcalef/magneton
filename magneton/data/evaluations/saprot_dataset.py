@@ -545,28 +545,26 @@ class ContactPredictionModule:
         logger.info(f"Making contact labels for {len(all_usable_records)} records")
         labels = list(tqdm(map(record_to_labels, all_usable_records)))
 
-        df = (
-            pd.DataFrame(
-                {
-                    "protein_id": [x["name"] for x in all_usable_records],
-                    "seq": [x["seq"] for x in all_usable_records],
-                    # valid_seq is the masked sequence, which we use to do a sanity
-                    # check against the sequence in the PDB files. The test set PDB files
-                    # don't contain entries for masked positions.
-                    "valid_seq": valid_seqs,
-                    "labels": labels,
-                }
-            ).assign(
-                pdb_id=lambda x: x.protein_id.str.split("_").str[0],
-            )
-
+        df = pd.DataFrame(
+            {
+                "protein_id": [x["name"] for x in all_usable_records],
+                "seq": [x["seq"] for x in all_usable_records],
+                # valid_seq is the masked sequence, which we use to do a sanity
+                # check against the sequence in the PDB files. The test set PDB files
+                # don't contain entries for masked positions.
+                "valid_seq": valid_seqs,
+                "labels": labels,
+            }
+        ).assign(
+            pdb_id=lambda x: x.protein_id.str.split("_").str[0],
         )
         # Some proteins have all positions masked, want to drop these
         all_masked = df.labels.apply(lambda x: (x == -1).all().item())
         if all_masked.any():
-            logger.warning(f"Dropping {all_masked.sum()} entries where all labels are masked")
+            logger.warning(
+                f"Dropping {all_masked.sum()} entries where all labels are masked"
+            )
             df = df.loc[~all_masked]
-
 
         if split == "test":
             want_dir = self.data_dir / "test_set"

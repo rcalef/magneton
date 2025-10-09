@@ -24,6 +24,7 @@ from .utils import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class SupervisedDataset(Dataset):
     def __init__(
         self,
@@ -52,6 +53,7 @@ class SupervisedDataset(Dataset):
             seq=row.seq,
             structure_path=str(row.structure_path),
         )
+
 
 LABEL_LINE: dict[str, int] = {
     "MF": 1,
@@ -91,11 +93,7 @@ class DeepFriModule:
 
     def get_deepfri_df(
         self,
-        split: Literal[
-            "train",
-            "val",
-            "test"
-        ],
+        split: Literal["train", "val", "test"],
     ) -> pd.DataFrame:
         """Data module encompassing evaluation sets from DeepFRI (GO terms and EC numbers)
 
@@ -121,7 +119,6 @@ class DeepFriModule:
 
             n_header_rows = 13
             col_names = ["PDB", "MF", "BP", "CC"]
-
 
         # Parse labels
         label_line = LABEL_LINE[self.task]
@@ -164,14 +161,17 @@ class DeepFriModule:
         if should_run_single_process():
             file_paths = dataset.structure_path.dropna().to_list()
             missing_files = [path for path in file_paths if not path.exists()]
-            logger.info(f"downloading {len(missing_files)} / {len(file_paths)} missing files")
+            logger.info(
+                f"downloading {len(missing_files)} / {len(file_paths)} missing files"
+            )
             download_afdb_files(missing_files, num_workers=self.num_workers)
         if dist.is_initialized():
             dist.barrier()
 
         # Remove entries with no structures
         dataset = dataset.loc[
-            dataset.structure_path.notna() & dataset.structure_path.apply(lambda p: p.exists())
+            dataset.structure_path.notna()
+            & dataset.structure_path.apply(lambda p: p.exists())
         ]
 
         # Extract sequences from PDB files to make sure they match the downloaded
@@ -194,10 +194,8 @@ class DeepFriModule:
         else:
             raise ValueError(f"Unknown split: {split}")
 
-        want_subset = (
-            dataset
-            .loc[lambda x: x.pdb_id.isin(data)]
-            .rename(columns={"pdb_id": "protein_id"})
+        want_subset = dataset.loc[lambda x: x.pdb_id.isin(data)].rename(
+            columns={"pdb_id": "protein_id"}
         )
         return want_subset
 
@@ -215,11 +213,15 @@ class DeepFriModule:
                 with Pool(self.num_workers) as p:
                     uniprot_ids = p.starmap(pdb_id_to_uniprot, tqdm(ids_and_chains))
 
-                id_map = pd.DataFrame({
-                    "pdb_id": pdb_ids,
-                    "uniprot_id": uniprot_ids,
-                })
-                logger.info(f"mapped PDB IDs for {id_map.uniprot_id.notna().sum()} / {len(id_map)}")
+                id_map = pd.DataFrame(
+                    {
+                        "pdb_id": pdb_ids,
+                        "uniprot_id": uniprot_ids,
+                    }
+                )
+                logger.info(
+                    f"mapped PDB IDs for {id_map.uniprot_id.notna().sum()} / {len(id_map)}"
+                )
                 id_map = id_map.loc[lambda x: x.uniprot_id.notna()]
                 id_map.to_csv(path, sep="\t", index=False)
 
@@ -228,4 +230,3 @@ class DeepFriModule:
 
         logger.info(f"found PDB-UniProt mapping at: {path}")
         return pd.read_table(path).loc[lambda x: x.uniprot_id.notna()]
-

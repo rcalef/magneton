@@ -78,9 +78,19 @@ class BioLIP2Module:
 
         # The following interact poorly with FoldSeek and other tokenizers
         # due to having residues missing alpha-carbon atoms
-        self.exclude = ['5wdh_A', '3zqe_A', '1jni_A', '5ivn_A',
-             '2bp3_A', '2a06_G', '4ku4_A', '1plj_A',
-             '1brd_A', '2vn2_A', '2zba_D']
+        self.exclude = [
+            "5wdh_A",
+            "3zqe_A",
+            "1jni_A",
+            "5ivn_A",
+            "2bp3_A",
+            "2a06_G",
+            "4ku4_A",
+            "1plj_A",
+            "1brd_A",
+            "2vn2_A",
+            "2zba_D",
+        ]
 
     def _jsonl_name(self, split: str) -> Path:
         """
@@ -98,13 +108,17 @@ class BioLIP2Module:
         if split not in valid_splits:
             raise ValueError(f"split must be one of {list(valid_splits)}")
 
-        return self.data_dir / f"BioLIP2FunctionDataset_{self.task}_label_{valid_splits[split]}.jsonl"
+        return (
+            self.data_dir
+            / f"BioLIP2FunctionDataset_{self.task}_label_{valid_splits[split]}.jsonl"
+        )
 
     def num_classes(self) -> int:
         return 1
 
     def get_dataset(
-        self, split: Literal["train", "validation", "test", "fold_test", "superfamily_test"]
+        self,
+        split: Literal["train", "validation", "test", "fold_test", "superfamily_test"],
     ) -> Dataset:
         json_path = self._jsonl_name(split)
         if not json_path.exists():
@@ -133,25 +147,34 @@ class BioLIP2Module:
 
         logger.info(f"Loaded {len(all_protein_ids)} records from {json_path}")
 
-        df = pd.DataFrame({
-            "protein_id": all_protein_ids,
-            "structure_path": all_paths,
-            "labels": all_labels,
-        })
+        df = pd.DataFrame(
+            {
+                "protein_id": all_protein_ids,
+                "structure_path": all_paths,
+                "labels": all_labels,
+            }
+        )
 
-        fasta_path = self.data_dir / f"{self.task}.{split}.seqs_from_pdbs_unk{self.unk_amino_acid_char}.fa"
+        fasta_path = (
+            self.data_dir
+            / f"{self.task}.{split}.seqs_from_pdbs_unk{self.unk_amino_acid_char}.fa"
+        )
         sequence_dict = parse_seqs_from_pdbs(
             fasta_path=fasta_path,
             jobs=df.structure_path.to_list(),
             protein_ids=df.protein_id.to_list(),
             num_workers=self.num_workers,
-            parse_func=partial(parse_seq_direct, unk_amino_acid_char=self.unk_amino_acid_char),
+            parse_func=partial(
+                parse_seq_direct, unk_amino_acid_char=self.unk_amino_acid_char
+            ),
         )
         df = df.assign(seq=lambda x: x.protein_id.map(sequence_dict))
         num_labels = df.labels.map(lambda x: x.size(dim=0))
         mismatch_len = df.seq.str.len() != num_labels
         if mismatch_len.sum() != 0:
-            logger.info(f"Removing {mismatch_len.sum()} / {len(df)} records with mismatched sequence and labels")
+            logger.info(
+                f"Removing {mismatch_len.sum()} / {len(df)} records with mismatched sequence and labels"
+            )
             df = df.loc[~mismatch_len]
 
         duplicated = df[["protein_id", "structure_path"]].duplicated()
@@ -164,7 +187,6 @@ class BioLIP2Module:
         return BioLIP2Dataset(df)
 
 
-
 def parse_seq_direct(
     path: Path,
     unk_amino_acid_char: str,
@@ -175,7 +197,7 @@ def parse_seq_direct(
     identities from the file. Some of the PDB files here seem to have missing
     atoms that result in omitted residues otherwise.
     """
-    aa_map = {k.upper(): v for k,v in protein_letters_3to1.items()}
+    aa_map = {k.upper(): v for k, v in protein_letters_3to1.items()}
     aa_map["UNK"] = unk_amino_acid_char
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure("protein", path)
@@ -192,4 +214,3 @@ def parse_seq_direct(
     except KeyError as e:
         print(path)
         raise e
-

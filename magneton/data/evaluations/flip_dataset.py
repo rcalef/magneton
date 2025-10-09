@@ -37,15 +37,16 @@ logger = logging.getLogger(__name__)
 DEFAULT_LABEL_TYPES: tuple[str, ...] = ("metal", "nucleic", "small")
 BIT_INDEX_FOR_LABEL: Dict[str, int] = {"metal": 0, "nucleic": 1, "small": 2}
 
+
 # -----------------------------
 # FASTA parsing
 # -----------------------------
 @dataclass(frozen=True)
 class LabelRecord:
     uniprot_id: str
-    set_name: str          # e.g., "train" or "test"
-    is_validation: bool    # from 'VALIDATION=' field
-    labels_compact: str    # string of digits, possibly spanning multiple lines
+    set_name: str  # e.g., "train" or "test"
+    is_validation: bool  # from 'VALIDATION=' field
+    labels_compact: str  # string of digits, possibly spanning multiple lines
 
 
 FASTA_HEADER_RE = re.compile(
@@ -116,7 +117,9 @@ def _decode_compact_labels(
     """
     for lt in label_types:
         if lt not in BIT_INDEX_FOR_LABEL:
-            raise ValueError(f"Unknown label type: {lt}. Valid: {list(BIT_INDEX_FOR_LABEL)}")
+            raise ValueError(
+                f"Unknown label type: {lt}. Valid: {list(BIT_INDEX_FOR_LABEL)}"
+            )
 
     L = len(compact)
     K = len(label_types)
@@ -250,10 +253,9 @@ class FlipModule:
             ]
         )
 
-        seq_df = (
-            pd.DataFrame({"uniprot_id": list(seqs.keys()), "seq": list(seqs.values())})
-            .assign(length=lambda x: x.seq.str.len())
-        )
+        seq_df = pd.DataFrame(
+            {"uniprot_id": list(seqs.keys()), "seq": list(seqs.values())}
+        ).assign(length=lambda x: x.seq.str.len())
 
         # 2) Merge on UniProt ID (inner)
         merged = labels_df.merge(seq_df, on="uniprot_id", how="inner")
@@ -265,7 +267,9 @@ class FlipModule:
         same_len = merged.apply(lambda r: len(r.labels_compact) == len(r.seq), axis=1)
         if not same_len.all():
             n_bad = (~same_len).sum()
-            raise ValueError(f"{n_bad} entries have label length != sequence length. Example: {merged.loc[~same_len].uniprot_id.head()}")
+            raise ValueError(
+                f"{n_bad} entries have label length != sequence length. Example: {merged.loc[~same_len].uniprot_id.head()}"
+            )
 
         # 3) Attach structure paths and download missing
         merged = merged.assign(
@@ -276,7 +280,9 @@ class FlipModule:
 
         file_paths = merged.structure_path.tolist()
         missing = [p for p in file_paths if not p.exists()]
-        logger.info(f"downloading {len(missing)} / {len(file_paths)} missing AlphaFold PDBs")
+        logger.info(
+            f"downloading {len(missing)} / {len(file_paths)} missing AlphaFold PDBs"
+        )
         download_afdb_files(missing, num_workers=self.num_workers)
 
         # Remove entries with no structures
@@ -301,7 +307,9 @@ class FlipModule:
         match = merged.apply(lambda r: r.seq == r.seq_pdb, axis=1)
         if not match.all():
             n_mismatch = (~match).sum()
-            logger.warning(f"Dropping {n_mismatch} entries with sequence mismatches vs PDB.")
+            logger.warning(
+                f"Dropping {n_mismatch} entries with sequence mismatches vs PDB."
+            )
             merged = merged.loc[match].reset_index(drop=True)
 
         # 6) Decode per-residue labels to (L, K) tensors
@@ -317,4 +325,3 @@ class FlipModule:
         merged = merged.rename(columns={"uniprot_id": "protein_id"})
         logger.info(f"Prepared {len(merged)} total entries after filtering.")
         return merged
-

@@ -114,8 +114,10 @@ def protein_has_substructs(
 def passthrough_filter_func(prot: Protein) -> bool:
     return True
 
+
 def protein_in_subset(prot: Protein, subset: set[str]) -> bool:
     return prot.uniprot_id in subset
+
 
 def check_filters(prot: Protein, funcs: list[Callable[[Protein], bool]]) -> bool:
     for func in funcs:
@@ -136,9 +138,9 @@ def get_protein_dataset(
     """Create a Protein dataset with the desired configurations."""
     filters = []
     if want_subtype_parser is not None:
-        filters.append(partial(
-            protein_has_substructs, want_subtype_parser=want_subtype_parser
-        ))
+        filters.append(
+            partial(protein_has_substructs, want_subtype_parser=want_subtype_parser)
+        )
     if want_subset is not None:
         filters.append(partial(protein_in_subset, subset=set(want_subset)))
     if len(filters) > 0:

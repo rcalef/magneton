@@ -4,6 +4,7 @@ import torch.nn as nn
 from magneton.data.core import Batch
 from .interface import HeadModule
 
+
 class ProteinClassificationHead(nn.Module, HeadModule):
     """Head module for protein-level classification tasks."""
 

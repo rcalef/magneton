@@ -50,6 +50,7 @@ MMCIF_TO_DSSP = {mmcif: i for i, mmcif in enumerate(DSSP_TO_MMCIF)}
 @dataclass
 class SecondaryStructure:
     """Representation of a single DSSP secondary structure"""
+
     dssp_type: DsspType
     # Note that positions are 1-indexed, as output by dssp.
     # Coordinates are half-open, i.e. [start, end)
@@ -77,6 +78,7 @@ class SecondaryStructure:
 
 class SubstructType(StrEnum):
     """Enum of available substructure types"""
+
     FAMILY = "Family"
     DOMAIN = "Domain"
     HOMO_FAMILY = "Homologous_superfamily"
@@ -87,12 +89,14 @@ class SubstructType(StrEnum):
     SS = "Secondary_struct"
     REPEAT = "Repeat"
 
+
 # InterPro types that use the `representative` field
 INTERPRO_REP_TYPES = [
     SubstructType.FAMILY,
     SubstructType.DOMAIN,
     SubstructType.REPEAT,
 ]
+
 
 @dataclass
 class InterproEntry:
@@ -105,6 +109,7 @@ class InterproEntry:
     - representative (bool): Whether or not this is the representative entry of this element for this protein.
     - positions (List[Tuple[int]]): List of [start, end) positions for this entry, 1-indexed as in InterPro.
     """
+
     id: str
     element_type: SubstructType
     match_id: str
@@ -153,6 +158,7 @@ class Protein:
     - entries (List[InterproEntry]): List of InterPro substructure entries
     - secondary_structs (List[SecondaryStructure]): List of secondary structures.
     """
+
     uniprot_id: str
     kb_id: str
     name: str
@@ -198,6 +204,7 @@ class Protein:
 
 class DataType(StrEnum):
     """Enum used to define the data types a given model requires."""
+
     SEQ = "sequence"
     STRUCT = "structure"
     SUBSTRUCT = "substructure"

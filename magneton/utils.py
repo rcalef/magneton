@@ -3,12 +3,15 @@ from pathlib import Path
 
 import torch.distributed as dist
 
+
 def should_run_single_process() -> bool:
     no_distributed = not dist.is_initialized()
     return no_distributed or dist.get_rank() == 0
 
 
 DATA_DIR_ENV_VAR = "MAGNETON_DATA_DIR"
+
+
 def get_data_dir() -> Path:
     data_dir = Path(os.environ.get(DATA_DIR_ENV_VAR))
     if not data_dir.exists():
@@ -19,7 +22,10 @@ def get_data_dir() -> Path:
         )
     return data_dir
 
+
 MODEL_DIR_ENV_VAR = "MAGNETON_MODEL_DIR"
+
+
 def get_model_dir() -> Path:
     model_dir = Path(os.environ.get(MODEL_DIR_ENV_VAR))
     if not model_dir.exists():

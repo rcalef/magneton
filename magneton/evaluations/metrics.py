@@ -25,7 +25,7 @@ def format_logits_and_labels_for_metrics(
     if task_type == EVAL_TASK.BINARY:
         # For binary metrics, convert labels to int (AveragePrecision expects int targets)
         labels = labels.int()
-        #if logits.shape[0] != 1:
+        # if logits.shape[0] != 1:
         print(logits.shape)
         print(logits.squeeze(-1).shape)
         return logits.squeeze(-1), labels.squeeze(-1)
@@ -100,6 +100,7 @@ def _calc_fmax(
 
 class FMaxScore(Metric):
     """Metric object for Fmax score, i.e. maximum F1 over possible thresholds."""
+
     def __init__(self, **kwargs):
         self.num_thresh_steps = kwargs.pop("num_thresh_steps", 101)
         super().__init__(**kwargs)
@@ -144,6 +145,7 @@ class PrecisionAtL(Metric):
     Credit for metric calculation code goes to the SaProt authors:
       https://github.com/westlake-repl/SaProt/blob/main/model/saprot/saprot_contact_model.py#L81
     """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -153,7 +155,9 @@ class PrecisionAtL(Metric):
         accuracies = {}
         for length in self.lengths.keys():
             for range in self.ranges:
-                accuracies[f"{range}_{length}"] = Accuracy(task="binary", ignore_index=-1, **kwargs)
+                accuracies[f"{range}_{length}"] = Accuracy(
+                    task="binary", ignore_index=-1, **kwargs
+                )
         self.accuracies = MetricCollection(accuracies)
 
     def update(
@@ -163,7 +167,9 @@ class PrecisionAtL(Metric):
         protein_lengths: list[int],
     ) -> None:
         if preds.shape != targets.shape:
-            raise ValueError(f"preds and target must have the same shape: {preds.shape} != {targets.shape}")
+            raise ValueError(
+                f"preds and target must have the same shape: {preds.shape} != {targets.shape}"
+            )
 
         for pred_map, label_map, L in zip(preds, targets, protein_lengths):
             x_inds, y_inds = np.indices(label_map.shape)

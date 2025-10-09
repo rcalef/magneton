@@ -1,5 +1,6 @@
 import torch
 
+
 def pool_residue_embeddings(
     embeds: torch.Tensor,
     residue_mask: torch.Tensor,
@@ -12,7 +13,9 @@ def pool_residue_embeddings(
     """
     assert embeds.ndim == 3, f"{embeds.ndim} != 3"
     assert residue_mask.ndim == 2, f"{residue_mask.ndim} != 2"
-    assert embeds.shape[:2] == residue_mask.shape, f"{embeds.shape[:2]} != {residue_mask.shape}"
+    assert embeds.shape[:2] == residue_mask.shape, (
+        f"{embeds.shape[:2]} != {residue_mask.shape}"
+    )
 
     # Add dummy dimension for broadcasting
     residue_mask = residue_mask.unsqueeze(-1)
@@ -28,6 +31,7 @@ def pool_residue_embeddings(
 
     # Divide the summed embeddings by the sequence lengths
     return summed_embeddings / seq_lengths
+
 
 def get_seq_mask(
     tokenized_seqs: torch.Tensor,
@@ -45,11 +49,9 @@ def get_seq_mask(
         - mask_prob (float): Masking probability.
     """
     probs = torch.rand(
-        tokenized_seqs.shape, generator=rng,
+        tokenized_seqs.shape,
+        generator=rng,
     ).to(tokenized_seqs.device)
 
-    mask = (
-        (probs < mask_prob)
-        & ~torch.isin(tokenized_seqs, ignore_tokens)
-    )
+    mask = (probs < mask_prob) & ~torch.isin(tokenized_seqs, ignore_tokens)
     return mask

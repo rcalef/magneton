@@ -40,7 +40,10 @@ def test_multilabelmlp_with_dummy_embedder(tmp_path, task):
         )
         config = instantiate(cfg)
 
-    with patch("magneton.models.evaluation_classifier.SubstructureClassifier", MockSubstructureClassifier):
+    with patch(
+        "magneton.models.evaluation_classifier.SubstructureClassifier",
+        MockSubstructureClassifier,
+    ):
         run_supervised_classification(
             config=config, task=task, output_dir=tmp_path, run_id=f"test_{task},"
         )
