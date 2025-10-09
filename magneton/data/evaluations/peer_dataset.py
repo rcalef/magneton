@@ -267,10 +267,10 @@ class PeerDataset(Dataset):
             # Check if there's a validation column for train/val split
             if "validation" in df.columns and self.split in ["val", "valid"]:
                 # Filter for validation data within train set
-                df = df[(df[split_column] == "train") & (df["validation"] == True)]
+                df = df[(df[split_column] == "train") & df["validation"]]
             elif "validation" in df.columns and self.split == "train":
                 # Filter for training data (excluding validation)
-                df = df[(df[split_column] == "train") & (df["validation"] != True)]
+                df = df[(df[split_column] == "train") & ~df["validation"]]
             else:
                 # Map our split names to FLIP split values
                 split_mapping = {

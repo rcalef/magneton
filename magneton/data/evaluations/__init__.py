@@ -10,3 +10,20 @@ from .saprot_dataset import (
     flatten_ppi_data_elements,
 )
 from .task_types import EVAL_TASK, TASK_GRANULARITY, TASK_TO_TYPE, TASK_TYPES
+
+__all__ = [
+    "BioLIP2Module",
+    "DeepFriModule",
+    "FlipModule",
+    "PEER_TASK_TO_CONFIGS",
+    "PeerDataModule",
+    "ContactPredictionModule",
+    "DeepLocModule",
+    "HumanPPIModule",
+    "ThermostabilityModule",
+    "flatten_ppi_data_elements",
+    "EVAL_TASK",
+    "TASK_GRANULARITY",
+    "TASK_TO_TYPE",
+    "TASK_TYPES",
+]

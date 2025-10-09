@@ -3,3 +3,11 @@ from .contact_classifier import ContactPredictionHead
 from .ppi_classifier import PPIPredictionHead
 from .protein_classifier import ProteinClassificationHead
 from .residue_classifier import ResidueClassificationHead
+
+__all__ = [
+    "HeadModule",
+    "ContactPredictionHead",
+    "PPIPredictionHead",
+    "ProteinClassificationHead",
+    "ResidueClassificationHead",
+]

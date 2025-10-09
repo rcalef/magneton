@@ -1,7 +1,6 @@
 import bz2
 import logging
 import sys
-
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
@@ -10,23 +9,21 @@ from typing import Literal
 
 import torch
 import torch.distributed as dist
-
-from torchdata.nodes import BaseNode, ParallelMapper
-from transformers import AutoTokenizer
-from tqdm import tqdm
-
 from esm.utils.misc import stack_variable_length_tensors
+from torchdata.nodes import BaseNode, ParallelMapper
+from tqdm import tqdm
+from transformers import AutoTokenizer
 
 from magneton.data.core import Batch, DataElement
 from magneton.utils import (
+    MODEL_DIR_ENV_VAR,
     get_model_dir,
     should_run_single_process,
-    MODEL_DIR_ENV_VAR,
 )
 
 PROSST_REPO_PATH = Path(__file__).parent.parent.parent / "external" / "ProSST"
 sys.path.append(str(PROSST_REPO_PATH))
-from prosst.structure.get_sst_seq import SSTPredictor, init_shared_pool
+from prosst.structure.get_sst_seq import SSTPredictor, init_shared_pool  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

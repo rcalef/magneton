@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from enum import auto, IntEnum, StrEnum, unique
+from enum import IntEnum, StrEnum, auto, unique
 from pprint import pprint
 
 
@@ -9,7 +9,7 @@ class DsspType(IntEnum):
     B = auto()
     E = auto()
     G = auto()
-    I = auto()
+    I = auto()  # noqa: E741
     P = auto()
     T = auto()
     S = auto()

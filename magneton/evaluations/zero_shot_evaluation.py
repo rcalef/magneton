@@ -1,3 +1,4 @@
+# ruff: noqa: E722
 import os
 import re
 import attr
@@ -17,6 +18,7 @@ from esm.sdk.api import ESMProtein, LogitsConfig
 from magneton.config import PipelineConfig
 
 PROTEINGYM_REPO_PATH = Path(__file__).parent.parent / "external" / "proteingym"
+
 
 def run_zero_shot_evaluation(
     config: PipelineConfig,
@@ -50,10 +52,14 @@ def run_zero_shot_evaluation(
 
     # Set up paths
     dms_data_folder = PROTEINGYM_REPO_PATH / "DMS_ProteinGym_substitutions"
-    dms_reference_file = PROTEINGYM_REPO_PATH / "reference_files" / "DMS_substitutions.csv"
+    dms_reference_file = (
+        PROTEINGYM_REPO_PATH / "reference_files" / "DMS_substitutions.csv"
+    )
 
     if not dms_reference_file.exists():
-        raise FileNotFoundError(f"DMS reference file not found: {str(dms_reference_file)}")
+        raise FileNotFoundError(
+            f"DMS reference file not found: {str(dms_reference_file)}"
+        )
 
     # Create output directories
     run_output_dir = os.path.join(output_dir, run_id)

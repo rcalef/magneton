@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Dict
 
 import lightning as L
-import torch
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from lightning.pytorch.profilers import AdvancedProfiler
