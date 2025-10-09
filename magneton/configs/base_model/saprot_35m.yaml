@@ -1,6 +1,7 @@
 model: "saprot"
 model_params:
   model_size: "35m"
-  weights_path: "/weka/scratch/weka/kellislab/rcalef/model_weights/SaProt_35M_AF2"
+  weights_path: "${oc.env:MAGNETON_MODEL_DIR}/SaProt_35M_AF2"
   rep_layer: 12
+  use_flash_attn: false
   unk_amino_acid_char: "#"

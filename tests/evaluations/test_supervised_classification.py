@@ -5,8 +5,8 @@ import pytest
 import torch
 
 from magneton.config import (
+    BaseModelConfig,
     DataConfig,
-    EmbeddingConfig,
     EvalConfig,
     ModelConfig,
     PipelineConfig,
@@ -15,6 +15,7 @@ from magneton.config import (
 from magneton.data.core.unified_dataset import Batch
 from magneton.data.evaluations.task_types import TASK_GRANULARITY
 from magneton.evaluations import supervised_classification
+
 from ..mocks import MockBaseModel, MockDataModule, MockTrainer
 
 
@@ -42,7 +43,9 @@ def test_run_supervised_classification_minimal(
         return SimpleNamespace(embedder=MockBaseModel(embed_dim=8))
 
     monkeypatch.setattr(
-        sc.SubstructureClassifier, "load_from_checkpoint", staticmethod(fake_load_from_checkpoint)
+        sc.SubstructureClassifier,
+        "load_from_checkpoint",
+        staticmethod(fake_load_from_checkpoint),
     )
 
     # Monkeypatch SupervisedDownstreamTaskDataModule to a tiny fake
@@ -60,19 +63,19 @@ def test_run_supervised_classification_minimal(
     def fake_module(*args, **kwargs):
         return MockDataModule(granularity, num_classes, batches)
 
-    monkeypatch.setattr(supervised_classification, "SupervisedDownstreamTaskDataModule", fake_module)
+    monkeypatch.setattr(
+        supervised_classification, "SupervisedDownstreamTaskDataModule", fake_module
+    )
 
     # Build minimal config
     cfg = PipelineConfig(
         output_dir=str(tmp_path),
         run_id="testrun",
         data=DataConfig(data_dir=str(tmp_path), batch_size=2),
-        embedding=EmbeddingConfig(model="esm2", model_params={}),
+        base_model=BaseModelConfig(model="esm2", model_params={}),
         model=ModelConfig(
-            model_type="mlp",
             model_params={"hidden_dims": ["embed"], "dropout_rate": 0.0},
-            checkpoint=str(tmp_path / "dummy.ckpt"),
-            frozen_embedder=True,
+            frozen_base_model=True,
         ),
         training=TrainingConfig(
             max_epochs=1,

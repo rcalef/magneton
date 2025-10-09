@@ -3,8 +3,8 @@ from types import SimpleNamespace
 import torch
 
 from magneton.config import (
+    BaseModelConfig,
     DataConfig,
-    EmbeddingConfig,
     ModelConfig,
     PipelineConfig,
     TrainingConfig,
@@ -24,7 +24,7 @@ def make_simple_config(hidden_dims=None, loss_strategy="none", ewc_weight=1.0):
         hidden_dims = []
     return PipelineConfig(
         model=ModelConfig(
-            frozen_embedder=False,
+            frozen_base_model=False,
             model_params={"hidden_dims": hidden_dims, "dropout_rate": 0.0},
         ),
         training=TrainingConfig(
@@ -36,7 +36,7 @@ def make_simple_config(hidden_dims=None, loss_strategy="none", ewc_weight=1.0):
             embedding_learning_rate=1e-4,
             embedding_weight_decay=0.0,
         ),
-        embedding=EmbeddingConfig(model_params={}),
+        base_model=BaseModelConfig(model_params={}),
         data=DataConfig(substruct_types=[]),
     )
 

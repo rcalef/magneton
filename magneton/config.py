@@ -5,8 +5,8 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
 @dataclass
-class EmbeddingConfig:
-    _target_: str = "magneton.config.EmbeddingConfig"
+class BaseModelConfig:
+    _target_: str = "magneton.config.BaseModelConfig"
     model: str = MISSING
     model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
 
@@ -35,18 +35,16 @@ class DataConfig:
     labels_path: Optional[str] = None
     struct_template: Optional[str] = None
     substruct_types: Optional[List[str]] = None
-    collapse_labels: bool = True
-    num_loader_workers: int = 4
+    collapse_labels: bool = False
+    num_loader_workers: int = 32
     model_specific_params: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ModelConfig:
     _target_: str = "magneton.config.ModelConfig"
-    model_type: str = MISSING
     model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
-    checkpoint: str = MISSING
-    frozen_embedder: bool = True
+    frozen_base_model: bool = True
 
 
 @dataclass
@@ -80,7 +78,7 @@ class PipelineConfig:
     output_dir: str = MISSING
     run_id: str = MISSING
     data: DataConfig = MISSING
-    embedding: EmbeddingConfig = MISSING
+    base_model: BaseModelConfig = MISSING
     model: ModelConfig = MISSING
     training: Optional[TrainingConfig] = None
     evaluate: Optional[EvalConfig] = None
@@ -88,7 +86,7 @@ class PipelineConfig:
 
 cs = ConfigStore.instance()
 cs.store(name="base_pipeline", node=PipelineConfig)
-cs.store(group="embed", name="base_embed", node=EmbeddingConfig)
+cs.store(group="embed", name="base_embed", node=BaseModelConfig)
 cs.store(group="data", name="base_data", node=DataConfig)
 cs.store(group="model", name="base_mmodel", node=ModelConfig)
 cs.store(group="training", name="base_train", node=TrainingConfig)

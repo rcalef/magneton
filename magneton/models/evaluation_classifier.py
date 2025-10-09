@@ -15,7 +15,6 @@ from magneton.evaluations.metrics import (
     get_task_torchmetrics,
 )
 
-from .substructure_classifier import SubstructureClassifier
 from .head_classifiers import (
     ContactPredictionHead,
     HeadModule,
@@ -23,6 +22,7 @@ from .head_classifiers import (
     ProteinClassificationHead,
     ResidueClassificationHead,
 )
+from .substructure_classifier import SubstructureClassifier
 from .utils import parse_hidden_dims
 
 
@@ -56,7 +56,7 @@ class EvaluationClassifier(L.LightningModule):
         )
         self.embedder = model.embedder
 
-        if self.config.model.frozen_embedder:
+        if self.config.model.frozen_base_model:
             self.embedder._freeze()
             self.embedder.eval()
         else:
@@ -175,7 +175,7 @@ class EvaluationClassifier(L.LightningModule):
         return _get_optimizer(
             model=self,
             config=self.config.training,
-            frozen_embedder=self.config.model.frozen_embedder,
+            frozen_embedder=self.config.model.frozen_base_model,
         )
 
     def name(self) -> str:
@@ -184,7 +184,7 @@ class EvaluationClassifier(L.LightningModule):
     def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         """Modify checkpointing logic to not dump the underlying embedder weights if frozen."""
         # If embedder is not frozen, then just use the default state dict with all weights
-        if not self.config.model.frozen_embedder:
+        if not self.config.model.frozen_base_model:
             return
         # Otherwise overwrite state dict with just the head weights
         checkpoint["state_dict"] = self.head.state_dict()
@@ -208,6 +208,7 @@ class EvaluationClassifier(L.LightningModule):
             model.load_state_dict(checkpoint["state_dict"])
 
         return model
+
 
 def _get_labels_for_loss(
     labels: torch.Tensor,

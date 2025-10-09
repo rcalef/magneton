@@ -1,0 +1,5 @@
+model: "prosst"
+model_params:
+  structure_vocab_size: 2048
+  weights_path: "${oc.env:MAGNETON_MODEL_DIR}/ProSST-2048"
+  rep_layer: 12

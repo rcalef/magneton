@@ -20,9 +20,7 @@ class Pipeline:
     def __init__(self, cfg: PipelineConfig):
         print("\n=== Pipeline Configuration ===")
         print(f"Output Directory: {cfg.output_dir}")
-        print(f"Model Type: {cfg.model.model_type}")
-        print(f"Model Checkpoint: {cfg.model.checkpoint}")
-        print(f"Interpro Type: {cfg.data.substruct_types}")
+        print(f"Substructure types: {cfg.data.substruct_types}")
         print("Full Config:")
         pprint(cfg, compact=False)
         print("============================\n")
@@ -30,13 +28,6 @@ class Pipeline:
         self.config = cfg
         self.output_dir = Path(self.config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-
-        self.ckpt = self.config.model.checkpoint
-
-    def run(self):
-        """Run complete pipeline"""
-        self.run_training()
-        self.run_evals()
 
     def run_training(self):
         """Train and evaluate model using Lightning"""
@@ -54,12 +45,14 @@ class Pipeline:
         want_distributed_sampler = torch.cuda.device_count() > 1
         data_module = MagnetonDataModule(
             data_config=self.config.data,
-            model_type=self.config.embedding.model,
+            model_type=self.config.base_model.model,
             distributed=want_distributed_sampler,
         )
 
         # Setup trainer
         if len(self.config.data.substruct_types) != 1:
+            # With more than one substructure type, a given batch may only contain examples
+            # of some substructure types, resulting in unused parameters.
             self.config.training.strategy = "ddp_find_unused_parameters_true"
         trainer = ModelTrainer(
             self.config.training,

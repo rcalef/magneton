@@ -27,7 +27,7 @@ def classify_substructs(
 
     data_module = MagnetonDataModule(
         data_config=config.data,
-        model_type=config.embedding.model,
+        model_type=config.base_model.model,
     )
 
     substruct_parser = get_substructure_parser(config.data)
@@ -47,7 +47,7 @@ def classify_substructs(
     final_predictions = trainer.predict(
         model=model, dataloaders=loader, return_predictions=True
     )
-    
+
     logits_by_task = defaultdict(list)
     labels_by_task = defaultdict(list)
     for logits_dict, labels_dict in final_predictions:
@@ -66,17 +66,19 @@ def classify_substructs(
     for substruct_type, logits in logits_by_task.items():
         this_num_classes = num_classes[substruct_type]
 
-        metrics = MetricCollection({
-            "macro_accuracy": Accuracy(
-                task="multiclass", average="macro", num_classes=this_num_classes
-            ),
-            "macro_auprc": AveragePrecision(
-                task="multiclass", average="macro", num_classes=this_num_classes
-            ),
-            "macro_auroc": AUROC(
-                task="multiclass", average="macro", num_classes=this_num_classes
-            ),
-        })
+        metrics = MetricCollection(
+            {
+                "macro_accuracy": Accuracy(
+                    task="multiclass", average="macro", num_classes=this_num_classes
+                ),
+                "macro_auprc": AveragePrecision(
+                    task="multiclass", average="macro", num_classes=this_num_classes
+                ),
+                "macro_auroc": AUROC(
+                    task="multiclass", average="macro", num_classes=this_num_classes
+                ),
+            }
+        )
 
         task_metrics = metrics(logits, labels_by_task[substruct_type])
         for k, v in task_metrics.items():

@@ -1,6 +1,0 @@
-model: "esm2"
-model_params:
-  model_size: "650m"
-  weights_path: "/weka/scratch/weka/kellislab/rcalef/model_weights/esm2_t33_650M_UR50D"
-  rep_layer: 33
-  use_flash_attn: true

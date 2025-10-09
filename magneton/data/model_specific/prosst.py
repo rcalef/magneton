@@ -18,7 +18,11 @@ from tqdm import tqdm
 from esm.utils.misc import stack_variable_length_tensors
 
 from magneton.data.core import Batch, DataElement
-from magneton.utils import should_run_single_process
+from magneton.utils import (
+    get_model_dir,
+    should_run_single_process,
+    MODEL_DIR_ENV_VAR,
+)
 
 PROSST_REPO_PATH = (
     Path(__file__).parent.parent.parent /
@@ -87,9 +91,20 @@ class ProSSTTransformNode(ParallelMapper):
         self,
         source_node: BaseNode,
         data_dir: str | Path,
-        tokenizer_path: str | Path = "/home/rcalef/storage/om_storage/model_weights/ProSST-2048",
+        tokenizer_path: str | None = None,
         num_workers: int = 2,
     ):
+        if tokenizer_path is None:
+            model_dir = get_model_dir()
+            tokenizer_path = model_dir / "ProSST-2048"
+        tokenizer_path = Path(tokenizer_path)
+        if not tokenizer_path.exists():
+            raise FileNotFoundError(
+                f"Model files for ProSST not found at: {str(tokenizer_path)}\n"
+                f"Please set the '{MODEL_DIR_ENV_VAR}' environment variable appropriately "
+                "or download weights from https://huggingface.co/AI4Protein/ProSST-2048"
+            )
+        
         if isinstance(data_dir, str):
             data_dir = Path(data_dir)
         struct_tokens_path = data_dir / "prosst_toks.tsv.bz2"

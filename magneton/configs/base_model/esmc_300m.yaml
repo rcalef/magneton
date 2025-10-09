@@ -1,6 +1,6 @@
 model: "esmc"
 model_params:
   model_size: "300m"
-  weights_path: "/weka/scratch/weka/kellislab/rcalef/model_weights/esmc-300m-2024-12"
+  weights_path: "${oc.env:MAGNETON_MODEL_DIR}/esmc-300m-2024-12"
   rep_layer: 29
   use_flash_attn: True

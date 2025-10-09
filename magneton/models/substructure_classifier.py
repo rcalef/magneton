@@ -71,11 +71,11 @@ class SubstructureClassifier(L.LightningModule):
 
         self.model_config = config.model
         self.train_config = config.training
-        self.embed_config = config.embedding
+        self.embed_config = config.base_model
 
         # Embedder
         self.base_model = BaseModelFactory.create_base_model(
-            self.embed_config, frozen=self.model_config.frozen_embedder
+            self.embed_config, frozen=self.model_config.frozen_base_model
         )
 
         # Build MLP heads (ModuleDict)
@@ -389,7 +389,7 @@ class SubstructureClassifier(L.LightningModule):
                 "weight_decay": self.train_config.weight_decay,
             }
         ]
-        if not self.model_config.frozen_embedder:
+        if not self.model_config.frozen_base_model:
             optim_params.append(
                 {
                     "params": self.base_model.parameters(),
@@ -406,7 +406,7 @@ class SubstructureClassifier(L.LightningModule):
     def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         """Modify checkpointing logic to not dump the underlying base model weights if frozen."""
         # If embedder is not frozen, then just use the default state dict with all weights
-        if not self.model_config.frozen_embedder:
+        if not self.model_config.frozen_base_model:
             return
         # Otherwise overwrite state dict with just the head weights
         checkpoint["state_dict"] = self.heads.state_dict()
@@ -436,4 +436,3 @@ class SubstructureClassifier(L.LightningModule):
             model.load_state_dict(checkpoint["state_dict"])
 
         return model
-

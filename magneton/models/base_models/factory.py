@@ -1,4 +1,4 @@
-from magneton.config import EmbeddingConfig
+from magneton.config import BaseModelConfig
 
 from .esm2 import ESM2BaseModel, ESM2Config
 from .esmc import ESMCBaseModel, ESMCConfig
@@ -18,7 +18,7 @@ class BaseModelFactory:
     @classmethod
     def create_base_model(
         cls,
-        config: EmbeddingConfig,
+        config: BaseModelConfig,
         frozen: bool = True,
     ) -> tuple[BaseModel]:
         """Create an embedder instance based on config"""

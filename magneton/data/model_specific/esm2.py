@@ -10,6 +10,8 @@ from esm.utils.misc import stack_variable_length_tensors
 from torchdata.nodes import BaseNode, ParallelMapper
 from transformers import EsmTokenizer
 
+from magneton.utils import get_model_dir, MODEL_DIR_ENV_VAR
+
 from ..core import Batch, DataElement
 
 @dataclass(kw_only=True)
@@ -36,10 +38,20 @@ class ESM2TransformNode(ParallelMapper):
         self,
         source_node: BaseNode,
         data_dir: str | Path = None,
-        tokenizer_path: str
-        | Path = "/home/rcalef/storage/om_storage/model_weights/esm2_t33_650M_UR50D",
+        tokenizer_path: str | None = None,
         num_workers: int = 2,
     ):
+        if tokenizer_path is None:
+            model_dir = get_model_dir()
+            tokenizer_path = model_dir / "esm2_t33_650M_UR50D"
+        tokenizer_path = Path(tokenizer_path)
+        if not tokenizer_path.exists():
+            raise FileNotFoundError(
+                f"Model files for ESM2 not found at: {str(tokenizer_path)}\n"
+                f"Please set the '{MODEL_DIR_ENV_VAR}' environment variable appropriately "
+                "or download weights from https://huggingface.co/facebook/esm2_t33_650M_UR50D"
+            )
+
         self.tokenizer = EsmTokenizer.from_pretrained(
             tokenizer_path, trust_remote_code=True
         )

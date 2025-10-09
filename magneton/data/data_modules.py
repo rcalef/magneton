@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import lightning as L
@@ -51,6 +52,8 @@ model_data = {
     "saprot": (SaProtTransformNode, [DataType.SEQ, DataType.STRUCT]),
 }
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def filter_and_sample(
     dataset: Dataset,
@@ -73,8 +76,8 @@ def filter_and_sample(
                 raise ValueError(f"unexpected length type ({i}): {item.length}")
             if check_length < max_len:
                 valid_indices.append(i)
+        logger.info(f"remaining proteins after length filter: {len(valid_indices)} / {len(dataset)}")
         dataset = Subset(dataset, valid_indices)
-        print(f"remaining samples after length filter: {len(valid_indices)}")
 
     if distributed:
         sampler = DistributedSampler(
@@ -83,7 +86,7 @@ def filter_and_sample(
             seed=seed,
             drop_last=drop_last,
         )
-        print(f"using distributed sampler: {len(sampler)}")
+        logger.info(f"distributed sampling proteins per node: {len(sampler)}")
     else:
         if shuffle:
             generator = torch.Generator()
@@ -97,7 +100,6 @@ def filter_and_sample(
             sampler = SequentialSampler(
                 data_source=dataset,
             )
-        print(f"NOT using distributed sampler: {len(sampler)}")
     sampler_node = SamplerWrapper(
         sampler=sampler,
     )
@@ -113,6 +115,7 @@ class MagnetonDataModule(L.LightningDataModule):
         model_type: str,
         distributed: bool = False,
         max_len: int | None = 2048,
+        num_workers: int = 32,
     ):
         super().__init__()
         self.data_config = data_config
@@ -121,6 +124,7 @@ class MagnetonDataModule(L.LightningDataModule):
         self.want_datatypes = want_datatypes + [DataType.SUBSTRUCT]
         self.distributed = distributed
         self.max_len = max_len
+        self.num_workers = num_workers
 
     def _get_dataloader(
         self,
@@ -138,9 +142,12 @@ class MagnetonDataModule(L.LightningDataModule):
             max_len=self.max_len,
             shuffle=shuffle,
         )
+        # Allocate half the workers to model-specific transforms, since
+        # this is typically where most of the work is.
         node = self.transform_cls(
-            node,
-            self.data_config.data_dir,
+            source_node=node,
+            data_dir=self.data_config.data_dir,
+            num_workers=self.num_workers // 2,
             **self.data_config.model_specific_params,
         )
         collate_fn = node.get_collate_fn(
@@ -303,8 +310,8 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         # Allocate half the workers to model-specific transforms, since
         # this is typically where most of the work is.
         node = self.transform_cls(
-            node,
-            this_data_dir,
+            source_node=node,
+            data_dir=this_data_dir,
             num_workers=self.num_workers // 2,
             **self.data_config.model_specific_params,
         )

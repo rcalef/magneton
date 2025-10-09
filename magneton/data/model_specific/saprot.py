@@ -19,7 +19,11 @@ from tqdm import tqdm
 from transformers import AutoTokenizer
 
 from magneton.data.core import Batch, DataElement
-from magneton.utils import should_run_single_process
+from magneton.utils import (
+    get_model_dir,
+    should_run_single_process,
+    MODEL_DIR_ENV_VAR,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -180,10 +184,20 @@ class SaProtTransformNode(ParallelMapper):
         self,
         source_node: BaseNode,
         data_dir: str | Path,
-        tokenizer_path: str
-        | Path = "/home/rcalef/storage/om_storage/model_weights/SaProt_35M_AF2",
+        tokenizer_path: str | None = None,
         num_workers: int = 2,
     ):
+        if tokenizer_path is None:
+            model_dir = get_model_dir()
+            tokenizer_path = model_dir / "SaProt_35M_AF2"
+        tokenizer_path = Path(tokenizer_path)
+        if not tokenizer_path.exists():
+            raise FileNotFoundError(
+                f"Model files for SaProt not found at: {str(tokenizer_path)}\n"
+                f"Please set the '{MODEL_DIR_ENV_VAR}' environment variable appropriately "
+                "or download weights from https://huggingface.co/westlake-repl/SaProt_35M_AF2"
+            )
+
         if isinstance(data_dir, str):
             data_dir = Path(data_dir)
         foldseek_tokens_path = data_dir / "foldseek_tokens.fa.bz2"

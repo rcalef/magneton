@@ -1,6 +1,6 @@
 model: "esm2"
 model_params:
   model_size: "650m"
-  weights_path: "/weka/scratch/weka/kellislab/rcalef/model_weights/esm2_t36_3B_UR50D"
+  weights_path: "${oc.env:MAGNETON_MODEL_DIR}/esm2_t36_3B_UR50D"
   rep_layer: 36
   use_flash_attn: true
