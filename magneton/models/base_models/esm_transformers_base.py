@@ -64,7 +64,7 @@ class TransformersESMBaseModel(BaseModel):
                     f"flash attention with SaProt requires transformers >= 4.56.1, found: {installed_version_str}"
                 )
         if config.for_contact_prediction:
-            self.model.config._attn_implementation = "eager"
+            self.setup_for_contacts()
 
         if frozen:
             self.model = self.model.eval()
@@ -78,6 +78,9 @@ class TransformersESMBaseModel(BaseModel):
         # For masking when calculating original MLM loss
         self.rng = torch.Generator().manual_seed(42)
         self.mask_prob = config.mask_prob
+
+    def setup_for_contacts(self):
+        self.model.config._attn_implementation = "eager"
 
     def _freeze(self):
         for params in self.model.parameters():

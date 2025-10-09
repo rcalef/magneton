@@ -52,10 +52,10 @@ def run_supervised_classification(
     expected_final_metrics_path = output_dir / f"test_{task}_metrics.json"
     if expected_final_metrics_path.exists():
         if not config.evaluate.rerun_completed:
-            print(f"{task}: final predictions preset, recompute=False, skipping")
+            print(f"{task}: final predictions preset, rerun_completed=False, skipping")
             return
         else:
-            print(f"{task}: final predictions preset, recompute=True, rerunning")
+            print(f"{task}: final predictions preset, rerun_completed=True, rerunning")
 
     # Set up callbacks with appropriate monitoring metric
     if task_type == EVAL_TASK.MULTICLASS:
@@ -111,9 +111,9 @@ def run_supervised_classification(
         data_config=config.data,
         task=task,
         data_dir=config.evaluate.data_dir,
-        model_type=config.embedding.model,
+        model_type=config.base_model.model,
         distributed=want_distributed_sampler,
-        unk_amino_acid_char=config.embedding.model_params.get(
+        unk_amino_acid_char=config.base_model.model_params.get(
             "unk_amino_acid_char", "X"
         ),
     )

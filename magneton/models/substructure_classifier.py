@@ -110,13 +110,18 @@ class SubstructureClassifier(L.LightningModule):
         self.loss_strategy = self.train_config.loss_strategy
         if self.loss_strategy == "ewc":
             self.ewc_weight = self.train_config.ewc_weight
+            placeholder_vec = torch.zeros_like(
+                torch.nn.utils.parameters_to_vector(self.base_model.parameters())
+            )
+            self.register_buffer("fisher_info", placeholder_vec, persistent=True)
+
             # Optionally reuse precomputed fisher vector
             if config.training.reuse_ewc_weights is not None:
                 ewc_ckpt = torch.load(
                     config.training.reuse_ewc_weights, weights_only=False
                 )
                 fisher_vec = ewc_ckpt["state_dict"]["fisher_info"]
-                self.register_buffer("fisher_info", fisher_vec, persistent=True)
+                self.fisher_info = fisher_vec
                 logger.info(
                     f"Loaded precomputed Fisher info complete: {fisher_vec[:10]}"
                 )
@@ -144,11 +149,6 @@ class SubstructureClassifier(L.LightningModule):
 
         # Fisher calculation state (for EWC) - can be set externally via `self.calc_fisher_state = True`
         self.calc_fisher_state = False
-        if load_pretrained_fisher:
-            placeholder_vec = torch.zeros_like(
-                torch.nn.utils.parameters_to_vector(self.base_model.parameters())
-            )
-            self.register_buffer("fisher_info", placeholder_vec, persistent=True)
 
     # Prediction methods below are used for computing Fisher info if `calc_fisher_state` is set to True,
     # otherwise just behaves as normal prediction returning logits and labels.
@@ -217,7 +217,7 @@ class SubstructureClassifier(L.LightningModule):
                 describe_tensor(fisher_vec, prefix="fisher")
 
             # register buffer containing fisher vector over embedder params
-            self.register_buffer("fisher_info", fisher_vec, persistent=True)
+            self.fisher_info = fisher_vec
 
         # freeze/unfreeze embedder to original state
         self.base_model._freeze()
@@ -419,18 +419,15 @@ class SubstructureClassifier(L.LightningModule):
     ) -> None:
         """Flexible loading from checkpoint.
 
-        Main changes here are not expecting full base model weights if the
-        base model was frozen during training, and separately, handling the presence
-        of EWC weights even if this specific config isn't expecting them. The
-        converse of expecting EWC weights when they're not present will throw a
-        RuntimeError.
+        Change here is to not expect full base model weights if the
+        base model was frozen during training.
         """
         checkpoint = torch.load(checkpoint_path, weights_only=False)
         hparams = checkpoint["hyper_parameters"]
         hparams.update(kwargs)
 
         model = cls(**hparams)
-        if hparams["config"].model.frozen_embedder:
+        if hparams["config"].model.frozen_base_model:
             model.heads.load_state_dict(checkpoint["state_dict"])
         else:
             model.load_state_dict(checkpoint["state_dict"])

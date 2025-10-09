@@ -50,22 +50,20 @@ class EvaluationClassifier(L.LightningModule):
         model = SubstructureClassifier.load_from_checkpoint(
             self.config.evaluate.model_checkpoint,
             load_pretrained_fisher=self.config.evaluate.has_fisher_info,
-            for_contact_prediction=(
-                task_granularity == TASK_GRANULARITY.CONTACT_PREDICTION
-            ),
         )
-        self.embedder = model.embedder
+        self.base_model = model.base_model
 
         if self.config.model.frozen_base_model:
-            self.embedder._freeze()
-            self.embedder.eval()
+            self.base_model._freeze()
+            self.base_model.eval()
         else:
-            self.embedder._unfreeze(unfreeze_all=False)
+            self.base_model._unfreeze(unfreeze_all=False)
 
         # Create head module
-        embed_dim = self.embedder.get_embed_dim()
+        embed_dim = self.base_model.get_embed_dim()
         if task_granularity == TASK_GRANULARITY.CONTACT_PREDICTION:
-            embed_dim = self.embedder.get_attention_dim()
+            embed_dim = self.base_model.get_attention_dim()
+            self.base_model.setup_for_contacts()
         elif task_granularity == TASK_GRANULARITY.PPI_PREDICTION:
             # PPI head will handle the 2x concatenation internally
             pass
@@ -112,7 +110,7 @@ class EvaluationClassifier(L.LightningModule):
 
     def forward(self, batch: Batch) -> torch.Tensor:
         """Forward pass through the model."""
-        return self.head.forward(batch, self.embedder)
+        return self.head.forward(batch, self.base_model)
 
     def training_step(self, batch: Batch, batch_idx: int) -> torch.Tensor:
         logits = self(batch)
@@ -202,7 +200,7 @@ class EvaluationClassifier(L.LightningModule):
 
         model = cls(**hparams)
 
-        if hparams["config"].model.frozen_embedder:
+        if hparams["config"].model.frozen_base_model:
             model.head.load_state_dict(checkpoint["state_dict"])
         else:
             model.load_state_dict(checkpoint["state_dict"])
@@ -291,7 +289,7 @@ def _get_optimizer(
     if not frozen_embedder:
         optim_params.append(
             {
-                "params": model.embedder.parameters(),
+                "params": model.base_model.parameters(),
                 "lr": config.embedding_learning_rate,
                 "weight_decay": config.embedding_weight_decay,
                 "betas": (0.9, 0.98),

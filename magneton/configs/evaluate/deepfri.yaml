@@ -1,2 +1,2 @@
 tasks: ["GO:MF","GO:BP","GO:CC","EC"]
-data_dir: "/weka/scratch/weka/kellislab/rcalef/data/magneton-data/evaluations"
+data_dir: "${oc.env:MAGNETON_DATA_DIR}/evaluations"

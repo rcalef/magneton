@@ -78,6 +78,7 @@ class Pipeline:
 
         for task in self.config.evaluate.tasks:
             print(f"{task} - evaluation start")
+            run_id = f"{self.config.run_id}_{task}"
             output_dir = Path(self.config.output_dir) / task
             output_dir.mkdir(exist_ok=True)
 
@@ -87,7 +88,6 @@ class Pipeline:
                     output_dir=output_dir,
                 )
             elif task == "zero_shot":
-                run_id = f"{self.config.run_id}_{task}"
                 run_zero_shot_evaluation(
                     config=self.config,
                     task=task,

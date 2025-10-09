@@ -104,6 +104,10 @@ class BaseModel(nn.Module, ABC):
         """
         pass
 
+    def setup_for_contacts(self):
+        """Perform any configuration needed to use model for contact prediction"""
+        pass
+
     @abstractmethod
     def get_embed_dim(cls) -> int:
         pass

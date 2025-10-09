@@ -40,7 +40,7 @@ def test_run_supervised_classification_minimal(
     from magneton.models import substructure_classifier as sc
 
     def fake_load_from_checkpoint(*args, **kwargs):
-        return SimpleNamespace(embedder=MockBaseModel(embed_dim=8))
+        return SimpleNamespace(base_model=MockBaseModel(embed_dim=8))
 
     monkeypatch.setattr(
         sc.SubstructureClassifier,

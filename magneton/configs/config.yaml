@@ -6,8 +6,7 @@ defaults:
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
-run_id: esmc_embed_conserved_site
-output_dir: "/weka/scratch/weka/kellislab/rcalef/projects/magneton/experiments/esmc_test"
+run_id: my_new_run
 model:
   model_params:
     hidden_dims: ["embed"]

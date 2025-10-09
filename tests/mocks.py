@@ -91,7 +91,7 @@ class MockSubstructureClassifier:
     """Object mimicking the checkpointed model."""
 
     def __init__(self):
-        self.embedder = MockBaseModel()
+        self.base_model = MockBaseModel()
 
     # this is what EvaluationClassifier calls
     @classmethod
