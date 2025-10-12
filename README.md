@@ -1,6 +1,8 @@
 # Magneton
 <img src="assets/images/magneton_logo.png" width="400" alt="Cartoon creature composed of multiple proteins" align="right">
 
+NOTE: You are viewing the anonymized version of our repo. Some external links may be broken due to the anonymization process. Specifically, our HuggingFace dataset is redacted for anonymization, as well as our fork of ProSST which parallelizes their structure token calculation. Please leave a public comment on our submission if you attempt to use the anonymized code and run into issues, and we'll be happy to help debug.
+
 This repository provides the code for Magneton, an integrated environment for developing substructure-aware protein models, detailed in the paper Greater than the Sum of Its Parts: Building Substructure into Protein Encoding Models.
 
 Magneton provides:
@@ -52,11 +54,11 @@ uv sync --extra flash
 uv pip install --upgrade-package transformers transformers
 ```
 
-The Magneton datasets are available via our [HuggingFace dataset](https://huggingface.co/datasets/rcalef/magneton-data) and are exposed via the `MAGNETON_DATA_DIR` environment variable. For substructure-tuning, the directory containing the base model weights is exposed via  the `MAGNETON_MODEL_DIR` environment variable. Example setup:
+The Magneton datasets are available via our [HuggingFace dataset]() (link removed for anonymization) and are exposed via the `MAGNETON_DATA_DIR` environment variable. For substructure-tuning, the directory containing the base model weights is exposed via  the `MAGNETON_MODEL_DIR` environment variable. Example setup:
 ```
 cd /path/to/download
 # Clone dataset
-git clone git@hf.co:datasets/rcalef/magneton-data
+git clone git@hf.co:datasets/REDACTED
 
 # Clone model weights of interest, e.g ESM-C 300M
 mkdir model_weights

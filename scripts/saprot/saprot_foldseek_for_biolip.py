@@ -11,6 +11,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from magneton.data.evaluations.biolip_dataset import BioLIP2Module
+from magneton.utils import get_data_dir
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -98,9 +99,11 @@ def parse_foldseek_toks(
 
 
 def run(
-    biolip_path: str = "/weka/scratch/weka/kellislab/rcalef/data/magneton-data/evaluations/struct_token_bench",
+    biolip_path: str | None = None,
     num_workers: int = 32,
 ):
+    if biolip_path is None:
+        biolip_path = get_data_dir() / "evaluations" / "struct_token_bench"
     biolip_path = Path(biolip_path)
     for task in ["binding", "catalytic"]:
         module = BioLIP2Module(
