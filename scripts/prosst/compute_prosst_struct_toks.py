@@ -10,9 +10,9 @@ import torch
 from tqdm import tqdm
 
 from magneton.config import DataConfig
+from magneton.core_types import DataType
 from magneton.data.core import CoreDataset
 from magneton.data import SupervisedDownstreamTaskDataModule
-from magneton.data.core import DataType
 
 
 PROSST_REPO_PATH = (
