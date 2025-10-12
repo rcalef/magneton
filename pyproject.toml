@@ -3,8 +3,6 @@ name = "magneton"
 version = "0.1.0"
 description = "Substructure-aware protein representation learning"
 authors = [
-    {name = "Robert Calef", email = "rcalef@mit.edu"},
-    {name = "Arthur Liang", email = "artliang@mit.edu"},
 ]
 readme = "README.md"
 requires-python = ">=3.11"
@@ -45,9 +43,6 @@ classifiers = [
     "Private :: Do Not Upload",
     "License :: OSI Approved :: MIT License",
 ]
-
-[project.urls]
-Source-code = "https://github.com/rcalef/magneton/"
 
 [project.optional-dependencies]
 flash = [

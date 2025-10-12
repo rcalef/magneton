@@ -10,6 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from magneton.data.evaluations import ContactPredictionModule
+from magneton.utils import get_data_dir
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -115,9 +116,11 @@ def parse_foldseek_toks(
 
 
 def run(
-    contact_data_path: str = "/weka/scratch/weka/kellislab/rcalef/data/magneton-data/evaluations/saprot_processed/Contact",
+    contact_data_path: str | None  = None,
     num_workers: int = 32,
 ):
+    if contact_data_path is None:
+        contact_data_path = get_data_dir() / "evaluations"/ "saprot_processed" /" Contact"
     contact_data_path = Path(contact_data_path)
     module = ContactPredictionModule(
         data_dir=contact_data_path,

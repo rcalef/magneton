@@ -18,7 +18,7 @@ def get_data_dir() -> Path:
         raise FileNotFoundError(
             f"Magneton data directory not found at: {str(data_dir)}, please "
             f"set the '{DATA_DIR_ENV_VAR}' environment variable or download "
-            "the dataset from HuggingFace: https://huggingface.co/datasets/rcalef/magneton-data"
+            "the dataset from HuggingFace: https://huggingface.co/datasets/REDACTED"
         )
     return data_dir
 

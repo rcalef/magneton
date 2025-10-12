@@ -1,5 +1,4 @@
-# artliang specific
-**.fasta
+*.fasta
 **.tsv
 bgz_to_fasta.py
 mmseqs/
