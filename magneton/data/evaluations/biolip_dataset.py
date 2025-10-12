@@ -1,13 +1,15 @@
+import gzip
 import json
 import logging
+import tarfile
 from functools import partial
 from pathlib import Path
 from typing import Literal
 
-from Bio.PDB import PDBParser
-from Bio.Data.IUPACData import protein_letters_3to1
 import pandas as pd
 import torch
+from Bio.Data.IUPACData import protein_letters_3to1
+from Bio.PDB import PDBParser
 from torch.utils.data import Dataset
 
 from magneton.data.core import DataElement
@@ -92,6 +94,16 @@ class BioLIP2Module:
             "2zba_D",
         ]
 
+        # Possibly unpack tarfile
+        expected_structure_path = self.data_dir / "biolip2" / "binding"
+        if not expected_structure_path.exists():
+            logger.info("BioLIP2 PDB files not found, attempting to unpack tar file")
+            tar_path = self.data_dir / "biolip2" / "pdb_files.tar.gz"
+            with tarfile.open(tar_path, "r") as tar:
+                tar.extractall(path=self.data_dir / "biolip2")
+            logger.info("BioLIP2 PDB file tar unpacked")
+
+
     def _jsonl_name(self, split: str) -> Path:
         """
         Map split to jsonl file name.
@@ -110,7 +122,7 @@ class BioLIP2Module:
 
         return (
             self.data_dir
-            / f"BioLIP2FunctionDataset_{self.task}_label_{valid_splits[split]}.jsonl"
+            / f"BioLIP2FunctionDataset_{self.task}_label_{valid_splits[split]}.jsonl.gz"
         )
 
     def num_classes(self) -> int:
@@ -130,10 +142,10 @@ class BioLIP2Module:
         all_paths = []
         all_labels = []
         all_residue_idxs = []
-        with open(json_path, "r") as fh:
+        with gzip.open(json_path, "rt") as fh:
             for line in fh:
                 record = json.loads(line)
-                path = Path(record["pdb_path"])
+                path = self.data_dir / record["pdb_path"]
                 protein_id = path.name.split(".")[0]
                 labels = record[label_key]
                 residue_idxs = record["residue_index"]

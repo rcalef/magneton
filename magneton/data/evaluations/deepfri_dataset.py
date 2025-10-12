@@ -74,7 +74,7 @@ class DeepFriModule:
     def __init__(
         self,
         task: str,
-        data_dir: str,
+        data_dir: str | Path,
         struct_template: str,
         num_workers: int = 16,
     ):
@@ -100,22 +100,18 @@ class DeepFriModule:
         Structure largely adapted from ProteinWorkshop.
         """
         if self.task == "EC":
-            data_dir = self.data_dir / "EnzymeCommission"
-
-            label_fname = data_dir / "nrPDB-EC_2020.04_annot.tsv"
-            train_fname = data_dir / "nrPDB-EC_2020.04_train.txt"
-            val_fname = data_dir / "nrPDB-EC_2020.04_valid.txt"
-            test_fname = data_dir / "nrPDB-EC_2020.04_test.txt"
+            label_fname = self.data_dir / "nrPDB-EC_2020.04_annot.tsv"
+            train_fname = self.data_dir / "nrPDB-EC_2020.04_train.txt"
+            val_fname = self.data_dir / "nrPDB-EC_2020.04_valid.txt"
+            test_fname = self.data_dir / "nrPDB-EC_2020.04_test.txt"
 
             n_header_rows = 3
             col_names = ["PDB", "EC"]
         else:
-            data_dir = self.data_dir / "GeneOntology"
-
-            label_fname = data_dir / "nrPDB-GO_annot.tsv"
-            train_fname = data_dir / "nrPDB-GO_train.txt"
-            val_fname = data_dir / "nrPDB-GO_valid.txt"
-            test_fname = data_dir / "nrPDB-GO_test.txt"
+            label_fname = self.data_dir / "nrPDB-GO_annot.tsv"
+            train_fname = self.data_dir / "nrPDB-GO_train.txt"
+            val_fname = self.data_dir / "nrPDB-GO_valid.txt"
+            test_fname = self.data_dir / "nrPDB-GO_test.txt"
 
             n_header_rows = 13
             col_names = ["PDB", "MF", "BP", "CC"]
@@ -146,7 +142,7 @@ class DeepFriModule:
         dataset = df[["pdb_id", self.task, "labels"]]
 
         # Add in UniProt IDs
-        pdb_id_map_path = data_dir / f"{self.task}.pdb_to_uniprot.tsv"
+        pdb_id_map_path = self.data_dir / f"{self.task}.pdb_to_uniprot.tsv"
         pdb_id_map = self.map_pdb_ids(dataset.pdb_id, pdb_id_map_path)
         dataset = dataset.merge(pdb_id_map, on="pdb_id")
 
@@ -176,7 +172,7 @@ class DeepFriModule:
 
         # Extract sequences from PDB files to make sure they match the downloaded
         # structure
-        fasta_path = data_dir / f"{self.task}.seqs_from_pdbs.fa"
+        fasta_path = self.data_dir / f"{self.task}.seqs_from_pdbs.fa"
         sequence_dict = parse_seqs_from_pdbs(
             fasta_path=fasta_path,
             jobs=dataset.structure_path.to_list(),

@@ -26,8 +26,6 @@ def format_logits_and_labels_for_metrics(
         # For binary metrics, convert labels to int (AveragePrecision expects int targets)
         labels = labels.int()
         # if logits.shape[0] != 1:
-        print(logits.shape)
-        print(logits.squeeze(-1).shape)
         return logits.squeeze(-1), labels.squeeze(-1)
     elif task_type in [EVAL_TASK.MULTILABEL, EVAL_TASK.MULTICLASS]:
         return logits, labels.int()

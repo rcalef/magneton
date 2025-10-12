@@ -54,8 +54,8 @@ class TrainingConfig:
     max_epochs: int = 100
     learning_rate: float = 1e-2
     weight_decay: float = 0.0
-    embedding_learning_rate: float = 1e-5
-    embedding_weight_decay: float = 0.0
+    base_model_learning_rate: float = 1e-5
+    base_model_weight_decay: float = 0.0
     accelerator: str = "gpu"
     strategy: str = "ddp"
     precision: str = "bf16-mixed"

@@ -206,13 +206,18 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         self.task = task
         self.task_type = TASK_TO_TYPE[task]
         self.data_config = data_config
-        self.data_dir = Path(data_dir)
+        self.data_root = Path(data_dir)
         self.distributed = distributed
         self.max_len = max_len
         self.num_workers = num_workers
 
         if task in ["GO:BP", "GO:CC", "GO:MF", "EC"]:
             task = task.replace("GO:", "")
+            if task == "EC":
+                self.data_dir = self.data_root / "EnzymeCommission"
+            else:
+                self.data_dir = self.data_root / "GeneOntology"
+
             self.module = DeepFriModule(
                 task,
                 self.data_dir,
@@ -228,16 +233,18 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
             self.task_granularity = TASK_GRANULARITY.PROTEIN_CLASSIFICATION
         elif task.startswith("saprot"):
             if task == "saprot_thermostability":
+                self.data_dir = self.data_root / "saprot_processed" / "Thermostability"
                 self.module = ThermostabilityModule(
-                    self.data_dir / "saprot_processed" / "Thermostability",
+                    self.data_dir,
                     struct_template=self.data_config.struct_template,
                     num_workers=num_workers,
                 )
                 self.task_granularity = TASK_GRANULARITY.PROTEIN_CLASSIFICATION
             elif task in ["saprot_binloc", "saprot_subloc"]:
                 num_labels = 2 if task == "saprot_binloc" else 10
+                self.data_dir = self.data_root / "saprot_processed" / "DeepLoc"
                 self.module = DeepLocModule(
-                    self.data_dir / "saprot_processed" / "DeepLoc",
+                    self.data_dir,
                     struct_template=self.data_config.struct_template,
                     num_labels=num_labels,
                     num_workers=num_workers,
@@ -245,21 +252,24 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
                 self.task_granularity = TASK_GRANULARITY.PROTEIN_CLASSIFICATION
 
         elif task == "FLIP_bind":
+            self.data_dir = self.data_root / "FLIP_bind"
             self.module = FlipModule(
-                data_dir=self.data_dir / "FLIP_bind",
+                data_dir=self.data_dir,
                 struct_template=self.data_config.struct_template,
                 num_workers=num_workers,
             )
             self.task_granularity = TASK_GRANULARITY.RESIDUE_CLASSIFICATION
         elif task == "contact_prediction":
+            self.data_dir = self.data_root / "saprot_processed" / "Contact"
             self.module = ContactPredictionModule(
-                data_dir=self.data_dir / "saprot_processed" / "Contact",
+                data_dir=self.data_dir,
                 num_workers=num_workers,
             )
             self.task_granularity = TASK_GRANULARITY.CONTACT_PREDICTION
         elif task in ["biolip_binding", "biolip_catalytic"]:
+            self.data_dir = self.data_root / "struct_token_bench"
             self.module = BioLIP2Module(
-                data_dir=self.data_dir / "struct_token_bench",
+                data_dir=self.data_dir,
                 task=task.replace("biolip_", ""),
                 unk_amino_acid_char=unk_amino_acid_char,
                 num_workers=num_workers,
@@ -271,8 +281,9 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
                 raise ValueError(
                     f"PPI batch size must be an even number: {self.data_config.batch_size}"
                 )
+            self.data_dir = self.data_root / "saprot_processed" / "HumanPPI"
             self.module = HumanPPIModule(
-                data_dir=self.data_dir / "saprot_processed" / "HumanPPI",
+                data_dir=self.data_dir,
                 struct_template=self.data_config.struct_template,
                 num_workers=num_workers,
             )
@@ -307,7 +318,7 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
             node = Mapper(node, flatten_ppi_data_elements)
             node = Unbatcher(node)
 
-        this_data_dir = self.data_dir / self.task / split
+        this_data_dir = self.data_dir / split
         if not this_data_dir.exists():
             this_data_dir.mkdir(parents=True, exist_ok=True)
         # Allocate half the workers to model-specific transforms, since

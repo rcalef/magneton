@@ -198,8 +198,7 @@ class SaProtTransformNode(ParallelMapper):
                 "or download weights from https://huggingface.co/westlake-repl/SaProt_35M_AF2"
             )
 
-        if isinstance(data_dir, str):
-            data_dir = Path(data_dir)
+        data_dir = Path(data_dir)
         foldseek_tokens_path = data_dir / "foldseek_tokens.fa.bz2"
 
         if should_run_single_process() and not foldseek_tokens_path.exists():

@@ -100,10 +100,7 @@ class SubstructureClassifier(L.LightningModule):
             layers.append(nn.Linear(prev, n_cls))
             mlps[head_name] = nn.Sequential(*layers)
         self.heads = nn.ModuleDict(mlps)
-
-        # Default head name (useful if some batch element types don't match head names
-        # e.g. single-task 'default' head)
-        self.default_head = next(iter(self.heads.keys()))
+        logger.info(f"head model: {self.heads}")
 
         # Loss and loss strategy (ewc optional)
         self.loss = nn.CrossEntropyLoss()
@@ -393,8 +390,8 @@ class SubstructureClassifier(L.LightningModule):
             optim_params.append(
                 {
                     "params": self.base_model.parameters(),
-                    "lr": self.train_config.embedding_learning_rate,
-                    "weight_decay": self.train_config.embedding_weight_decay,
+                    "lr": self.train_config.base_model_learning_rate,
+                    "weight_decay": self.train_config.base_model_weight_decay,
                 }
             )
         optimizer = torch.optim.AdamW(optim_params)
@@ -415,6 +412,8 @@ class SubstructureClassifier(L.LightningModule):
     def load_from_checkpoint(
         cls,
         checkpoint_path: Path,
+        map_location: torch.device = None,
+        strict: bool = True,
         **kwargs,
     ) -> None:
         """Flexible loading from checkpoint.
@@ -422,14 +421,18 @@ class SubstructureClassifier(L.LightningModule):
         Change here is to not expect full base model weights if the
         base model was frozen during training.
         """
-        checkpoint = torch.load(checkpoint_path, weights_only=False)
+        checkpoint = torch.load(
+            checkpoint_path,
+            weights_only=False,
+            map_location=map_location,
+        )
         hparams = checkpoint["hyper_parameters"]
         hparams.update(kwargs)
 
         model = cls(**hparams)
         if hparams["config"].model.frozen_base_model:
-            model.heads.load_state_dict(checkpoint["state_dict"])
+            model.heads.load_state_dict(checkpoint["state_dict"], strict=strict)
         else:
-            model.load_state_dict(checkpoint["state_dict"])
+            model.load_state_dict(checkpoint["state_dict"], strict=strict)
 
         return model

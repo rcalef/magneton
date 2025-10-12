@@ -8,10 +8,10 @@ defaults:
 
 run_id: my_new_run
 model:
+  frozen_base_model: true
   model_params:
     hidden_dims: ["embed"]
     dropout_rate: 0.1
-    frozen_base_model: true
 
 training:
   max_epochs: 5

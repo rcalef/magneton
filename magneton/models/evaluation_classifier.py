@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,9 @@ from .head_classifiers import (
 from .substructure_classifier import SubstructureClassifier
 from .utils import parse_hidden_dims
 
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
 
 class EvaluationClassifier(L.LightningModule):
     """Unified LightningModule for all evaluation tasks."""
@@ -50,6 +54,7 @@ class EvaluationClassifier(L.LightningModule):
         model = SubstructureClassifier.load_from_checkpoint(
             self.config.evaluate.model_checkpoint,
             load_pretrained_fisher=self.config.evaluate.has_fisher_info,
+            map_location=self.device,
         )
         self.base_model = model.base_model
 
@@ -79,8 +84,7 @@ class EvaluationClassifier(L.LightningModule):
             num_classes=num_classes,
             dropout_rate=self.config.model.model_params["dropout_rate"],
         )
-
-        print(f"head model: {self.head}")
+        logger.info(f"head model: {self.head}")
 
         # Choose loss function based on task type
         if task_type == EVAL_TASK.MULTILABEL:
@@ -290,8 +294,8 @@ def _get_optimizer(
         optim_params.append(
             {
                 "params": model.base_model.parameters(),
-                "lr": config.embedding_learning_rate,
-                "weight_decay": config.embedding_weight_decay,
+                "lr": config.base_model_learning_rate,
+                "weight_decay": config.base_model_weight_decay,
                 "betas": (0.9, 0.98),
             }
         )
