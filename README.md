@@ -1,5 +1,5 @@
 # Magneton
-<img src="assets/images/magneton_logo.png" width="400" alt="Cartoon creature composed of multiple proteins">
+<img src="assets/images/magneton_logo.png" width="400" alt="Cartoon creature composed of multiple proteins" align="right">
 
 NOTE: You are viewing the anonymized version of our repo. Some external links may be broken due to the anonymization process. Specifically, our HuggingFace dataset is redacted for anonymization, as well as our fork of ProSST which parallelizes their structure token calculation. Please leave a public comment on our submission if you attempt to use the anonymized code and run into issues, and we'll be happy to help debug.
 
