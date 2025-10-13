@@ -1,5 +1,5 @@
 # Magneton
-<img src="assets/images/magneton_logo.png" width="400" alt="Cartoon creature composed of multiple proteins">
+<img src="assets/images/magneton_logo.png" width="400" alt="Cartoon creature composed of multiple proteins" align="right">
 
 This repository provides the code for Magneton, an integrated environment for developing substructure-aware protein models, detailed in the paper Greater than the Sum of Its Parts: Building Substructure into Protein Encoding Models.
 
