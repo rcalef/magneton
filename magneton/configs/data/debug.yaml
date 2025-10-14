@@ -4,4 +4,4 @@ splits: "${oc.env:MAGNETON_DATA_DIR}/interpro_103.0/dataset_splits/seq_splits.ts
 labels_path: "${oc.env:MAGNETON_DATA_DIR}/interpro_103.0/labels/selected_subset"
 prefix: "swissprot.with_ss"
 substruct_types: ["Domain"]
-struct_template: "/weka/scratch/weka/kellislab/rcalef/data/pdb_alphafolddb/AF-%s-F1-model_v4.pdb"
+struct_template: "${oc.env:MAGNETON_DATA_DIR}/afdb_structures/AF-%s-F1-model_v6.pdb"
