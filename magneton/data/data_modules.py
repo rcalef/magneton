@@ -45,16 +45,16 @@ from .model_specific import (
     SaProtTransformNode,
 )
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Model-specific data transforms along with required datatypes
 model_data = {
     "esm2": (ESM2TransformNode, [DataType.SEQ]),
     "esmc": (ESMCTransformNode, [DataType.SEQ]),
     "prosst": (ProSSTTransformNode, [DataType.SEQ, DataType.STRUCT]),
     "saprot": (SaProtTransformNode, [DataType.SEQ, DataType.STRUCT]),
 }
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 
 def filter_and_sample(
     dataset: Dataset,
@@ -211,6 +211,7 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         self.max_len = max_len
         self.num_workers = num_workers
 
+        # TODO(rcalef): clean up this logic
         if task in ["GO:BP", "GO:CC", "GO:MF", "EC"]:
             task = task.replace("GO:", "")
             if task == "EC":
