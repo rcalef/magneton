@@ -212,7 +212,6 @@ class SupervisedDownstreamTaskDataModule(L.LightningDataModule):
         self.max_len = max_len
         self.num_workers = num_workers
 
-        # TODO(rcalef): clean up this logic
         if task in ["GO:BP", "GO:CC", "GO:MF", "EC"]:
             task = task.replace("GO:", "")
             if task == "EC":
