@@ -215,6 +215,8 @@ Available substructure annotations from InterPro and SwissProt:
 - **Homology**: Homologous superfamily regions
 - **Secondary_structure**: Alpha helix, beta strand annotations
 
+## Contributing
+One of the goals of Magneton's design is to make it easy to add new models or evaluation tasks. Adding a new model just requires implementing model-specific data transformations (e.g. tokenization) and a base model class that implements a forward pass for generating residue- or protein-level embeddings. Full details of the Magneton architecture and how to add a new model can be found in the [architecture description](./magneton/ARCHITECTURE.md).
 
 ## Citing
 Arxiv link: TBA

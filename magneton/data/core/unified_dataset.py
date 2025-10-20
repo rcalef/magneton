@@ -20,6 +20,27 @@ from .substructure_parsers import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+@dataclass(kw_only=True)
+class DataElement:
+    """Single dataset entry.
+
+    - protein_id (str): UniProt ID for this protein.
+    - length (int): Length in AAs.
+    - seq (str | None): AA sequence of protein.
+    - substructures (List[LabeledSubstructure] | None): Annotated substructures.
+    - structure_path (str | None): Path to structure (.pdb) file.
+    - labels: (torch.Tensor | None): Labels for supervised tasks.
+    """
+
+    protein_id: str
+    length: int
+    seq: str | None = None
+    # First element is ranges, second element is labels
+    substructures: list[LabeledSubstructure] | None = None
+    structure_path: str | None = None
+    # For any downstream supervised tasks
+    labels: torch.Tensor | None = None
+
 
 @dataclass(kw_only=True)
 class Batch:
@@ -53,28 +74,6 @@ class Batch:
 
     def total_length(self) -> int:
         return sum(map(len, self.substructures))
-
-
-@dataclass(kw_only=True)
-class DataElement:
-    """Single dataset entry.
-
-    - protein_id (str): UniProt ID for this protein.
-    - length (int): Length in AAs.
-    - seq (str | None): AA sequence of protein.
-    - substructures (List[LabeledSubstructure] | None): Annotated substructures.
-    - structure_path (str | None): Path to structure (.pdb) file.
-    - labels: (torch.Tensor | None): Labels for supervised tasks.
-    """
-
-    protein_id: str
-    length: int
-    seq: str | None = None
-    # First element is ranges, second element is labels
-    substructures: list[LabeledSubstructure] | None = None
-    structure_path: str | None = None
-    # For any downstream supervised tasks
-    labels: torch.Tensor | None = None
 
 
 class CoreDataset(Dataset):

@@ -25,6 +25,10 @@ class ESMCDataElement(DataElement):
 
 @dataclass(kw_only=True)
 class ESMCBatch(Batch):
+    """Batch of data for ESM-C
+
+    - tokenized_seq (torch.Tensor): Tokenized AA seq for batch.
+    """
     tokenized_seq: torch.Tensor
 
     def to(self, device: str):
