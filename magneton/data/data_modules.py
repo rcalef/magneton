@@ -54,6 +54,8 @@ model_data = {
     "esmc": (ESMCTransformNode, [DataType.SEQ]),
     "prosst": (ProSSTTransformNode, [DataType.SEQ, DataType.STRUCT]),
     "saprot": (SaProtTransformNode, [DataType.SEQ, DataType.STRUCT]),
+    # S-PLM just uses the ESM2 tokenizer
+    "s-plm": (ESM2TransformNode, [DataType.SEQ]),
 }
 
 def filter_and_sample(

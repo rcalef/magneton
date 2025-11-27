@@ -46,6 +46,13 @@ class ModelConfig:
     _target_: str = "magneton.config.ModelConfig"
     model_params: Optional[Dict[str, Any]] = field(default_factory=dict)
     frozen_base_model: bool = True
+    pooling_mechanism: str = "mean"
+
+    def __post_init__(self):
+        # For backwards compatbility
+        if not hasattr(self, "pooling_mechanism"):
+            self.pooling_mechanism = "mean"
+        assert self.pooling_mechanism in ["mean", "max", "attention"]
 
 
 @dataclass
