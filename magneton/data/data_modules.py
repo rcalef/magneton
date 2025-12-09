@@ -120,7 +120,6 @@ class MagnetonDataModule(L.LightningDataModule):
         model_type: str,
         distributed: bool = False,
         max_len: int | None = 2048,
-        num_workers: int = 32,
     ):
         super().__init__()
         self.data_config = data_config
@@ -129,7 +128,7 @@ class MagnetonDataModule(L.LightningDataModule):
         self.want_datatypes = want_datatypes + [DataType.SUBSTRUCT]
         self.distributed = distributed
         self.max_len = max_len
-        self.num_workers = num_workers
+        self.num_workers = self.data_config.num_loader_workers
 
     def _get_dataloader(
         self,
