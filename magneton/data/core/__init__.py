@@ -4,12 +4,13 @@ from .unified_dataset import (
     DataElement,
 )
 from .protein_dataset import get_protein_dataset
-from .substructure_parsers import get_substructure_parser
+from .substructure_parsers import LabeledSubstructure, get_substructure_parser
 
 __all__ = [
     "Batch",
     "CoreDataset",
     "DataElement",
+    "LabeledSubstructure",
     "get_protein_dataset",
     "get_substructure_parser",
 ]

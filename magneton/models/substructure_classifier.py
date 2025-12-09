@@ -7,18 +7,59 @@ import lightning as L
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-from torch_scatter import scatter_mean
+from torch_scatter import scatter_max, scatter_mean
 from torchmetrics import Accuracy, F1Score, MetricCollection
 
 from magneton.config import PipelineConfig
 from magneton.core_types import SubstructType
-from magneton.data.core import Batch
+from magneton.data.core import Batch, LabeledSubstructure
 
 from .base_models import BaseModelFactory
 from .utils import describe_tensor, parse_hidden_dims
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+class AttentionPool(nn.Module):
+    """
+    Simple attention pooling with a single learnable query vector.
+
+    Input: (L, D) tensor of residue embeddings
+    Output: (D,) pooled embedding
+    """
+    def __init__(self, embed_dim: int, proj_dim: int | None = None):
+        super().__init__()
+        self.embed_dim = embed_dim
+        proj_dim = proj_dim or embed_dim
+        # projectors for keys and values
+        self.key_proj = nn.Linear(embed_dim, proj_dim, bias=False)
+        self.value_proj = nn.Linear(embed_dim, proj_dim, bias=False)
+
+        # Initialize query vector to zeros to default to mean pool (i.e.
+        # attention weights will be uniform after softmax)
+        self.query = nn.Parameter(torch.zeros(proj_dim))
+        # small scaling for numerical stability
+        self.scale = proj_dim ** 0.5
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x: (L, D)
+        returns: (D_proj,) pooled embedding (same dtype/device as x)
+        """
+        if x.numel() == 0:
+            # If empty input, return zeros of appropriate dim on same device/dtype
+            return torch.zeros(self.key_proj.out_features, device=x.device, dtype=x.dtype)
+
+        # keys/values: (L, P)
+        keys = self.key_proj(x)       # (L, P)
+        values = self.value_proj(x)   # (L, P)
+        # scores: (L,)
+        # use dot-product between keys and query
+        scores = keys.matmul(self.query) / self.scale
+        attn = torch.softmax(scores, dim=0)  # (L,)
+        # weighted sum of values -> (P,)
+        pooled = (attn.unsqueeze(-1) * values).sum(dim=0)
+        return pooled
 
 
 class SubstructureClassifier(L.LightningModule):
@@ -101,6 +142,17 @@ class SubstructureClassifier(L.LightningModule):
             mlps[head_name] = nn.Sequential(*layers)
         self.heads = nn.ModuleDict(mlps)
         logger.info(f"head model: {self.heads}")
+
+        # Pooling method
+        self.pooling = config.model.pooling_mechanism
+        assert self.pooling in ["mean", "max", "attention"]
+        if self.pooling in ["mean", "max"]:
+            self.pool_func = self.scatter_pool
+        elif self.pooling == "attention":
+            self.pool_func = self.attention_pool
+            self.att_pool = AttentionPool(embed_dim=embed_dim)
+        else:
+            raise ValueError(f"unknown pooling type: {self.pooling}")
 
         # Loss and loss strategy (ewc optional)
         self.loss = nn.CrossEntropyLoss()
@@ -230,6 +282,89 @@ class SubstructureClassifier(L.LightningModule):
             )
         return super().on_train_start()
 
+    def scatter_pool(
+        self,
+        protein_embeds: torch.Tensor,
+        substructures: list[LabeledSubstructure],
+    ) -> dict[str, torch.Tensor]:
+        embed_dim = protein_embeds.shape[-1]
+        dtype = protein_embeds.dtype
+
+        substruct_embeds = defaultdict(list)
+        all_indices = []
+        range_ids = []
+        for substruct_idx, substructure in enumerate(substructures):
+            for start, end in substructure.ranges:
+                idx = torch.arange(start, end)
+                all_indices.append(idx)
+                range_ids.append(torch.full((len(idx),), substruct_idx))
+        if len(all_indices) == 0:
+            return {}
+        all_indices = torch.cat(all_indices).to(self.device)
+        range_ids = torch.cat(range_ids).to(self.device)
+
+        # aggregate embeddings per-substructure
+        result = torch.zeros(
+            len(substructures), embed_dim, dtype=dtype, device=self.device
+        )
+        if self.pooling == "mean":
+            result = scatter_mean(
+                index=range_ids[:, None].expand(-1, embed_dim),
+                src=protein_embeds[all_indices],
+                dim=0,
+                out=result,
+            )
+        elif self.pooling == "max":
+            result, _ = scatter_max(
+                index=range_ids[:, None].expand(-1, embed_dim),
+                src=protein_embeds[all_indices],
+                dim=0,
+                out=result,
+            )
+        else:
+            raise RuntimeError(f"unexpected pooling type: {self.pooling}")
+
+        for substruct_idx, substructure in enumerate(substructures):
+            substruct_embeds[self._map_head_key(substructure.element_type)].append(
+                result[substruct_idx]
+            )
+        return substruct_embeds
+
+    def attention_pool(
+        self,
+        protein_embeds: torch.Tensor,
+        substructures: list[LabeledSubstructure],
+    ) -> dict[str, torch.Tensor]:
+        """
+        For each substructure, gather its residue embeddings and apply the shared
+        AttentionPool module. Returns dict head_name -> list of pooled embeddings.
+        """
+        if len(substructures) == 0:
+            return {}
+
+        device = protein_embeds.device
+        substruct_embeds = defaultdict(list)
+
+        for substructure in substructures:
+            idxs = []
+            for start, end in substructure.ranges:
+                idxs.append(torch.arange(start, end, device=device))
+            if len(idxs) == 0:
+                continue
+            idxs = torch.cat(idxs)
+            if idxs.numel() == 0:
+                continue
+            # gather residue embeddings for this substructure: (L, D)
+            tokens = protein_embeds[idxs]
+            # pooled: (P,) where P == proj_dim used inside AttentionPool
+            pooled = self.att_pool(tokens)
+            # If the pool projects to a different dim than the embed dim, optionally map back.
+            # Here we assume proj_dim == embed_dim so pooled has same dim.
+            substruct_embeds[self._map_head_key(substructure.element_type)].append(pooled)
+
+        return substruct_embeds
+
+
     def calc_substructure_embeds(
         self,
         protein_embeds: torch.Tensor,
@@ -240,39 +375,15 @@ class SubstructureClassifier(L.LightningModule):
         For single-task (only 'default' head), all substructures map to 'default'.
         Order of embeddings per head matches the order returned by _gather_labels.
         """
-        embed_dim = protein_embeds.shape[-1]
-        dtype = protein_embeds.dtype
-
         substruct_embeds = defaultdict(list)
         # iterate proteins
         for i, prot_substructs in enumerate(batch.substructures):
-            all_indices = []
-            range_ids = []
-            for substruct_idx, substructure in enumerate(prot_substructs):
-                for start, end in substructure.ranges:
-                    idx = torch.arange(start, end)
-                    all_indices.append(idx)
-                    range_ids.append(torch.full((len(idx),), substruct_idx))
-            if len(all_indices) == 0:
-                continue
-            all_indices = torch.cat(all_indices).to(self.device)
-            range_ids = torch.cat(range_ids).to(self.device)
-
-            # aggregate embeddings per-substructure
-            result = torch.zeros(
-                len(prot_substructs), embed_dim, dtype=dtype, device=self.device
+            this_substruct_embeds = self.pool_func(
+                protein_embeds=protein_embeds[i],
+                substructures=prot_substructs,
             )
-            result = scatter_mean(
-                index=range_ids[:, None].expand(-1, embed_dim),
-                src=protein_embeds[i][all_indices],
-                dim=0,
-                out=result,
-            )
-
-            for substruct_idx, substructure in enumerate(prot_substructs):
-                substruct_embeds[self._map_head_key(substructure.element_type)].append(
-                    result[substruct_idx]
-                )
+            for head_name, embeds_list in this_substruct_embeds.items():
+                substruct_embeds[head_name].extend(embeds_list)
 
         # stack per-head
         ret = {}

@@ -75,7 +75,9 @@ uv run pytest tests/
 If the tests pass, you're good to go! If not, please feel free to open an issue to request help.
 
 #### Structure data
-For models that require structure data, we recommend downloading [AlphaFold DB's SwissProt release](https://alphafold.ebi.ac.uk/download#swissprot-section)
+For models that require structure data, we recommend downloading [AlphaFold DB's SwissProt release](https://alphafold.ebi.ac.uk/download#swissprot-section).
+
+Our HuggingFace dataset contains a placeholder directory (`afdb_structures`) in which to extract the structure files. This is the default search location for structure files in our data configs, but if you already have AFDB structures downloaded elsewhere, you can just change the `data.struct_template` parameter in your run scripts to point to your directory of structure files.
 
 ### Substructure classification
 To perform substructure classification, we invoke `magneton.cli`, where we use Hydra for managing configs. At a high-level, the most relevant parameters are

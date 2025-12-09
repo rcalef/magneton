@@ -5,6 +5,7 @@ from .esmc import ESMCBaseModel, ESMCConfig
 from .interface import BaseConfig, BaseModel
 from .prosst import ProSSTConfig, ProSSTEmbedder
 from .saprot import SaProtBaseModel, SaProtConfig
+from .s_plm_benchmark_only import SPLMBaseModel, SPLMConfig
 
 
 class BaseModelFactory:
@@ -13,6 +14,7 @@ class BaseModelFactory:
         "esmc": (ESMCBaseModel, ESMCConfig),
         "prosst": (ProSSTEmbedder, ProSSTConfig),
         "saprot": (SaProtBaseModel, SaProtConfig),
+        "s-plm": (SPLMBaseModel, SPLMConfig),
     }
 
     @classmethod
