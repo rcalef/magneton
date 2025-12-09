@@ -3,22 +3,24 @@ import yaml
 
 from dataclasses import dataclass
 from pathlib import Path
-from importlib.metadata import version
-from typing import Literal, Set
+from typing import Set
 
 import torch
 import torch.nn.functional as F
-from packaging.version import parse
-from transformers import EsmForMaskedLM, EsmTokenizer
-from transformers.models.esm.modeling_esm import average_product_correct, symmetrize
 
 from magneton.core_types import DataType
 from magneton.data.core import Batch
 from magneton.data.model_specific.esm2 import ESM2Batch
 
 from .interface import BaseConfig, BaseModel
-from .utils import pool_residue_embeddings
 
+
+# NOTE: To use S-PLM within Magneton, you will have to apply
+# the git patch file contained within this directory to the S-PLM
+# submodule:
+#   cd /path/to/magneton/magneton/external/S-PLM
+#   git apply ../../models/base_models/s_plm_compatibility.patch
+#
 S_PLM_PATH = Path(__file__).parent.parent.parent / "external" / "S-PLM"
 sys.path.append(str(S_PLM_PATH))
 from splm_utils import load_configs, load_checkpoints_only
