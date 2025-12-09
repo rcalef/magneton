@@ -46,7 +46,11 @@ class SPLMConfig(BaseConfig):
 
 
 class SPLMBaseModel(BaseModel):
-    """Base class containing shared logic for models based on transformers ESM implementation."""
+    """Base class for S-PLM models.
+
+    Note that this class is intended for benchmarking only, not substructure-tuning,
+    hence the many unimplemented methods.
+    """
 
     def __init__(
         self,
@@ -124,7 +128,7 @@ class SPLMBaseModel(BaseModel):
         batch: Batch,
         reduction: str = "mean",
     ) -> torch.Tensor:
-        """NOTE: this modifies the original tokenized seq tensor, call last."""
+        """Not implemented."""
         return 0
 
     def get_embed_dim(self):
