@@ -151,6 +151,11 @@ class CoreDataset(Dataset):
             in_memory=True,
             want_subset=want_ids,
         )
+        if len(self.dataset) == 0:
+            raise RuntimeError(
+                f"split {split}: got 0 proteins, possibly a mismatch between the provided "
+                "`data_dir` and `prefix`"
+            )
         logger.info(f"split {split}: got {len(self.dataset)} proteins")
 
     def _prot_to_elem(self, prot: Protein) -> DataElement:

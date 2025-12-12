@@ -183,6 +183,10 @@ def process_sharded_proteins(
     all_files = [
         os.path.join(shard_dir, x[1]) for x in get_sorted_files(shard_dir, prefix)
     ]
+    if len(all_files) == 0:
+        raise RuntimeError(
+            f"No files matching prefix '{prefix}' found in shard_dir '{shard_dir}'"
+        )
 
     with Pool(nprocs) as p:
         return list(tqdm(p.imap(func, all_files), total=len(all_files), desc=message))

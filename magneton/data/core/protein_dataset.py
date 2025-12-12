@@ -63,7 +63,9 @@ class ShardedProteinDataset(IterableDataset):
         assert self.input_path.exists() and self.input_path.is_dir()
         all_files = get_sorted_files(input_path, prefix)
         if len(all_files) == 0:
-            raise ValueError(f"no files found in {input_path} with prefix {prefix}")
+            raise RuntimeError(
+                f"No files matching prefix '{prefix}' found in input_path '{input_path}'"
+            )
 
         self._load_index()
 
