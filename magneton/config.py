@@ -85,6 +85,8 @@ class PipelineConfig:
     stage: str = "train"
     output_dir: str = MISSING
     run_id: str = MISSING
+    wandb_entity: str = "magneton"
+    wandb_project: str = "magneton"
     data: DataConfig = MISSING
     base_model: BaseModelConfig = MISSING
     model: ModelConfig = MISSING

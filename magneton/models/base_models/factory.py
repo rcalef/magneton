@@ -7,7 +7,6 @@ from .prosst import ProSSTConfig, ProSSTEmbedder
 from .saprot import SaProtBaseModel, SaProtConfig
 from .s_plm_benchmark_only import SPLMBaseModel, SPLMConfig
 
-
 class BaseModelFactory:
     _base_models: dict[str, tuple[type[BaseModel], type[BaseConfig]]] = {
         "esm2": (ESM2BaseModel, ESM2Config),

@@ -1,12 +1,11 @@
 import sys
-import yaml
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Set
 
 import torch
 import torch.nn.functional as F
+import yaml
 
 from magneton.core_types import DataType
 from magneton.data.core import Batch
@@ -14,17 +13,6 @@ from magneton.data.model_specific.esm2 import ESM2Batch
 
 from .interface import BaseConfig, BaseModel
 
-
-# NOTE: To use S-PLM within Magneton, you will have to apply
-# the git patch file contained within this directory to the S-PLM
-# submodule:
-#   cd /path/to/magneton/magneton/external/S-PLM
-#   git apply ../../models/base_models/s_plm_compatibility.patch
-#
-S_PLM_PATH = Path(__file__).parent.parent.parent / "external" / "S-PLM"
-sys.path.append(str(S_PLM_PATH))
-from splm_utils import load_configs, load_checkpoints_only
-from model import SequenceRepresentation
 
 @dataclass(kw_only=True)
 class SPLMConfig(BaseConfig):
@@ -57,6 +45,19 @@ class SPLMBaseModel(BaseModel):
         config: SPLMConfig,
         frozen: bool = True,
     ):
+        # NOTE: To use S-PLM within Magneton, you will have to apply
+        # the git patch file contained within this directory to the S-PLM
+        # submodule:
+        #   cd /path/to/magneton/magneton/external/S-PLM
+        #   git apply ../../models/base_models/s_plm_compatibility.patch
+        # While it's a bit messy to put these imports in the __init__ of the
+        # model, it seems nicer than forcing all users (who likely won't use S-PLM)
+        # to have to do the above setup.
+        S_PLM_PATH = Path(__file__).parent.parent.parent / "external" / "S-PLM"
+        sys.path.append(str(S_PLM_PATH))
+        from model import SequenceRepresentation
+        from splm_utils import load_checkpoints_only, load_configs
+
         super().__init__(config)
         # Load the configuration file
         config_path = S_PLM_PATH / "configs" / "representation_config.yaml"
