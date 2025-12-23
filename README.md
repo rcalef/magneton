@@ -1,4 +1,6 @@
 # Magneton
+[![arXiv](https://img.shields.io/badge/arXiv-2512.18114-b31b1b?logo=arxiv)](https://arxiv.org/abs/2512.18114)
+[![HuggingFace](https://img.shields.io/badge/HuggingFace-magneton--data-FFD21E?logo=huggingface)](https://huggingface.co/datasets/rcalef/magneton-data)
 <img src="assets/images/magneton_logo.png" width="400" alt="Cartoon creature composed of multiple proteins" align="right">
 
 This repository provides the code for Magneton, an integrated environment for developing substructure-aware protein models, detailed in the paper Greater than the Sum of Its Parts: Building Substructure into Protein Encoding Models.
@@ -221,11 +223,15 @@ Available substructure annotations from InterPro and SwissProt:
 One of the goals of Magneton's design is to make it easy to add new models or evaluation tasks. Adding a new model just requires implementing model-specific data transformations (e.g. tokenization) and a base model class that implements a forward pass for generating residue- or protein-level embeddings. Full details of the Magneton architecture and how to add a new model can be found in the [architecture description](./magneton/ARCHITECTURE.md).
 
 ## Citing
-Arxiv link: TBA
-
 Please consider citing `magneton` if it proves useful in your work.
-
 ```bibtex
-TBA
-
+@misc{calef2025greatersumpartsbuilding,
+      title={Greater than the Sum of Its Parts: Building Substructure into Protein Encoding Models}, 
+      author={Robert Calef and Arthur Liang and Manolis Kellis and Marinka Zitnik},
+      year={2025},
+      eprint={2512.18114},
+      archivePrefix={arXiv},
+      primaryClass={q-bio.QM},
+      url={https://arxiv.org/abs/2512.18114}, 
+}
 ```
