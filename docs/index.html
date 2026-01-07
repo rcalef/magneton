@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magneton: Building Substructure into Protein Encoding Models</title>
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Magneton: An integrated environment for developing substructure-aware protein models with 530K proteins and 1.7M substructure annotations.">
+    <meta name="keywords" content="protein, machine learning, substructure, deep learning, bioinformatics">
+
+    <!-- Open Graph / Social Media -->
+    <meta property="og:title" content="Magneton: Building Substructure into Protein Encoding Models">
+    <meta property="og:description" content="An integrated environment for developing substructure-aware protein models.">
+    <meta property="og:image" content="static/images/magneton_logo.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <img src="static/images/magneton_logo.png" alt="Magneton Logo" class="logo">
+            <h1>Magneton</h1>
+            <p class="subtitle">Greater than the Sum of Its Parts: Building Substructure into Protein Encoding Models</p>
+
+            <div class="authors">
+                <span class="author">Robert Calef<sup>1,2</sup></span>
+                <span class="author">Arthur Liang<sup>1</sup></span>
+                <span class="author">Manolis Kellis<sup>1</sup></span>
+                <span class="author">Marinka Zitnik<sup>2</sup></span>
+            </div>
+
+            <div class="affiliations">
+                <p><sup>1</sup>MIT &nbsp; <sup>2</sup>Harvard University</p>
+            </div>
+
+            <div class="buttons">
+                <a href="https://arxiv.org/abs/2512.18114" class="btn btn-paper" target="_blank">
+                    <i class="fa-solid fa-file-pdf"></i> Paper
+                </a>
+                <a href="https://github.com/rcalef/magneton" class="btn btn-github" target="_blank">
+                    <i class="fa-brands fa-github"></i> Code
+                </a>
+                <a href="https://huggingface.co/datasets/rcalef/magneton-data" class="btn btn-hf" target="_blank">
+                    <i class="fa-solid fa-database"></i> Dataset
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Abstract Section -->
+    <section class="abstract">
+        <div class="container">
+            <h2>Abstract</h2>
+            <p>
+                Proteins are not monolithic entities&mdash;they possess recurrent, evolutionarily conserved
+                substructures such as domains and functional sites that determine their function. However,
+                current protein representation learning approaches largely ignore this intermediate level
+                of organization, instead treating proteins as simple sequences or focusing solely on
+                tertiary structure.
+            </p>
+            <p>
+                We introduce <strong>Magneton</strong>, an integrated environment for developing substructure-aware
+                protein models. Magneton provides: (1) a large-scale dataset of <strong>530,601 proteins</strong>
+                annotated with over <strong>1.7 million substructures</strong> spanning <strong>13,075 types</strong>;
+                (2) a framework for training substructure-aware protein models; and (3) a benchmark suite of
+                <strong>13 tasks</strong> probing residue-, substructure-, and protein-level representations.
+            </p>
+            <p>
+                Using Magneton, we develop <strong>substructure-tuning</strong>, a supervised finetuning method
+                that distills substructural knowledge into pretrained protein models. Across state-of-the-art
+                sequence- and structure-based models, substructure-tuning improves function-related tasks while
+                revealing that substructural signals are complementary to global structural information.
+            </p>
+        </div>
+    </section>
+
+    <!-- Overview Section -->
+    <section class="overview">
+        <div class="container">
+            <h2>Overview</h2>
+            <p class="section-description">
+                Proteins organize hierarchically from primary sequence through secondary structure to folds,
+                domains, and full tertiary structure. Magneton bridges the gap between sequence-level and
+                structure-level representations by explicitly incorporating substructural annotations.
+            </p>
+            <div class="figure-container">
+                <img src="static/images/fig1.png" alt="Magneton Overview" class="figure">
+                <p class="caption">
+                    <strong>Figure 1:</strong> (A) Protein structural hierarchy from primary sequence to full
+                    tertiary structure. (B) Magneton incorporates curated substructure annotations (secondary
+                    structure, functional sites, domains) to enable substructure-tuning, improving downstream
+                    tasks compared to existing methods that rely only on sequence or full tertiary structure.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Method Section -->
+    <section class="method">
+        <div class="container">
+            <h2>Substructure Tuning</h2>
+            <p class="section-description">
+                Substructure-tuning pools residue embeddings into substructure representations and trains
+                classifiers to predict substructure types, distilling this knowledge into the base protein model.
+            </p>
+            <div class="figure-container">
+                <img src="static/images/fig2.png" alt="Substructure Tuning Method" class="figure">
+                <p class="caption">
+                    <strong>Figure 2:</strong> Substructure tuning architecture. Residue embeddings from a
+                    protein model are pooled into substructure embeddings based on curated annotations.
+                    Type-specific classifiers (secondary structure, active site, domain) are trained jointly,
+                    with gradients flowing back to finetune the base model.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Key Features Section -->
+    <section class="features">
+        <div class="container">
+            <h2>Key Features</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3><i class="fa-solid fa-database"></i> Large-Scale Dataset</h3>
+                    <p>530,601 proteins with 1.7M+ substructure annotations across 13,075 types from InterPro and SwissProt.</p>
+                </div>
+                <div class="feature-card">
+                    <h3><i class="fa-solid fa-gears"></i> Flexible Framework</h3>
+                    <p>Easy integration with state-of-the-art models including ESM2, ESM-C, SaProt, and ProSST.</p>
+                </div>
+                <div class="feature-card">
+                    <h3><i class="fa-solid fa-chart-line"></i> Comprehensive Benchmarks</h3>
+                    <p>13 evaluation tasks spanning residue-, substructure-, and protein-level predictions.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Results Section -->
+    <section class="results">
+        <div class="container">
+            <h2>Results</h2>
+            <p class="section-description">
+                Substructure-tuning achieves high accuracy across proteins with varying numbers of domains
+                and generalizes well even for rare domain types.
+            </p>
+            <div class="figure-container">
+                <img src="static/images/fig3.png" alt="Benchmark Results" class="figure">
+                <p class="caption">
+                    <strong>Figure 3:</strong> (A) Average accuracy per protein stratified by number of domains.
+                    (B) Per-domain test set accuracy vs. domain occurrences in the training set, showing robust
+                    performance across the frequency spectrum.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Models Section -->
+    <section class="models">
+        <div class="container">
+            <h2>Supported Models</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Size</th>
+                            <th>Type</th>
+                            <th>Flash Attention</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>ESM2</td>
+                            <td>150M, 650M, 3B</td>
+                            <td>Sequence</td>
+                            <td>Optional</td>
+                        </tr>
+                        <tr>
+                            <td>ESM-C</td>
+                            <td>300M, 600M</td>
+                            <td>Sequence</td>
+                            <td>Optional</td>
+                        </tr>
+                        <tr>
+                            <td>SaProt</td>
+                            <td>35M, 650M</td>
+                            <td>Sequence + Structure</td>
+                            <td>Optional</td>
+                        </tr>
+                        <tr>
+                            <td>ProSST</td>
+                            <td>110M</td>
+                            <td>Sequence + Structure</td>
+                            <td>Unsupported</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Evaluation Tasks Section -->
+    <section class="tasks">
+        <div class="container">
+            <h2>Evaluation Tasks</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Scale</th>
+                            <th>Task</th>
+                            <th>Type</th>
+                            <th>Metric</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td rowspan="2"><strong>Interaction</strong></td>
+                            <td>Human PPI Prediction</td>
+                            <td>Binary</td>
+                            <td>Accuracy</td>
+                        </tr>
+                        <tr>
+                            <td>Contact Prediction</td>
+                            <td>Binary</td>
+                            <td>Precision@L</td>
+                        </tr>
+                        <tr>
+                            <td rowspan="4"><strong>Protein</strong></td>
+                            <td>Gene Ontology (BP, CC, MF)</td>
+                            <td>Multilabel</td>
+                            <td>F<sub>max</sub></td>
+                        </tr>
+                        <tr>
+                            <td>Enzyme Commission</td>
+                            <td>Multilabel</td>
+                            <td>F<sub>max</sub></td>
+                        </tr>
+                        <tr>
+                            <td>Subcellular Localization</td>
+                            <td>Multiclass</td>
+                            <td>Accuracy</td>
+                        </tr>
+                        <tr>
+                            <td>Thermostability</td>
+                            <td>Regression</td>
+                            <td>Spearman's &rho;</td>
+                        </tr>
+                        <tr>
+                            <td rowspan="3"><strong>Residue</strong></td>
+                            <td>Variant Effect Prediction</td>
+                            <td>Regression</td>
+                            <td>Spearman's &rho;</td>
+                        </tr>
+                        <tr>
+                            <td>Binding Residue Classification</td>
+                            <td>Multilabel</td>
+                            <td>F<sub>max</sub></td>
+                        </tr>
+                        <tr>
+                            <td>Functional Site Prediction</td>
+                            <td>Binary</td>
+                            <td>AUROC</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Citation Section -->
+    <section class="citation">
+        <div class="container">
+            <h2>Citation</h2>
+            <p>If you find Magneton useful in your research, please cite our paper:</p>
+            <div class="bibtex">
+                <button class="copy-btn" onclick="copyBibtex()">
+                    <i class="fa-regular fa-copy"></i> Copy
+                </button>
+<pre><code>@article{calef2024magneton,
+  title={Greater than the Sum of Its Parts: Building Substructure into Protein Encoding Models},
+  author={Calef, Robert and Liang, Arthur and Kellis, Manolis and Zitnik, Marinka},
+  journal={arXiv preprint arXiv:2512.18114},
+  year={2025}
+}</code></pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>
+                This website template is based on the
+                <a href="https://github.com/eliahuhorwitz/Academic-project-page-template" target="_blank">
+                    Academic Project Page Template</a>.
+            </p>
+            <p>&copy; 2025 Magneton Authors. Licensed under CC BY-SA 4.0.</p>
+        </div>
+    </footer>
+
+    <script>
+        function copyBibtex() {
+            const bibtex = document.querySelector('.bibtex code').textContent;
+            navigator.clipboard.writeText(bibtex).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy';
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
