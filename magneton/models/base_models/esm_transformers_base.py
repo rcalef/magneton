@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from importlib.metadata import version
 from typing import Literal, Set
 
@@ -10,10 +11,42 @@ from transformers.models.esm.modeling_esm import average_product_correct, symmet
 
 from magneton.core_types import DataType
 from magneton.data.core import Batch
+from magneton.utils import get_model_dir
 
 from .interface import BaseConfig, BaseModel
 from .utils import pool_residue_embeddings
 
+
+def map_esms_keys(k: str) -> str:
+    if "layers" in k or "emb_layer_norm_after" in k:
+        k = k.replace("q_proj", "query")
+        k = k.replace("k_proj", "key")
+        k = k.replace("v_proj", "value")
+        k = k.replace("self_attn.out_proj", "attention.output.dense")
+
+        k = k.replace("rot_emb", "rotary_embeddings")
+        k = k.replace("self_attn_layer_norm", "attention.LayerNorm")
+        k = k.replace("self_attn", "attention.self")
+
+        k = k.replace("fc1", "intermediate.dense")
+        k = k.replace("fc2", "output.dense")
+        k = k.replace("final_layer_norm", "LayerNorm")
+        k = k.replace("model", "esm.encoder")
+        k = k.replace("layers", "layer")
+    if "contact_head" in k:
+        k = k.replace("model", "esm")
+    if "lm_head" in k:
+        k = k.replace("model.", "")
+        k = k.replace("lm_head.weight", "lm_head.decoder.weight")
+
+    if k == "model.embed_tokens.weight":
+        k = "esm.embeddings.word_embeddings.weight"
+    return k
+
+esm_s_weight_map = {
+    "esm_150m_s.pth": "esm2_t30_150M_UR50D",
+    "esm_650m_s.pth": "esm2_t33_650M_UR50D",
+}
 
 @dataclass(kw_only=True)
 class TransformersESMBaseConfig(BaseConfig):
@@ -51,8 +84,23 @@ class TransformersESMBaseModel(BaseModel):
         self.rep_layer = config.rep_layer
         self.model_size = config.model_size
 
-        self.tokenizer = EsmTokenizer.from_pretrained(config.weights_path)
-        self.model = EsmForMaskedLM.from_pretrained(config.weights_path)
+        weights_path = Path(config.weights_path)
+        weights_base = weights_path.name
+        # Handle ESM-S weights
+        if weights_base in esm_s_weight_map:
+            esm_s_state_dict = torch.load(config.weights_path)
+            mapped_state_dict = {}
+            for k, v in esm_s_state_dict.items():
+                mapped_state_dict[map_esms_keys(k)] = v
+
+            esm2_weight_path = get_model_dir() / esm_s_weight_map[weights_base]
+            self.model = EsmForMaskedLM.from_pretrained(esm2_weight_path)
+            self.model.load_state_dict(mapped_state_dict, strict=False)
+            self.tokenizer = EsmTokenizer.from_pretrained(esm2_weight_path)
+        # Otherwise just load normally
+        else:
+            self.model = EsmForMaskedLM.from_pretrained(config.weights_path)
+            self.tokenizer = EsmTokenizer.from_pretrained(config.weights_path)
         if config.use_flash_attn:
             self.model.config._attn_implementation = "flash_attention_2"
             # Flash attention support was only added in 4.56.1

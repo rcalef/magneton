@@ -25,10 +25,15 @@ class ModelTrainer:
         config: TrainingConfig,
         save_dir: str,
         run_id: str,
+        wandb_entity: str = "magneton",
+        wandb_project: str = "magneton",
     ):
         self.config = config
         self.save_dir = save_dir
         self.run_id = run_id
+        self.wandb_entity = wandb_entity
+        self.wandb_project = wandb_project
+
         self.model = None
         self.trainer = None
 
@@ -60,8 +65,8 @@ class ModelTrainer:
             )
         else:
             logger = WandbLogger(
-                entity="magneton",
-                project="magneton",
+                entity=self.wandb_entity,
+                project=self.wandb_project,
                 name=self.run_id,
             )
 
