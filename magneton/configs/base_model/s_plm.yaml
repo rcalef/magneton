@@ -1,0 +1,3 @@
+model: "s-plm"
+model_params:
+  weights_path: "${oc.env:MAGNETON_MODEL_DIR}/S-PLM/checkpoint_0520000.pth"

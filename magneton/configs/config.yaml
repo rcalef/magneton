@@ -7,6 +7,8 @@ defaults:
   - override hydra/hydra_logging: colorlog
 
 run_id: my_new_run
+wandb_entity: magneton
+wandb_project: magneton
 model:
   frozen_base_model: true
   model_params:
