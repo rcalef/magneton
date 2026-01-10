@@ -23,6 +23,11 @@
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Ber2MwU6Kqka77xDlZdBdj3u4b8n2n0gRd2Qf8dB" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"></script>
+
     <link rel="stylesheet" href="static/css/style.css">
 </head>
 <body>
@@ -34,14 +39,15 @@
             <p class="subtitle">Greater than the Sum of Its Parts: Building Substructure into Protein Encoding Models</p>
 
             <div class="authors">
-                <span class="author">Robert Calef<sup>1,2</sup></span>
-                <span class="author">Arthur Liang<sup>1</sup></span>
+                <span class="author">Robert Calef<sup>*,1,2</sup></span>
+                <span class="author">Arthur Liang<sup>*,1</sup></span>
                 <span class="author">Manolis Kellis<sup>1</sup></span>
                 <span class="author">Marinka Zitnik<sup>2</sup></span>
             </div>
 
             <div class="affiliations">
                 <p><sup>1</sup>MIT &nbsp; <sup>2</sup>Harvard University</p>
+                <p class="equal-contrib"><sup>*</sup>Equal contribution</p>
             </div>
 
             <div class="buttons">
@@ -63,25 +69,40 @@
         <div class="container">
             <h2>Abstract</h2>
             <p>
-                Proteins are not monolithic entities&mdash;they possess recurrent, evolutionarily conserved
-                substructures such as domains and functional sites that determine their function. However,
-                current protein representation learning approaches largely ignore this intermediate level
-                of organization, instead treating proteins as simple sequences or focusing solely on
-                tertiary structure.
+                <!-- Proteins are not monolithic entities—they possess recurrent, evolutionarily conserved substructures such as domains and functional sites that determine their function. However, current protein representation learning approaches largely ignore this intermediate level of organization, instead treating proteins as simple sequences or focusing solely on tertiary structure. -->
+                Protein representation learning has advanced rapidly with the scale-up of sequence and structure
+                supervision, but most models still encode proteins either as per-residue token sequences or as
+                single global embeddings. This overlooks a defining property of protein organization: proteins
+                are built from recurrent, evolutionarily conserved substructures that concentrate biochemical
+                activity and mediate core molecular functions. Although substructures such as domains and
+                functional sites are systematically cataloged, they are rarely used as training signals or
+                representation units in protein models.
             </p>
             <p>
-                We introduce <strong>Magneton</strong>, an integrated environment for developing substructure-aware
-                protein models. Magneton provides: (1) a large-scale dataset of <strong>530,601 proteins</strong>
-                annotated with over <strong>1.7 million substructures</strong> spanning <strong>13,075 types</strong>;
-                (2) a framework for training substructure-aware protein models; and (3) a benchmark suite of
-                <strong>13 tasks</strong> probing residue-, substructure-, and protein-level representations.
+                We introduce <strong>Magneton</strong>, an environment for developing substructure-aware protein
+                models. Magneton provides (1) a dataset of <strong>530,601 proteins</strong> annotated with over
+                <strong>1.7 million substructures</strong> spanning <strong>13,075 types</strong>, (2) a training
+                framework for incorporating substructures into existing protein models, and (3) a benchmark suite
+                of <strong>13 tasks</strong> probing representations at the residue, substructural, and protein levels.
             </p>
             <p>
-                Using Magneton, we develop <strong>substructure-tuning</strong>, a supervised finetuning method
+                Using Magneton, we develop <strong>substructure-tuning</strong>, a supervised fine-tuning method
                 that distills substructural knowledge into pretrained protein models. Across state-of-the-art
-                sequence- and structure-based models, substructure-tuning improves function-related tasks while
-                revealing that substructural signals are complementary to global structural information.
+                sequence- and structure-based models, substructure-tuning improves function prediction, yields
+                more consistent representations of substructure types never observed during tuning, and shows
+                that substructural supervision provides information that is complementary to global structure inputs.
+                The Magneton environment, datasets, and substructure-tuned models are all openly available.
             </p>
+
+            <h3>Key Contributions</h3>
+            <ul class="key-points">
+                <li><strong>Magneton Environment:</strong> A comprehensive framework for developing substructure-aware protein models, with 530K+ annotated proteins and 1.7M+ substructure annotations across 13K types</li>
+                <li><strong>Substructure-Tuning:</strong> A supervised fine-tuning method that distills substructural knowledge into pretrained protein models</li>
+                <li><strong>Improved Function Prediction:</strong> Consistent gains on function-related tasks (EC, GO) across both sequence-only and structure-aware models</li>
+                <li><strong>Generalization to Unseen Types:</strong> Substructure-tuned models yield better-clustered representations even for substructure types never seen during training, demonstrating that substructure-tuning encourages models to
+                    learn general features of functional substructures</li>
+                <li><strong>Complementary to Structure:</strong> Substructural supervision provides information orthogonal to global tertiary structure inputs</li>
+            </ul>
         </div>
     </section>
 
@@ -97,10 +118,8 @@
             <div class="figure-container">
                 <img src="static/images/fig1.png" alt="Magneton Overview" class="figure">
                 <p class="caption">
-                    <strong>Figure 1:</strong> (A) Protein structural hierarchy from primary sequence to full
-                    tertiary structure. (B) Magneton incorporates curated substructure annotations (secondary
-                    structure, functional sites, domains) to enable substructure-tuning, improving downstream
-                    tasks compared to existing methods that rely only on sequence or full tertiary structure.
+                    <strong>Figure 1: Overview of protein structure and the Magneton environment. </strong> (A) Proteins are built from modular substructures that assemble into full structures. (B) Magneton leverages decades of substructure research
+                    to provide an environment for developing and evaluating substructure-aware models.
                 </p>
             </div>
         </div>
@@ -117,10 +136,9 @@
             <div class="figure-container">
                 <img src="static/images/fig2.png" alt="Substructure Tuning Method" class="figure">
                 <p class="caption">
-                    <strong>Figure 2:</strong> Substructure tuning architecture. Residue embeddings from a
-                    protein model are pooled into substructure embeddings based on curated annotations.
-                    Type-specific classifiers (secondary structure, active site, domain) are trained jointly,
-                    with gradients flowing back to finetune the base model.
+                    <strong>Figure 2: Overview of using Magneton for substructure-tuning. </strong> Given a pre-trained protein model,
+                    substructure-tuning first pools residue-level embeddings to create substructure representations, which are then
+                    used for supervised finetuning via substructure type-specific classifier heads.
                 </p>
             </div>
         </div>
@@ -158,11 +176,955 @@
             <div class="figure-container">
                 <img src="static/images/fig3.png" alt="Benchmark Results" class="figure">
                 <p class="caption">
-                    <strong>Figure 3:</strong> (A) Average accuracy per protein stratified by number of domains.
-                    (B) Per-domain test set accuracy vs. domain occurrences in the training set, showing robust
-                    performance across the frequency spectrum.
+                    <strong>Figure 3: (A) Domain classification uses local cues. </strong> Even within proteins containing multiple domains,
+                    classification accuracy remains high for all contained domains. Labels within bars show the number of test set
+                    proteins containing that number of domains. <strong> (B) Domain classification accuracy as a function of training
+                    set representation. </strong> Results shown for ESM-C 300M.
                 </p>
             </div>
+
+            <!-- Dataset Summary -->
+            <div class="table-section">
+                <h3>Magneton Substructure Dataset Summary</h3>
+                <p class="table-description">
+                    Our dataset comprises 530,601 proteins from SwissProt with over 1.7 million substructure annotations
+                    (37 million including secondary structure) across six substructure classes. After filtering for
+                    substructures occurring at least 75 times, we retain 2,542 unique types covering 1.56M occurrences.
+                    The median protein span varies by substructure class: homologous superfamilies span ~50% of proteins
+                    (137 AA), domains ~35% (127 AA), while functional sites like active sites span only ~3.5% (12 AA).
+                </p>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2">Substructure class</th>
+                                <th colspan="2">Pre-filter</th>
+                                <th colspan="2">Post-filter</th>
+                                <th rowspan="2">Median protein span</th>
+                            </tr>
+                            <tr>
+                                <th>Unique types</th>
+                                <th>Total occurrences</th>
+                                <th>Unique types</th>
+                                <th>Total occurrences</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Homologous superfamily</strong></td>
+                                <td>2,978</td>
+                                <td>1.09M</td>
+                                <td>1,133</td>
+                                <td>1.05M</td>
+                                <td>50% (137 AA)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Domain</strong></td>
+                                <td>9,133</td>
+                                <td>389K</td>
+                                <td>917</td>
+                                <td>301K</td>
+                                <td>34.8% (127 AA)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Conserved site</strong></td>
+                                <td>739</td>
+                                <td>175K</td>
+                                <td>356</td>
+                                <td>162K</td>
+                                <td>5.18% (16 AA)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Binding site</strong></td>
+                                <td>67</td>
+                                <td>20.1K</td>
+                                <td>48</td>
+                                <td>19.0K</td>
+                                <td>4.28% (16 AA)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Active site</strong></td>
+                                <td>132</td>
+                                <td>31.1K</td>
+                                <td>82</td>
+                                <td>29.2K</td>
+                                <td>3.47% (12 AA)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Secondary structure</strong></td>
+                                <td>8</td>
+                                <td>35.2M</td>
+                                <td>8</td>
+                                <td>35.2M</td>
+                                <td>0.94% (3.4 AA)</td>
+                            </tr>
+                            <tr class="total-row">
+                                <td><strong>Total</strong> <span class="small">(w/o secondary structure)</span></td>
+                                <td>13,075</td>
+                                <td>1.71M</td>
+                                <td>2,542</td>
+                                <td>1.56M</td>
+                                <td>—</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="table-caption"><strong>Table 1: Summary of Magneton substructure dataset (SwissProt subset). </strong> Before and after refer to filtering
+                    out rare substructures. Median protein span is the median length of a type of substructure, expressed as a
+                    percentage of the protein and as an absolute amino acid count.</p>
+            </div>
+
+            <!-- Evaluation Tasks -->
+            <div class="table-section">
+                <h3>Evaluation Tasks</h3>
+                <div class="table-container">
+                    <table class="data-table eval-tasks-table">
+                        <thead>
+                            <tr>
+                                <th>Scale</th>
+                                <th>Task</th>
+                                <th>Type</th>
+                                <th>Metric</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="scale-cell" rowspan="2"><strong>Interaction</strong></td>
+                                <td>Human PPI Prediction</td>
+                                <td>Binary</td>
+                                <td>Accuracy</td>
+                            </tr>
+                            <tr>
+                                <td>Contact Prediction</td>
+                                <td>Binary</td>
+                                <td>Precision@L</td>
+                            </tr>
+                            <tr>
+                                <td class="scale-cell" rowspan="4"><strong>Protein</strong></td>
+                                <td>Gene Ontology (BP, CC, MF)</td>
+                                <td>Multilabel</td>
+                                <td>F<sub>max</sub></td>
+                            </tr>
+                            <tr>
+                                <td>Enzyme Commission</td>
+                                <td>Multilabel</td>
+                                <td>F<sub>max</sub></td>
+                            </tr>
+                            <tr>
+                                <td>Subcellular Localization</td>
+                                <td>Multiclass</td>
+                                <td>Accuracy</td>
+                            </tr>
+                            <tr>
+                                <td>Thermostability</td>
+                                <td>Regression</td>
+                                <td>Spearman's &rho;</td>
+                            </tr>
+                            <tr>
+                                <td class="scale-cell" rowspan="3"><strong>Residue</strong></td>
+                                <td>Variant Effect Prediction</td>
+                                <td>Regression</td>
+                                <td>Spearman's &rho;</td>
+                            </tr>
+                            <tr>
+                                <td>Binding Residue Classification</td>
+                                <td>Multilabel</td>
+                                <td>F<sub>max</sub></td>
+                            </tr>
+                            <tr>
+                                <td>Functional Site Prediction</td>
+                                <td>Binary</td>
+                                <td>AUROC</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="table-caption"><strong>Table 2: Evaluation tasks contained within Magneton. </strong> Grouped by the scale of structural representation
+                    they interrogate.</p>
+            </div>
+
+            <!-- Table 3: Substructure Classification -->
+            <div class="table-section">
+                <h3>Substructure Classification Performance</h3>
+                <p class="table-description">
+                    Base protein models can effectively represent substructures, with macro-averaged accuracy
+                    exceeding 0.88 across all models and substructure types. Structure-aware models (SaProt, ProSST)
+                    generally outperform sequence-only models, particularly for secondary structure classification.
+                    Substructure-tuning (+ST) further improves performance, with notable gains in homologous
+                    superfamily and secondary structure classification.
+                </p>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Model</th>
+                                <th>Homologous superfamily</th>
+                                <th>Domain</th>
+                                <th>Conserved site</th>
+                                <th>Binding site</th>
+                                <th>Active site</th>
+                                <th>Secondary structure</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>ESM2-150M</td>
+                                <td>0.899</td>
+                                <td>0.969</td>
+                                <td>0.988</td>
+                                <td>1.000</td>
+                                <td>0.995</td>
+                                <td>0.827</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.925</td>
+                                <td>0.983</td>
+                                <td>0.991</td>
+                                <td>0.999</td>
+                                <td>0.994</td>
+                                <td>0.916</td>
+                            </tr>
+                            <tr>
+                                <td>ESM2-650M</td>
+                                <td>0.926</td>
+                                <td>0.982</td>
+                                <td>0.986</td>
+                                <td>1.000</td>
+                                <td>0.995</td>
+                                <td>0.892</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.902</td>
+                                <td>0.967</td>
+                                <td>0.986</td>
+                                <td>1.000</td>
+                                <td>0.996</td>
+                                <td>0.938</td>
+                            </tr>
+                            <tr>
+                                <td>ESM-C 300M</td>
+                                <td>0.913</td>
+                                <td>0.962</td>
+                                <td>0.990</td>
+                                <td>0.998</td>
+                                <td>0.994</td>
+                                <td>0.863</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.946</td>
+                                <td>0.982</td>
+                                <td>0.983</td>
+                                <td>0.999</td>
+                                <td>0.996</td>
+                                <td>0.757</td>
+                            </tr>
+                            <tr>
+                                <td>ESM-C 600M</td>
+                                <td>0.919</td>
+                                <td>0.975</td>
+                                <td>0.992</td>
+                                <td>0.977</td>
+                                <td>0.994</td>
+                                <td>0.891</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.907</td>
+                                <td>0.966</td>
+                                <td>0.993</td>
+                                <td>0.997</td>
+                                <td>0.996</td>
+                                <td>0.927</td>
+                            </tr>
+                            <tr>
+                                <td>SaProt (650M)</td>
+                                <td>0.916</td>
+                                <td>0.967</td>
+                                <td>0.992</td>
+                                <td>0.999</td>
+                                <td>0.996</td>
+                                <td>0.955</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.925</td>
+                                <td>0.980</td>
+                                <td>0.993</td>
+                                <td>0.999</td>
+                                <td>0.996</td>
+                                <td>0.972</td>
+                            </tr>
+                            <tr>
+                                <td>ProSST-2048</td>
+                                <td>0.888</td>
+                                <td>0.945</td>
+                                <td>0.995</td>
+                                <td>0.996</td>
+                                <td>0.993</td>
+                                <td>0.927</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.879</td>
+                                <td>0.976</td>
+                                <td>0.991</td>
+                                <td>0.991</td>
+                                <td>0.995</td>
+                                <td>0.961</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="table-caption"><strong>Table 3: Comparison of substructure classification performance. </strong> Performance on the diagnostic task of classifying substructures given their annotated residues, for base and substructure-tuned (+ST) models. All values are macro-averaged accuracy.</p>
+            </div>
+
+            <!-- Table 4: Substructure-Tuning Configurations -->
+            <div class="table-section">
+                <h3>Substructure-Tuning Configuration Comparison</h3>
+                <p class="table-description">
+                    We explored different combinations of substructure types for tuning ESM-C 300M. Key findings:
+                    (1) Function-related tasks (EC, GO:MF, GO:BP) consistently improve with substructure-tuning,
+                    with EC F<sub>max</sub> increasing from 0.688 to 0.815 with the _DCBA_ configuration.
+                    (2) Localization tasks show neutral to negative effects. (3) Even small substructures like
+                    active sites (median 12 AA) provide significant benefits. (4) Secondary structure alone (S)
+                    degrades performance. Based on these results, we selected the combination of active site, binding site, and conserved site as the substructure-tuning configuration for use in the full set of models and benchmarks.
+                </p>
+                <div class="table-container">
+                    <table class="data-table config-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2">Substructures used</th>
+                                <th colspan="4">F<sub>max</sub></th>
+                                <th colspan="2">Localization (Accuracy)</th>
+                                <th rowspan="2">Thermostability<br>(Spearman's &rho;)</th>
+                                <th rowspan="2">Zero-shot DMS<br>(Spearman's &rho;)</th>
+                            </tr>
+                            <tr>
+                                <th>EC</th>
+                                <th>GO:BP</th>
+                                <th>GO:CC</th>
+                                <th>GO:MF</th>
+                                <th>Binary</th>
+                                <th>Subcellular</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>None</td>
+                                <td>0.688</td>
+                                <td>0.307</td>
+                                <td class="best">0.416</td>
+                                <td>0.429</td>
+                                <td>0.871</td>
+                                <td>0.703</td>
+                                <td>0.648</td>
+                                <td class="best">0.432</td>
+                            </tr>
+                            <tr>
+                                <td><code>H_____</code></td>
+                                <td>0.805</td>
+                                <td>0.312</td>
+                                <td>0.395</td>
+                                <td>0.518</td>
+                                <td>0.851</td>
+                                <td>0.632</td>
+                                <td>0.662</td>
+                                <td>0.308</td>
+                            </tr>
+                            <tr>
+                                <td><code>_D____</code></td>
+                                <td>0.776</td>
+                                <td>0.307</td>
+                                <td>0.403</td>
+                                <td>0.501</td>
+                                <td>0.811</td>
+                                <td>0.640</td>
+                                <td class="best">0.666</td>
+                                <td>0.340</td>
+                            </tr>
+                            <tr>
+                                <td><code>__C___</code></td>
+                                <td>0.749</td>
+                                <td>0.318</td>
+                                <td>0.398</td>
+                                <td>0.491</td>
+                                <td>0.870</td>
+                                <td class="best">0.706</td>
+                                <td>0.661</td>
+                                <td>0.402</td>
+                            </tr>
+                            <tr>
+                                <td><code>___B__</code></td>
+                                <td>0.745</td>
+                                <td>0.315</td>
+                                <td>0.415</td>
+                                <td>0.478</td>
+                                <td>0.852</td>
+                                <td>0.686</td>
+                                <td>0.663</td>
+                                <td>0.423</td>
+                            </tr>
+                            <tr>
+                                <td><code>____A_</code></td>
+                                <td>0.794</td>
+                                <td>0.318</td>
+                                <td>0.403</td>
+                                <td>0.518</td>
+                                <td>0.851</td>
+                                <td>0.639</td>
+                                <td>0.663</td>
+                                <td>0.340</td>
+                            </tr>
+                            <tr>
+                                <td><code>_____S</code></td>
+                                <td>0.618</td>
+                                <td>0.297</td>
+                                <td>0.379</td>
+                                <td>0.381</td>
+                                <td>0.823</td>
+                                <td>0.587</td>
+                                <td>0.612</td>
+                                <td>0.264</td>
+                            </tr>
+                            <tr>
+                                <td><code>HD____</code></td>
+                                <td>0.774</td>
+                                <td>0.316</td>
+                                <td>0.388</td>
+                                <td>0.500</td>
+                                <td>0.847</td>
+                                <td>0.606</td>
+                                <td>0.639</td>
+                                <td>0.302</td>
+                            </tr>
+                            <tr>
+                                <td><code>H____S</code></td>
+                                <td>0.765</td>
+                                <td>0.297</td>
+                                <td>0.395</td>
+                                <td>0.466</td>
+                                <td class="best">0.883</td>
+                                <td>0.651</td>
+                                <td>0.644</td>
+                                <td>0.346</td>
+                            </tr>
+                            <tr>
+                                <td><code>HD___S</code></td>
+                                <td>0.754</td>
+                                <td>0.318</td>
+                                <td>0.413</td>
+                                <td>0.473</td>
+                                <td>0.868</td>
+                                <td>0.633</td>
+                                <td>0.658</td>
+                                <td>0.350</td>
+                            </tr>
+                            <tr>
+                                <td><code>H_CBA_</code></td>
+                                <td>0.800</td>
+                                <td>0.322</td>
+                                <td>0.389</td>
+                                <td>0.515</td>
+                                <td>0.857</td>
+                                <td>0.611</td>
+                                <td>0.663</td>
+                                <td>0.340</td>
+                            </tr>
+                            <tr>
+                                <td><code>_D___S</code></td>
+                                <td>0.751</td>
+                                <td>0.308</td>
+                                <td>0.384</td>
+                                <td>0.462</td>
+                                <td>0.872</td>
+                                <td>0.646</td>
+                                <td>0.643</td>
+                                <td>0.369</td>
+                            </tr>
+                            <tr>
+                                <td><code>_DCBA_</code></td>
+                                <td class="best">0.815</td>
+                                <td class="best">0.329</td>
+                                <td>0.395</td>
+                                <td class="best">0.525</td>
+                                <td>0.851</td>
+                                <td>0.662</td>
+                                <td>0.659</td>
+                                <td>0.369</td>
+                            </tr>
+                            <tr>
+                                <td><code>__CBA_</code></td>
+                                <td>0.761</td>
+                                <td>0.325</td>
+                                <td>0.403</td>
+                                <td>0.488</td>
+                                <td>0.879</td>
+                                <td>0.681</td>
+                                <td>0.660</td>
+                                <td>0.410</td>
+                            </tr>
+                            <tr>
+                                <td><code>___BA_</code></td>
+                                <td>0.740</td>
+                                <td>0.319</td>
+                                <td>0.406</td>
+                                <td>0.467</td>
+                                <td>0.841</td>
+                                <td>0.677</td>
+                                <td>0.656</td>
+                                <td>0.418</td>
+                            </tr>
+                            <tr>
+                                <td><code>__CBAS</code></td>
+                                <td>0.719</td>
+                                <td>0.313</td>
+                                <td>0.393</td>
+                                <td>0.453</td>
+                                <td>0.839</td>
+                                <td>0.666</td>
+                                <td>0.636</td>
+                                <td>0.379</td>
+                            </tr>
+                            <tr>
+                                <td><code>HDCBAS</code></td>
+                                <td>0.760</td>
+                                <td>0.315</td>
+                                <td>0.383</td>
+                                <td>0.457</td>
+                                <td>0.832</td>
+                                <td>0.624</td>
+                                <td>0.640</td>
+                                <td>0.359</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="table-caption"><strong>Table 4: Comparison of substructure-tuning configurations. </strong> Performance across tasks for ESM-C 300M with a range of substructure-tuning configurations. For each configuration, the substructures used are indicated by the presence of that substructure type’s single-letter code: <code>H</code>=Homologous superfamily, <code>D</code>=Domain, <code>C</code>=Conserved site, <code>B</code>=Binding site, <code>A</code>=Active site, <code>S</code>=Secondary structure; an underscore (<code>_</code>) means that substructure type was not used. </p>
+            </div>
+
+            <!-- Table 5: Protein-Level Task Performance -->
+            <div class="table-section">
+                <h3>Protein-Level Task Performance</h3>
+                <p class="table-description">
+                    Substructure-tuning consistently improves function prediction across all tested models.
+                    Notable improvements include: SaProt EC F<sub>max</sub> from 0.778 to 0.839, ESM-C 600M
+                    GO:MF from 0.436 to 0.527, and ESM-C 300M EC from 0.688 to 0.761. Importantly, these
+                    gains persist for structure-aware models (SaProt, ProSST), demonstrating that substructural
+                    information is complementary to global structure. Localization tasks show mixed effects,
+                    with some models improving (ESM2-650M) while others decline slightly.
+                </p>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2">Model</th>
+                                <th colspan="4">F<sub>max</sub></th>
+                                <th colspan="2">Localization (Accuracy)</th>
+                                <th rowspan="2">Thermostability<br>(Spearman's &rho;)</th>
+                                <th rowspan="2">Human PPI<br>(AUROC)</th>
+                            </tr>
+                            <tr>
+                                <th>EC</th>
+                                <th>GO:BP</th>
+                                <th>GO:CC</th>
+                                <th>GO:MF</th>
+                                <th>Binary</th>
+                                <th>Subcellular</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>ESM2-150M</td>
+                                <td>0.727</td>
+                                <td>0.316</td>
+                                <td>0.416</td>
+                                <td>0.441</td>
+                                <td>0.869</td>
+                                <td>0.694</td>
+                                <td>0.627</td>
+                                <td>0.933</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.742</td>
+                                <td>0.324</td>
+                                <td>0.415</td>
+                                <td>0.473</td>
+                                <td>0.866</td>
+                                <td>0.679</td>
+                                <td>0.582</td>
+                                <td>0.919</td>
+                            </tr>
+                            <tr>
+                                <td>ESM2-650M</td>
+                                <td>0.755</td>
+                                <td>0.319</td>
+                                <td>0.431</td>
+                                <td>0.486</td>
+                                <td>0.876</td>
+                                <td>0.710</td>
+                                <td>0.643</td>
+                                <td>0.939</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.745</td>
+                                <td>0.321</td>
+                                <td>0.440</td>
+                                <td>0.534</td>
+                                <td>0.895</td>
+                                <td>0.749</td>
+                                <td>0.655</td>
+                                <td>0.935</td>
+                            </tr>
+                            <tr>
+                                <td>ESM-C 300M</td>
+                                <td>0.688</td>
+                                <td>0.307</td>
+                                <td>0.416</td>
+                                <td>0.429</td>
+                                <td>0.871</td>
+                                <td>0.703</td>
+                                <td>0.648</td>
+                                <td>0.917</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.761</td>
+                                <td>0.325</td>
+                                <td>0.403</td>
+                                <td>0.488</td>
+                                <td>0.879</td>
+                                <td>0.681</td>
+                                <td>0.660</td>
+                                <td>0.933</td>
+                            </tr>
+                            <tr>
+                                <td>ESM-C 600M</td>
+                                <td>0.701</td>
+                                <td>0.312</td>
+                                <td>0.403</td>
+                                <td>0.436</td>
+                                <td>0.863</td>
+                                <td>0.713</td>
+                                <td>0.668</td>
+                                <td>0.927</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.780</td>
+                                <td>0.319</td>
+                                <td>0.385</td>
+                                <td>0.527</td>
+                                <td>0.872</td>
+                                <td>0.635</td>
+                                <td>0.667</td>
+                                <td>0.902</td>
+                            </tr>
+                            <tr>
+                                <td>SaProt (650M)</td>
+                                <td>0.778</td>
+                                <td>0.326</td>
+                                <td>0.453</td>
+                                <td>0.538</td>
+                                <td>0.887</td>
+                                <td>0.784</td>
+                                <td>0.692</td>
+                                <td>0.952</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.839</td>
+                                <td>0.339</td>
+                                <td>0.446</td>
+                                <td>0.584</td>
+                                <td>0.896</td>
+                                <td>0.741</td>
+                                <td>0.697</td>
+                                <td>0.932</td>
+                            </tr>
+                            <tr>
+                                <td>ProSST-2048</td>
+                                <td>0.778</td>
+                                <td>0.317</td>
+                                <td>0.426</td>
+                                <td>0.522</td>
+                                <td>0.878</td>
+                                <td>0.693</td>
+                                <td>0.686</td>
+                                <td>0.925</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.791</td>
+                                <td>0.314</td>
+                                <td>0.420</td>
+                                <td>0.567</td>
+                                <td>0.853</td>
+                                <td>0.683</td>
+                                <td>0.648</td>
+                                <td>0.883</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="table-caption"><strong>Table 5: Protein-level task performance for base models and models with substructure-tuning (+ST). </strong></p>
+            </div>
+
+            <!-- Table 6: Residue-Level Task Performance -->
+            <div class="table-section">
+                <h3>Residue-Level Task Performance</h3>
+                <p class="table-description">
+                    Residue-level tasks show mixed results with substructure-tuning. Binding residue prediction
+                    improves for ESM-C models but decreases for others. Functional site prediction remains
+                    relatively stable. Contact prediction shows minor decreases across most models. Variant
+                    effect prediction (zero-shot) consistently decreases with substructure-tuning, suggesting
+                    the tuning may bias models toward coarser-grained features at the expense of fine residue
+                    distinctions needed for variant effect prediction.
+                </p>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2">Model</th>
+                                <th rowspan="2">Binding residue<br>(F<sub>max</sub>)</th>
+                                <th colspan="2">Functional site (AUROC)</th>
+                                <th colspan="3">Contact Prediction (Precision@L)</th>
+                                <th rowspan="2">Variant Effect<br>(Spearman's &rho;)</th>
+                            </tr>
+                            <tr>
+                                <th>Binding</th>
+                                <th>Catalytic</th>
+                                <th>Short</th>
+                                <th>Medium</th>
+                                <th>Long</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>ESM2-150M</td>
+                                <td>0.379</td>
+                                <td>0.871</td>
+                                <td>0.910</td>
+                                <td>0.487</td>
+                                <td>0.452</td>
+                                <td>0.289</td>
+                                <td>0.342</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.327</td>
+                                <td>0.852</td>
+                                <td>0.890</td>
+                                <td>0.460</td>
+                                <td>0.445</td>
+                                <td>0.285</td>
+                                <td>0.262</td>
+                            </tr>
+                            <tr>
+                                <td>ESM2-650M</td>
+                                <td>0.366</td>
+                                <td>0.849</td>
+                                <td>0.912</td>
+                                <td>0.551</td>
+                                <td>0.528</td>
+                                <td>0.372</td>
+                                <td>0.359</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.362</td>
+                                <td>0.851</td>
+                                <td>0.927</td>
+                                <td>0.532</td>
+                                <td>0.518</td>
+                                <td>0.367</td>
+                                <td>0.317</td>
+                            </tr>
+                            <tr>
+                                <td>ESM-C 300M</td>
+                                <td>0.367</td>
+                                <td>0.851</td>
+                                <td>0.923</td>
+                                <td>0.339</td>
+                                <td>0.364</td>
+                                <td>0.174</td>
+                                <td>0.432</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.411</td>
+                                <td>0.866</td>
+                                <td>0.910</td>
+                                <td>0.350</td>
+                                <td>0.374</td>
+                                <td>0.180</td>
+                                <td>0.410</td>
+                            </tr>
+                            <tr>
+                                <td>ESM-C 600M</td>
+                                <td>0.357</td>
+                                <td>0.850</td>
+                                <td>0.921</td>
+                                <td>0.329</td>
+                                <td>0.362</td>
+                                <td>0.161</td>
+                                <td>0.434</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.368</td>
+                                <td>0.852</td>
+                                <td>0.906</td>
+                                <td>0.313</td>
+                                <td>0.315</td>
+                                <td>0.141</td>
+                                <td>0.381</td>
+                            </tr>
+                            <tr>
+                                <td>SaProt (650M)</td>
+                                <td>0.423</td>
+                                <td>0.891</td>
+                                <td>0.923</td>
+                                <td>0.788</td>
+                                <td>0.747</td>
+                                <td>0.697</td>
+                                <td>0.457</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.400</td>
+                                <td>0.871</td>
+                                <td>0.924</td>
+                                <td>0.765</td>
+                                <td>0.726</td>
+                                <td>0.647</td>
+                                <td>0.405</td>
+                            </tr>
+                            <tr>
+                                <td>ProSST-2048</td>
+                                <td>0.375</td>
+                                <td class="na">N/A</td>
+                                <td class="na">N/A</td>
+                                <td class="na">N/A</td>
+                                <td class="na">N/A</td>
+                                <td class="na">N/A</td>
+                                <td>0.507</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.342</td>
+                                <td class="na">N/A</td>
+                                <td class="na">N/A</td>
+                                <td class="na">N/A</td>
+                                <td class="na">N/A</td>
+                                <td class="na">N/A</td>
+                                <td>0.356</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="table-caption"><strong>Table 6: Residue-level task performance for base models and models with substructure-tuning (+ST).</strong></p>
+            </div>
+
+            <!-- Table 7: Silhouette Scores -->
+            <div class="table-section">
+                <h3>Silhouette Scores for Substructure Clustering</h3>
+                <p class="table-description">
+                    Substructure-tuning dramatically improves the clustering quality of substructure embeddings,
+                    as measured by silhouette scores. For ESM-C 300M, homologous superfamily scores improve from
+                    −0.183 to 0.339 (seen types) and 0.180 to 0.584 (unseen types). Crucially, improvements extend
+                    to substructure types never seen during training ("Unseen"), demonstrating that substructure-tuning
+                    encourages models to learn general features of functional substructures rather than memorizing
+                    specific type signatures. This generalization is observed across all substructure classes and
+                    both sequence-only (ESM-C) and structure-aware (SaProt) models.
+                </p>
+                <div class="table-container">
+                    <table class="data-table silhouette-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2">Model</th>
+                                <th colspan="2">Homologous superfamily</th>
+                                <th colspan="2">Domain</th>
+                                <th colspan="2">Conserved site</th>
+                                <th colspan="2">Binding site</th>
+                                <th colspan="2">Active site</th>
+                            </tr>
+                            <tr>
+                                <th>Seen</th>
+                                <th>Unseen</th>
+                                <th>Seen</th>
+                                <th>Unseen</th>
+                                <th>Seen</th>
+                                <th>Unseen</th>
+                                <th>Seen</th>
+                                <th>Unseen</th>
+                                <th>Seen</th>
+                                <th>Unseen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>ESM-C 300M</td>
+                                <td>−0.183</td>
+                                <td>0.180</td>
+                                <td>−0.184</td>
+                                <td>0.201</td>
+                                <td>0.279</td>
+                                <td>0.466</td>
+                                <td>0.378</td>
+                                <td>0.641</td>
+                                <td>0.490</td>
+                                <td>0.476</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.339</td>
+                                <td>0.584</td>
+                                <td>0.486</td>
+                                <td>0.652</td>
+                                <td>0.830</td>
+                                <td>0.747</td>
+                                <td>0.882</td>
+                                <td>0.894</td>
+                                <td>0.933</td>
+                                <td>0.816</td>
+                            </tr>
+                            <tr>
+                                <td>SaProt (650M)</td>
+                                <td>0.079</td>
+                                <td>0.301</td>
+                                <td>0.122</td>
+                                <td>0.412</td>
+                                <td>0.534</td>
+                                <td>0.623</td>
+                                <td>0.613</td>
+                                <td>0.796</td>
+                                <td>0.714</td>
+                                <td>0.701</td>
+                            </tr>
+                            <tr class="st-row">
+                                <td class="indent">+ST</td>
+                                <td>0.478</td>
+                                <td>0.684</td>
+                                <td>0.554</td>
+                                <td>0.717</td>
+                                <td>0.796</td>
+                                <td>0.764</td>
+                                <td>0.843</td>
+                                <td>0.938</td>
+                                <td>0.912</td>
+                                <td>0.866</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="table-caption"><strong>Table 7: Silhouette scores for substructure types included (“seen”) and excluded (“unseen”) from training. </strong> Higher silhouette scores indicate tighter clustering of substructures within a type. “Seen” scores are generated using the Magneton test set proteins (i.e. “seen” refers to substructure types, not individual proteins).</p>
+            </div>
+
         </div>
     </section>
 
@@ -204,75 +1166,6 @@
                             <td>110M</td>
                             <td>Sequence + Structure</td>
                             <td>Unsupported</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </section>
-
-    <!-- Evaluation Tasks Section -->
-    <section class="tasks">
-        <div class="container">
-            <h2>Evaluation Tasks</h2>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Scale</th>
-                            <th>Task</th>
-                            <th>Type</th>
-                            <th>Metric</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td rowspan="2"><strong>Interaction</strong></td>
-                            <td>Human PPI Prediction</td>
-                            <td>Binary</td>
-                            <td>Accuracy</td>
-                        </tr>
-                        <tr>
-                            <td>Contact Prediction</td>
-                            <td>Binary</td>
-                            <td>Precision@L</td>
-                        </tr>
-                        <tr>
-                            <td rowspan="4"><strong>Protein</strong></td>
-                            <td>Gene Ontology (BP, CC, MF)</td>
-                            <td>Multilabel</td>
-                            <td>F<sub>max</sub></td>
-                        </tr>
-                        <tr>
-                            <td>Enzyme Commission</td>
-                            <td>Multilabel</td>
-                            <td>F<sub>max</sub></td>
-                        </tr>
-                        <tr>
-                            <td>Subcellular Localization</td>
-                            <td>Multiclass</td>
-                            <td>Accuracy</td>
-                        </tr>
-                        <tr>
-                            <td>Thermostability</td>
-                            <td>Regression</td>
-                            <td>Spearman's &rho;</td>
-                        </tr>
-                        <tr>
-                            <td rowspan="3"><strong>Residue</strong></td>
-                            <td>Variant Effect Prediction</td>
-                            <td>Regression</td>
-                            <td>Spearman's &rho;</td>
-                        </tr>
-                        <tr>
-                            <td>Binding Residue Classification</td>
-                            <td>Multilabel</td>
-                            <td>F<sub>max</sub></td>
-                        </tr>
-                        <tr>
-                            <td>Functional Site Prediction</td>
-                            <td>Binary</td>
-                            <td>AUROC</td>
                         </tr>
                     </tbody>
                 </table>
@@ -325,6 +1218,19 @@
                 }, 2000);
             });
         }
+
+        // Initialize KaTeX auto-render
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '\\[', right: '\\]', display: true},
+                    {left: '$', right: '$', display: false},
+                    {left: '\\(', right: '\\)', display: false}
+                ],
+                throwOnError: false
+            });
+        });
     </script>
 </body>
 </html>

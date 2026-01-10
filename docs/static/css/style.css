@@ -110,6 +110,11 @@ h2 {
     color: var(--accent);
 }
 
+.affiliations .equal-contrib {
+    font-size: 0.85rem;
+    margin-top: 4px;
+}
+
 .buttons {
     display: flex;
     justify-content: center;
@@ -155,12 +160,48 @@ h2 {
     text-align: justify;
 }
 
-.abstract p:last-child {
-    margin-bottom: 0;
+.abstract p:last-of-type {
+    margin-bottom: 24px;
 }
 
 .abstract strong {
     font-weight: 600;
+}
+
+.abstract h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 24px auto 12px;
+    max-width: 720px;
+    text-align: left;
+    color: var(--text);
+}
+
+.abstract .key-points {
+    max-width: 720px;
+    margin: 0 auto;
+    padding-left: 20px;
+    list-style: none;
+}
+
+.abstract .key-points li {
+    position: relative;
+    padding-left: 16px;
+    margin-bottom: 10px;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.abstract .key-points li::before {
+    content: "\2022";
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-weight: bold;
+}
+
+.abstract .key-points li strong {
+    color: var(--text);
 }
 
 /* Figures */
@@ -250,6 +291,139 @@ th {
 
 tbody tr:last-child td {
     border-bottom: none;
+}
+
+/* Results Tables */
+.results .table-section h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text);
+    text-align: left;
+}
+
+.table-section {
+    margin-bottom: 40px;
+    padding-bottom: 40px;
+    border-bottom: 1px solid var(--border);
+}
+
+.table-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.table-description {
+    color: var(--text-secondary);
+    line-height: 1.65;
+    margin-bottom: 16px;
+    text-align: justify;
+}
+
+.table-caption {
+    margin-top: 12px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+/* Data tables styling */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.data-table th,
+.data-table td {
+    padding: 10px 12px;
+    text-align: center;
+    border: 1px solid var(--border);
+}
+
+.data-table th {
+    background: #f3f4f6;
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text);
+}
+
+.data-table td:first-child {
+    text-align: left;
+    font-weight: 500;
+}
+
+.data-table td.scale-cell {
+    vertical-align: middle;
+}
+
+/* Evaluation Tasks table - center all cells except scale column */
+.eval-tasks-table td:first-child:not(.scale-cell) {
+    text-align: center;
+    font-weight: 400;
+}
+
+.data-table .indent {
+    padding-left: 24px;
+    color: var(--text-secondary);
+}
+
+.data-table .st-row {
+    background: #f9fafb;
+}
+
+.data-table .total-row {
+    border-top: 2px solid var(--text-secondary);
+    font-weight: 600;
+}
+
+.data-table .total-row .small {
+    font-weight: 400;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.data-table .best {
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.data-table .highlight-row {
+    background: #eff6ff;
+}
+
+.data-table .na {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.data-table code {
+    font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+    font-size: 0.8rem;
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* Config table specific styling */
+.config-table {
+    font-size: 0.8rem;
+}
+
+.config-table th,
+.config-table td {
+    padding: 8px 10px;
+}
+
+/* Silhouette table specific styling */
+.silhouette-table th,
+.silhouette-table td {
+    padding: 8px 8px;
+    font-size: 0.8rem;
 }
 
 /* Citation */
