@@ -139,7 +139,12 @@ h2 {
 }
 
 .btn-paper {
-    background: #dc2626;
+    background: #b31b1b;
+    color: #fff;
+}
+
+.btn-or {
+    background: #8c1b12;
     color: #fff;
 }
 
