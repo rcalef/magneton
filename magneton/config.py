@@ -20,6 +20,7 @@ class EvalConfig:
     model_checkpoint: str = MISSING
     final_prediction_only: bool = False
     rerun_completed: bool = False
+    num_bootstraps: int | None = 50
     # Whether or not the saved model used EWC loss
     has_fisher_info: bool = False
 

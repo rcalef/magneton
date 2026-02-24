@@ -10,6 +10,7 @@ from lightning.pytorch.loggers import (
     WandbLogger,
 )
 from torchdata.nodes import Loader
+from torchmetrics.wrappers import BootStrapper
 
 from magneton.config import PipelineConfig
 from magneton.data import (
@@ -160,6 +161,7 @@ def run_supervised_classification(
         num_classes=module.num_classes(),
         output_dir=output_dir,
         prefix="validation",
+        num_bootstraps=config.evaluate.num_bootstraps,
     )
 
     final_eval_fn(
@@ -170,6 +172,7 @@ def run_supervised_classification(
         num_classes=module.num_classes(),
         output_dir=output_dir,
         prefix="test",
+        num_bootstraps=config.evaluate.num_bootstraps,
     )
 
     if logger is not None:
@@ -184,6 +187,7 @@ def run_final_predictions(
     num_classes: int,
     output_dir: Path,
     prefix: str,
+    num_bootstraps: int | None,
 ):
     """Run predictions only and output evaluation metrics."""
     final_predictions = trainer.predict(
@@ -209,11 +213,20 @@ def run_final_predictions(
 
     # Calculate task-specific metrics and prepare for JSON export
     task_type = TASK_TO_TYPE[task]
-    metrics = get_task_torchmetrics(task_type, num_classes, prefix=f"{prefix}_")
+    metrics = get_task_torchmetrics(
+        task_type, num_classes, prefix=f"{prefix}_", sync_on_compute=False
+    )
     if task_type == EVAL_TASK.MULTILABEL:
         # Fmax isn't included by default since it's too expensive to compute
         # as a metric on every iteration
-        metrics.add_metrics({"fmax": FMaxScore(num_thresh_steps=101)})
+        if num_bootstraps is not None:
+            fmax_metric = FMaxScore(num_thresh_steps=101, sync_on_compute=False)
+            fmax_metric = BootStrapper(
+                fmax_metric, num_bootstraps=num_bootstraps, sync_on_compute=False
+            )
+        else:
+            fmax_metric = FMaxScore(num_thresh_steps=101, sync_on_compute=False)
+        metrics.add_metrics({"fmax": fmax_metric})
 
     metrics_dict = {
         "task": task,
@@ -246,6 +259,7 @@ def run_final_contact_predictions(
     num_classes: int,
     output_dir: Path,
     prefix: str,
+    num_bootstraps: int | None,
 ):
     """Contact prediction-specific evaluation.
 
@@ -281,6 +295,8 @@ def run_final_contact_predictions(
         "task": "contact_prediction",
     }
     p_at_l = PrecisionAtL(sync_on_compute=False)
+    if num_bootstraps is not None:
+        p_at_l = BootStrapper(p_at_l, num_bootstraps=num_bootstraps)
     for logits, labels, lengths in zip(final_predictions, all_labels, protein_lengths):
         p_at_l.update(logits, labels, lengths)
 

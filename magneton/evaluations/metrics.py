@@ -12,6 +12,7 @@ from torchmetrics import (
     MetricCollection,
     SpearmanCorrCoef,
 )
+from torchmetrics.wrappers import BootStrapper
 
 from magneton.data.evaluations import EVAL_TASK
 
@@ -23,7 +24,8 @@ def format_logits_and_labels_for_metrics(
 ) -> torch.Tensor:
     """Perform any reshaping and dtype conversions for metric calculations."""
     if task_type == EVAL_TASK.BINARY:
-        # For binary metrics, convert labels to int (AveragePrecision expects int targets)
+        # For binary metrics, convert labels to int
+        # (AveragePrecision expects int targets)
         labels = labels.int()
         # if logits.shape[0] != 1:
         return logits.squeeze(-1), labels.squeeze(-1)
@@ -37,31 +39,61 @@ def get_task_torchmetrics(
     task_type: EVAL_TASK,
     num_classes: int,
     prefix: str,
+    num_bootstraps: int | None = 50,
+    sync_on_compute: bool = True,
 ) -> MetricCollection:
     """Get the metrics used for a given task type."""
     if task_type == EVAL_TASK.MULTILABEL:
         metrics = {
-            "accuracy": Accuracy(task="multilabel", num_labels=num_classes),
-            "auprc": AveragePrecision(task="multilabel", num_labels=num_classes),
+            "accuracy": Accuracy(
+                task="multilabel",
+                num_labels=num_classes,
+                sync_on_compute=sync_on_compute,
+            ),
+            "auprc": AveragePrecision(
+                task="multilabel",
+                num_labels=num_classes,
+                sync_on_compute=sync_on_compute,
+            ),
         }
     elif task_type == EVAL_TASK.MULTICLASS:
         metrics = {
-            "accuracy": Accuracy(task="multiclass", num_classes=num_classes),
+            "accuracy": Accuracy(
+                task="multiclass",
+                num_classes=num_classes,
+                sync_on_compute=sync_on_compute,
+            ),
         }
     elif task_type == EVAL_TASK.BINARY:
         metrics = {
-            "accuracy": Accuracy(task="binary"),
-            "auprc": AveragePrecision(task="binary"),
-            "auroc": AUROC(task="binary"),
+            "accuracy": Accuracy(
+                task="binary", sync_on_compute=sync_on_compute
+            ),
+            "auprc": AveragePrecision(
+                task="binary", sync_on_compute=sync_on_compute
+            ),
+            "auroc": AUROC(
+                task="binary", sync_on_compute=sync_on_compute
+            ),
         }
     elif task_type == EVAL_TASK.REGRESSION:
         metrics = {
-            "mae": MeanAbsoluteError(),
-            "rmse": MeanSquaredError(squared=False),  # RMSE instead of MSE
-            "spearman": SpearmanCorrCoef(),
+            "mae": MeanAbsoluteError(sync_on_compute=sync_on_compute),
+            "rmse": MeanSquaredError(
+                squared=False, sync_on_compute=sync_on_compute
+            ),  # RMSE instead of MSE
+            "spearman": SpearmanCorrCoef(sync_on_compute=sync_on_compute),
         }
     else:
         raise ValueError(f"unknown task type: {task_type}")
+
+    if num_bootstraps is not None:
+        metrics = {
+            name: BootStrapper(
+                metric, num_bootstraps=num_bootstraps, sync_on_compute=sync_on_compute
+            )
+            for name, metric in metrics.items()
+        }
     return MetricCollection(metrics, prefix=prefix)
 
 

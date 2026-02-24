@@ -70,8 +70,7 @@ class EvaluationClassifier(L.LightningModule):
             embed_dim = self.base_model.get_attention_dim()
             self.base_model.setup_for_contacts()
         elif task_granularity == TASK_GRANULARITY.PPI_PREDICTION:
-            # PPI head will handle the 2x concatenation internally
-            pass
+            embed_dim = embed_dim * 2
 
         hidden_dims = parse_hidden_dims(
             raw_dims=self.config.model.model_params["hidden_dims"], embed_dim=embed_dim

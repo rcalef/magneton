@@ -15,9 +15,7 @@ class PPIPredictionHead(nn.Module, HeadModule):
         dropout_rate: float,
     ):
         super().__init__()
-        # Embed dim is here is 2 x model_embed_dim, since we just concatenate
-        # the embeddings of the two proteins for input to the predictor head
-        input_dim = embed_dim * 2
+        input_dim = embed_dim
 
         layers = []
         prev_dim = input_dim
